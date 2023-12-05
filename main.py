@@ -28,7 +28,8 @@ def main():
     # files = ['selfTPOTFe_proba_pedthr_230801_17H17_000_05', 'selfTPOTFe_proba_datrun_230801_17H17_000_05']
     files = ['selfTPOTFe_proba_pedthr_230801_17H17_000_05']
     for file in files:
-        raw_root_path = read_fdf_to_root(file, fdf_dir, raw_root_dir)
+        raw_root_path = os.path.join(raw_root_dir, file + ".root")
+        # raw_root_path = read_fdf_to_root(file, fdf_dir, raw_root_dir)
         # plot_adc_pyroot(raw_root_path)
         # plot_adc_uproot(raw_root_path)
         plot_time_samples(raw_root_path)
@@ -103,26 +104,10 @@ def plot_time_samples(file_path):
 
     # Get the variable data from the tree
     variable_name = 'StripAmpl'
-    variable_data = tree[variable_name].array()
-    concat0 = ak.concatenate(variable_data, axis=0)
-    print(len(concat0))
-    concat1 = ak.concatenate(variable_data, axis=1)
-    print(len(concat1))
-    concat2 = ak.concatenate(variable_data, axis=2)
-    print(len(concat2))
-    concat3 = ak.concatenate(variable_data, axis=3)
-    print(len(concat3))
-    print(len(variable_data))
-    print(type(variable_data[0][0][0]))
-    print(variable_data[0][0][0])
+    variable_data = ak.to_numpy(tree[variable_name].array())
+    print(variable_data.shape)
 
-    all_events = variable_data[0]
-    for event in variable_data[1:]:
-        for det_num, det in enumerate(event):
-            for strip_num, strip in enumerate(det):
-                all_events[det_num][strip_num].extend(strip)
-
-    for det_num, det in enumerate(all_events):
+    for det_num, det in enumerate(np.concatenate(variable_data, axis=2)):
         print(det_num)
         print(det)
         fig, ax = plt.subplots()
@@ -139,4 +124,5 @@ def plot_time_samples(file_path):
 
 
 if __name__ == '__main__':
+    # pass
     main()
