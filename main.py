@@ -25,11 +25,13 @@ import awkward as ak
 def main():
     fdf_dir = 'test_data/fdf/'
     raw_root_dir = 'test_data/raw_root/'
-    # files = ['selfTPOTFe_proba_pedthr_230801_17H17_000_05', 'selfTPOTFe_proba_datrun_230801_17H17_000_05']
-    files = ['selfTPOTFe_proba_pedthr_230801_17H17_000_05']
+    files = ['selfTPOTFe_proba_pedthr_230801_17H17_000_05', 'selfTPOTFe_proba_datrun_230801_17H17_000_05']
+    # files = ['selfTPOTFe_proba_pedthr_230801_17H17_000_05']
+    for file in files:
+        raw_root_path = read_fdf_to_root(file, fdf_dir, raw_root_dir)
+
     for file in files:
         raw_root_path = os.path.join(raw_root_dir, file + ".root")
-        # raw_root_path = read_fdf_to_root(file, fdf_dir, raw_root_dir)
         # plot_adc_pyroot(raw_root_path)
         # plot_adc_uproot(raw_root_path)
         plot_time_samples(raw_root_path)
