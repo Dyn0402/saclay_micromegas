@@ -12,37 +12,40 @@ import os
 import shutil
 
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
+from scipy.stats import norm
+from scipy.optimize import curve_fit as cf
 
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 
-import ROOT
+# import ROOT
 import uproot
 import awkward as ak
 
+
 # Suppress the specified warning messages
 # ROOT.gErrorIgnoreLevel = ROOT.kError + ROOT.kBreak
-ROOT.gErrorIgnoreLevel = -1
+# ROOT.gErrorIgnoreLevel = -1
 
 
 def main():
     # fdf_dir = 'test_data/fdf/'
     # raw_root_dir = 'test_data/raw_root/'
-    base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
+    # base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
+    base_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/dec6/'
     fdf_dir = base_path
     raw_root_dir = f'{base_path}raw_root/'
     ped_flag = '_pedthr_'
-    num_threads = 6
-    free_memory = 2  # GB of memory to allocate (in theory, in reality needs a lot of wiggle room)
+    num_threads = 16
+    free_memory = 45  # GB of memory to allocate (in theory, in reality needs a lot of wiggle room)
     chunk_size = f'{free_memory / num_threads} GB'
     print(f'{num_threads} threads, {chunk_size} chunk size')
 
     overwrite = False
     num_detectors = 2
     noise_sigmas = 5
-    plot_pedestals = True
+    plot_pedestals = False
 
     ped_file = None
     fdf_files = [file for file in os.listdir(fdf_dir) if file[-4:] == '.fdf']
@@ -57,32 +60,34 @@ def main():
                         ped_file = root_name
                 pbar.update(1)
 
-    # for file_num, file in enumerate(fdf_files):
-    #     print(f'\nReading {file_num + 1}/{len(fdf_files)} {file} to root')
-    #     root_name = file[:-4] + '.root'
-    #     if ped_flag in root_name:
-    #         if ped_file is not None:
-    #             print(f'Warning: Multiple ped files found: {ped_file}, {root_name}')
-    #         else:
-    #             ped_file = root_name
-    #     if not overwrite and root_name in os.listdir(raw_root_dir):
-    #         print(f'{root_name} already exists in {raw_root_dir}, skipping')
-    #         continue
-    #     read_fdf_to_root(file, fdf_dir, raw_root_dir, root_name)
-
     # Deal with pedestals
     ped_root_path = os.path.join(raw_root_dir, ped_file)
     ped_data = read_det_data(ped_root_path, num_detectors)
     pedestals = get_pedestals(ped_data)
     ped_common_noise = get_common_noise(ped_data, pedestals)
     ped_rms = get_pedestals_rms(ped_data, pedestals)
-    noise_thresholds = get_noise_thresholds(ped_rms, noise_sigmas=noise_sigmas)
+    ped_fits_no_noise_sub = get_pedestal_fits(ped_data)
+    ped_fits = get_pedestal_fits(ped_data, common_noise=ped_common_noise)
     if plot_pedestals:
         plot_combined_time_series(ped_data, max_events=10)
+        # plot_adc_scatter_vs_strip(ped_data)
         [plot_1d_data(pedestal, title=f'Detector {det_num} Pedestals') for det_num, pedestal in enumerate(pedestals)]
+        means = {'Dumb Pedestals': {'vals': pedestals},
+                 'Fit Peds No Noise Sub': {'vals': ped_fits_no_noise_sub['mean'],
+                                           'errs': ped_fits_no_noise_sub['mean_err']},
+                 'Fit Pedestals': {'vals': ped_fits['mean'], 'errs': ped_fits['mean_err']}}
+        # plot_pedestal_comp(, ped_fits_no_noise_sub, stat='mean')
+        plot_pedestal_comp(means)
+        rmses = {'Dumb RMSes': {'vals': ped_rms},
+                 'Fit Sigma No Noise Sub': {'vals': ped_fits_no_noise_sub['sigma'],
+                                            'errs': ped_fits_no_noise_sub['sigma_err']},
+                 'Fit Sigma': {'vals': ped_fits['sigma'], 'errs': ped_fits['sigma_err']}}
+        plot_pedestal_comp(rmses)
         plot_2d_data(*pedestals)
         [plot_1d_data(ped_rms_det, title=f'Detector {det_num} Ped STDs') for det_num, ped_rms_det in enumerate(ped_rms)]
         plt.show()
+    pedestals, ped_rms = ped_fits['mean'], ped_fits['sigma']
+    noise_thresholds = get_noise_thresholds(ped_rms, noise_sigmas=noise_sigmas)
 
     data_files = [os.path.join(raw_root_dir, file) for file in os.listdir(raw_root_dir)
                   if file[-5:] == '.root' and file != ped_file]
@@ -140,32 +145,32 @@ def read_fdf_to_root(file, fdf_dir, raw_root_dir, root_name):
     return raw_root_path
 
 
-def plot_adc_pyroot(file_path):
-    # Create a ROOT TFile object to open the file
-    root_file = ROOT.TFile(file_path)
-
-    # Access the tree in the file
-    tree = root_file.Get('T')
-
-    # Create a canvas to draw the histogram
-    canvas = ROOT.TCanvas("canvas", "Histogram Canvas", 800, 600)
-
-    # Create a histogram from the tree variable
-    variable_name = 'StripAmpl'
-    tree.Draw(variable_name)
-    histogram = ROOT.gPad.GetPrimitive("htemp")
-
-    # Set histogram attributes
-    histogram.SetTitle(f"Histogram of {variable_name}")
-    histogram.GetXaxis().SetTitle(variable_name)
-    histogram.GetYaxis().SetTitle("Frequency")
-
-    # Draw the histogram on the canvas
-    canvas.Draw()
-
-    # Keep the program running to display the canvas
-    ROOT.gApplication.Run()
-    input()
+# def plot_adc_pyroot(file_path):
+#     # Create a ROOT TFile object to open the file
+#     root_file = ROOT.TFile(file_path)
+#
+#     # Access the tree in the file
+#     tree = root_file.Get('T')
+#
+#     # Create a canvas to draw the histogram
+#     canvas = ROOT.TCanvas("canvas", "Histogram Canvas", 800, 600)
+#
+#     # Create a histogram from the tree variable
+#     variable_name = 'StripAmpl'
+#     tree.Draw(variable_name)
+#     histogram = ROOT.gPad.GetPrimitive("htemp")
+#
+#     # Set histogram attributes
+#     histogram.SetTitle(f"Histogram of {variable_name}")
+#     histogram.GetXaxis().SetTitle(variable_name)
+#     histogram.GetYaxis().SetTitle("Frequency")
+#
+#     # Draw the histogram on the canvas
+#     canvas.Draw()
+#
+#     # Keep the program running to display the canvas
+#     ROOT.gApplication.Run()
+#     input()
 
 
 def plot_adc_uproot(file_path):
@@ -221,7 +226,6 @@ def get_pedestals(data):
     strip_medians = np.median(data, axis=3)  # Median of samples in each strip for each event
     strip_medians_transpose = np.transpose(strip_medians, axes=(1, 2, 0))  # Concatenate strips for each event
     strip_means = np.mean(strip_medians_transpose, axis=2)  # Mean of strip medians over all events
-    print(strip_means.shape)
 
     # This takes the median of samples over all events for each strip
     # data_event_concat = np.concatenate(data, axis=2)
@@ -232,18 +236,45 @@ def get_pedestals(data):
 
 
 def get_common_noise(data, pedestals):
-    return data - pedestals[np.newaxis, :, :, np.newaxis]
+    data_ped_sub = data - pedestals[np.newaxis, :, :, np.newaxis]
+    data_ped_sub_trans = np.transpose(data_ped_sub, axes=(0, 1, 3, 2))
+    common_noise = np.median(data_ped_sub_trans, axis=-1)
+
+    return common_noise
 
 
 def get_pedestals_rms(ped_data, ped_means):
     ped_zeroed = subtract_pedestal(ped_data, ped_means)  # Subtract averages from pedestal data
-    print(ped_zeroed.shape)
     ped_zeroed_concat = np.concatenate(ped_zeroed, axis=2)  # Concatenate all events
-    print(ped_zeroed_concat.shape)
     ped_rms = np.std(ped_zeroed_concat, axis=2)  # Get RMS of pedestal data for each strip
-    print(ped_rms.shape)
     # Existing code averages over all strips, but will see if we can get away with strip by strip
     return ped_rms
+
+
+def gaussian(x, mu, sigma):
+    return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-(x - mu) ** 2 / (2 * sigma ** 2))
+
+
+def fit_pedestals(strip_samples):
+    bin_edges = np.arange(-0.5, 4097.5, 1)
+    mean = np.mean(strip_samples)
+    sd = np.std(strip_samples)
+    hist, _ = np.histogram(strip_samples, bins=bin_edges, density=True)
+    bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+    popt, pcov = cf(gaussian, bin_centers, hist, p0=[mean, sd])
+    perr = np.sqrt(np.diag(pcov))
+    return *popt, *perr
+
+
+def get_pedestal_fits(ped_data, common_noise=None):
+    if common_noise is not None:
+        ped_data = ped_data - common_noise[:, :, np.newaxis, :]
+    ped_concat = np.concatenate(ped_data, axis=2)  # Concatenate all events
+    ped_fits = np.apply_along_axis(fit_pedestals, -1, ped_concat)
+    ped_fits = np.transpose(ped_fits, axes=(2, 0, 1))
+    ped_fits = dict(zip(['mean', 'sigma', 'mean_err', 'sigma_err'], ped_fits))
+    # Existing code averages over all strips, but will see if we can get away with strip by strip
+    return ped_fits
 
 
 def get_noise_thresholds(ped_rms, noise_sigmas=5):
@@ -259,6 +290,23 @@ def plot_1d_data(data, title=None):
     if title is not None:
         ax.set_title(title)
     plt.tight_layout()
+
+
+def plot_pedestal_comp(ped_dict):
+    num_detectors = len(list(ped_dict.values())[0]['vals'])
+    for det_num in range(num_detectors):
+        fig, ax = plt.subplots()
+        for ped_name, vals_errs in ped_dict.items():
+            if 'errs' in vals_errs:
+                ax.errorbar(range(len(vals_errs['vals'][det_num])), vals_errs['vals'][det_num],
+                            yerr=vals_errs['errs'][det_num], label=ped_name)
+            else:
+                ax.plot(range(len(vals_errs['vals'][det_num])), vals_errs['vals'][det_num], label=ped_name)
+        ax.set_xlabel('Strip Number')
+        ax.set_ylabel("ADC")
+        ax.set_title('Pedestals')
+        ax.legend()
+        fig.tight_layout()
 
 
 def plot_2d_data(data_x, data_y):
@@ -294,6 +342,19 @@ def plot_combined_time_series(data, max_events=None):
         ax.set_xlabel('Sample Number')
         ax.set_ylabel("ADC")
         ax.set_title(f"Detector #{det_num}")
+
+
+def plot_adc_scatter_vs_strip(data):
+    data_transpose = np.transpose(data, (1, 2, 3, 0))
+    for det_num, det in enumerate(data_transpose):
+        fig, ax = plt.subplots()
+        for strip_num, strip in enumerate(det):
+            samples = np.concatenate(strip)
+            ax.scatter([strip_num] * len(samples), samples, marker='_', alpha=0.2)
+        ax.set_xlabel('Strip Number')
+        ax.set_ylabel("ADC")
+        ax.set_title(f'ADC Distribution per Strip Detector #{det_num}')
+        plt.tight_layout()
 
 
 def subtract_pedestal(data, pedestal):
@@ -448,8 +509,10 @@ def plot_high_noise_metric(data_max, threshold=None):
 
 def process_chunk(chunk, pedestals, noise_thresholds, num_detectors):
     data = read_det_data_chunk(chunk['StripAmpl'], num_detectors)
+    common_noise = get_common_noise(data, pedestals)
     ped_sub_data = subtract_pedestal(data, pedestals)
-    max_data = get_sample_max(ped_sub_data)
+    ped_com_sub_data = ped_sub_data - common_noise[:, :, np.newaxis, :]
+    max_data = get_sample_max(ped_com_sub_data)
     noise_mask = identify_noise(max_data, noise_threshold=noise_thresholds)
     data_no_noise = suppress_noise(data, noise_mask)
     # signal_mask = identify_common_signal(max_data, signal_threshold=400)
