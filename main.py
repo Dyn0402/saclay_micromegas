@@ -122,6 +122,11 @@ def main():
     print(f'high_noise_mask.shape: {high_noise_mask.shape}')
     high_noise_events = signal_events[high_noise_mask]
     print(f'high_noise_events.shape: {high_noise_events.shape}')
+    pure_signal_events_max = signal_events_max[~high_noise_mask]
+    print(f'pure_signal_events.shape: {pure_signal_events_max.shape}')
+    signal_events_max_det_sum = np.sum(get_strip_max(pure_signal_events_max), axis=1, keepdims=True)
+    print(f'signal_events_max_det_sum.shape: {signal_events_max_det_sum.shape}')
+    plot_1d_sample_max_hist(signal_events_max_det_sum, bins=100, title='Sample Max ADC Spectrum Signal Events')
     # [plot_2d_data(*event) for event in signal_events_max[~high_noise_mask][:10]]
     # plot_position_data(signal_events_max[~high_noise_mask], event_nums=None)
     plt.show()
