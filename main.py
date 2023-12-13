@@ -32,20 +32,21 @@ import awkward as ak
 def main():
     # fdf_dir = 'test_data/fdf/'
     # raw_root_dir = 'test_data/raw_root/'
-    # base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
-    base_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/dec6/'
+    base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
+    # base_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/dec6/'
     fdf_dir = base_path
     raw_root_dir = f'{base_path}raw_root/'
     ped_flag = '_pedthr_'
-    num_threads = 16
-    free_memory = 45  # GB of memory to allocate (in theory, in reality needs a lot of wiggle room)
+    num_threads = 6
+    free_memory = 2.0  # GB of memory to allocate (in theory, in reality needs a lot of wiggle room)
     chunk_size = f'{free_memory / num_threads} GB'
+    chunk_size = 3500
     print(f'{num_threads} threads, {chunk_size} chunk size')
 
     overwrite = False
     num_detectors = 2
     noise_sigmas = 5
-    plot_pedestals = False
+    plot_pedestals = True
 
     ped_file = None
     fdf_files = [file for file in os.listdir(fdf_dir) if file[-4:] == '.fdf']
@@ -85,7 +86,7 @@ def main():
         plot_pedestal_comp(rmses)
         plot_2d_data(*pedestals)
         [plot_1d_data(ped_rms_det, title=f'Detector {det_num} Ped STDs') for det_num, ped_rms_det in enumerate(ped_rms)]
-        plt.show()
+        # plt.show()
     pedestals, ped_rms = ped_fits['mean'], ped_fits['sigma']
     noise_thresholds = get_noise_thresholds(ped_rms, noise_sigmas=noise_sigmas)
 
@@ -129,6 +130,7 @@ def main():
     plot_1d_sample_max_hist(signal_events_max_det_sum, bins=100, title='Sample Max ADC Spectrum Signal Events')
     # [plot_2d_data(*event) for event in signal_events_max[~high_noise_mask][:10]]
     # plot_position_data(signal_events_max[~high_noise_mask], event_nums=None)
+    plot_position_data(signal_events_max[high_noise_mask], event_nums=[1,3,5,9,14])
     plt.show()
 
     print('donzo')
@@ -534,7 +536,7 @@ def process_file(file_path, pedestals, noise_thresholds, num_detectors, chunk_si
     for tree_name in tree_names:
         with uproot.open(file_path) as file:
             tree = file[tree_name]
-            for chunk in uproot.iterate(tree, branches=['StripAmpl'], entrysteps=chunk_size):
+            for chunk in uproot.iterate(tree, branches=['StripAmpl'], step_size=chunk_size):
                 data_no_noise = process_chunk(chunk, pedestals, noise_thresholds, num_detectors)
                 noise_filtered_events.append(data_no_noise)
 
