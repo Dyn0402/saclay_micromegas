@@ -23,17 +23,17 @@ from concurrent.futures import ProcessPoolExecutor
 import uproot
 import awkward as ak
 
+plt.ioff()
 
-# Suppress the specified warning messages
-# ROOT.gErrorIgnoreLevel = ROOT.kError + ROOT.kBreak
-# ROOT.gErrorIgnoreLevel = -1
+
+connected_channels = np.array([[True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False], [True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False]])
 
 
 def main():
     # fdf_dir = 'test_data/fdf/'
     # raw_root_dir = 'test_data/raw_root/'
-    base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
-    # base_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/dec6/'
+    # base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
+    base_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/dec6/'
     fdf_dir = base_path
     raw_root_dir = f'{base_path}raw_root/'
     ped_flag = '_pedthr_'
@@ -42,11 +42,12 @@ def main():
     chunk_size = f'{free_memory / num_threads} GB'
     chunk_size = 3500
     print(f'{num_threads} threads, {chunk_size} chunk size')
+    single_file = 'P22_P2_2_ME_400_P2_2_DR_1000'
 
     overwrite = False
     num_detectors = 2
     noise_sigmas = 5
-    plot_pedestals = True
+    plot_pedestals = False
 
     ped_file = None
     fdf_files = [file for file in os.listdir(fdf_dir) if file[-4:] == '.fdf']
@@ -89,10 +90,13 @@ def main():
         # plt.show()
     pedestals, ped_rms = ped_fits['mean'], ped_fits['sigma']
     noise_thresholds = get_noise_thresholds(ped_rms, noise_sigmas=noise_sigmas)
+    pedestals = pedestals * connected_channels
 
     data_files = [os.path.join(raw_root_dir, file) for file in os.listdir(raw_root_dir)
                   if file[-5:] == '.root' and file != ped_file]
     process_data = [(file, pedestals, noise_thresholds, num_detectors, chunk_size) for file in data_files]
+    if single_file:
+        process_data = [data for data in process_data if single_file in data[0]]
     no_noise_events = []
     with ProcessPoolExecutor(max_workers=num_threads) as executor:
         with tqdm(total=len(process_data), desc='Processing Trees') as pbar:
@@ -102,35 +106,45 @@ def main():
 
     no_noise_events = np.concatenate(no_noise_events, axis=0)
     print(f'no_noise_events.shape: {no_noise_events.shape}')
+
+    # get_connected_channels(no_noise_events, noise_thresholds)  # Figure out which channels are connected
+
     no_noise_events_max = get_sample_max(no_noise_events)
-    no_noise_events_max_strip = get_max_strip(no_noise_events_max)
-    plot_1d_sample_max_hist(no_noise_events_max_strip, bins=64, title='Sample Max Strip Number No Noise Events')
-    no_noise_events_strip_max = get_strip_max(no_noise_events_max)
-    plot_1d_sample_max_hist(no_noise_events_strip_max, bins=100, title='Sample Max ADC Spectrum No Noise Events')
     print(f'no_noise_events_max.shape: {no_noise_events_max.shape}')
-    signal_mask = identify_common_signal(no_noise_events_max, signal_threshold=200)
-    print(f'signal_mask.shape: {signal_mask.shape}')
-    signal_events = no_noise_events[signal_mask]
-    print(f'signal_events.shape: {signal_events.shape}')
-    signal_events_max = no_noise_events_max[signal_mask]
-    signal_events_max_strip = get_max_strip(signal_events_max)
-    plot_1d_sample_max_hist(signal_events_max_strip, bins=64, title='Sample Max Strip Number Spectrum Signal Events')
-    signal_events_strip_max = get_strip_max(signal_events_max)
-    plot_1d_sample_max_hist(signal_events_strip_max, bins=100, title='Sample Max ADC Spectrum Signal Events')
-    print(f'signal_events_max.shape: {signal_events_max.shape}')
-    plot_high_noise_metric(signal_events_max, threshold=500)
-    high_noise_mask = identify_high_noise(signal_events_max, avg_threshold=500)
-    print(f'high_noise_mask.shape: {high_noise_mask.shape}')
-    high_noise_events = signal_events[high_noise_mask]
-    print(f'high_noise_events.shape: {high_noise_events.shape}')
-    pure_signal_events_max = signal_events_max[~high_noise_mask]
-    print(f'pure_signal_events.shape: {pure_signal_events_max.shape}')
-    signal_events_max_det_sum = np.sum(get_strip_max(pure_signal_events_max), axis=1, keepdims=True)
-    print(f'signal_events_max_det_sum.shape: {signal_events_max_det_sum.shape}')
-    plot_1d_sample_max_hist(signal_events_max_det_sum, bins=100, title='Sample Max ADC Spectrum Signal Events')
-    # [plot_2d_data(*event) for event in signal_events_max[~high_noise_mask][:10]]
-    # plot_position_data(signal_events_max[~high_noise_mask], event_nums=None)
-    plot_position_data(signal_events_max[high_noise_mask], event_nums=[1,3,5,9,14])
+    no_noise_events_adcs = no_noise_events_max.reshape(-1, 2)
+    print(f'no_noise_events_adcs.shape: {no_noise_events_adcs.shape}')
+    plot_1d_sample_max_hist(no_noise_events_adcs, bins=100, title='Max Sample Strip ADC Spectrum No Noise Events')
+    no_noise_events_max_strip = get_max_strip(no_noise_events_max)
+    print(f'no_noise_events_max_strip.shape: {no_noise_events_max_strip.shape}')
+    bins = np.arange(np.min(no_noise_events_max_strip) - 0.5, np.max(no_noise_events_max_strip) + 1.5, 1)
+    plot_1d_sample_max_hist(no_noise_events_max_strip, bins=bins, title='Sample Max Strip Number No Noise Events',
+                            xlabel='Strip Number')
+    no_noise_events_strip_max = get_strip_max(no_noise_events_max)
+    print(f'no_noise_events_strip_max.shape: {no_noise_events_strip_max.shape}')
+    plot_1d_sample_max_hist(no_noise_events_strip_max, bins=100,
+                            title='Max Sample Max Strip ADC Spectrum No Noise Events')
+
+    spark_mask, spark_thresholds = identify_spark(no_noise_events_max, threshold_sigma=10)
+    plot_spark_metric(no_noise_events_max, spark_thresholds)
+    neg_mask = identify_negatives(no_noise_events_max)
+    print(f'spark_mask.shape: {spark_mask.shape}')
+    spark_events = no_noise_events[spark_mask]
+    print(f'spark_events.shape: {spark_events.shape}')
+    pure_signal_events_max = no_noise_events_max[(~spark_mask) & (~neg_mask)]
+    print(f'pure_signal_events_max.shape: {pure_signal_events_max.shape}')
+
+    plot_combined_time_series(no_noise_events[neg_mask], max_events=10)
+
+    signal_events_max_sum = np.sum(pure_signal_events_max, axis=(1, 2))
+    print(f'signal_events_max_sum.shape: {signal_events_max_sum.shape}')
+    fig, ax = plt.subplots()
+    ax.hist(signal_events_max_sum, bins=250, edgecolor='black')
+    ax.set_xlabel('ADC')
+    ax.set_ylabel('Events')
+    ax.set_title('Sum of Strip Max ADCs for Pure Signal Events')
+
+    # plot_position_data(signal_events_max[~spark_mask], event_nums=None)
+    # plot_position_data(signal_events_max[spark_mask], event_nums=[1,3,5,9,14])
     plt.show()
 
     print('donzo')
@@ -405,12 +419,12 @@ def plot_spectrum(signal_data):
     ax.set_title('ADC Spectrum')
 
 
-def plot_1d_sample_max_hist(max_data, bins=100, title=None):
+def plot_1d_sample_max_hist(max_data, bins=100, title=None, xlabel='ADC'):
     fig, ax = plt.subplots()
     for det_num, det in enumerate(np.transpose(max_data)):
         ax.hist(det, bins=bins, edgecolor='black', label=f'Detector #{det_num}')
     ax.legend()
-    ax.set_xlabel('ADC')
+    ax.set_xlabel(xlabel)
     ax.set_ylabel('Events')
     if title is not None:
         ax.set_title(title)
@@ -442,7 +456,7 @@ def identify_noise(max_data, noise_threshold=100):
     :param noise_threshold: If number, use as threshold for all detectors.
                             If 1D array, use as threshold for each detector.
                             If 2D array, use as threshold for each strip of each detector.
-    :return:
+    :return: Boolean array of shape (n_events,) where True means event is noise.
     """
     noise_strips = max_data < noise_threshold  # Compare strip maxima with the threshold
     noise_mask = np.all(noise_strips, axis=(1, 2))  # Mark event as noise if all strips on all detectors below threshold
@@ -486,27 +500,29 @@ def get_strip_max(data_max):
     return np.max(data_max, axis=2)
 
 
-def identify_high_noise(data_max, avg_threshold=1000):
+def identify_spark(data_max, threshold_sigma=10):
     """
     Filter out events with high noise.
-    :param data_max:
-    :param avg_threshold:
-    :return:
+    :param data_max: Max strip ADC for each detector for each event.
+    :param threshold_sigma: Number of standard deviations above the mean to set the threshold.
+    :return: Boolean array of shape (n_events,) where True means event is possible spark.
     """
-    det_avg = np.mean(data_max, axis=2)
-    event_max = np.max(det_avg, axis=1)
-    high_noise_mask = event_max > avg_threshold
 
-    return high_noise_mask
+    det_avg = np.mean(data_max, axis=2)  # Average over strips for each detector for each event
+    det_std = np.std(det_avg, axis=0)  # Standard deviation of strip average for each detector over all events
+    spark_thresholds = det_std * threshold_sigma  # Threshold for each detector
+    spark_mask = det_avg > spark_thresholds  # Select events where detector strip average above threshold
+    spark_mask = np.any(spark_mask, axis=1)  # Select events where at least one detector strip average above threshold
+
+    return spark_mask, spark_thresholds
 
 
-def plot_high_noise_metric(data_max, threshold=None):
+def plot_spark_metric(data_max, thresholds):
     det_avg = np.transpose(np.mean(data_max, axis=2))
     fig, ax = plt.subplots()
     for det_num, det in enumerate(det_avg):
         ax.scatter(range(len(det)), det, label=f'Detector #{det_num}')
-    if threshold is not None:
-        ax.axhline(threshold, ls='--', color='black', label='High Noise Threshold')
+        ax.axhline(thresholds[det_num], ls='--', color='black', label='High Noise Threshold')
     ax.set_xlabel('Event #')
     ax.set_ylabel('Detector Strip Averaged ADC')
     ax.set_title('High Noise Metric')
@@ -514,18 +530,45 @@ def plot_high_noise_metric(data_max, threshold=None):
     fig.tight_layout()
 
 
-def process_chunk(chunk, pedestals, noise_thresholds, num_detectors):
+def identify_negatives(data_max):
+    """
+    Filter out events with negative strip averages.
+    :param data_max: Max strip ADC for each detector for each event.
+    :return: Boolean array of shape (n_events,) where True means event has a negative ADC detector.
+    """
+
+    det_avg = np.mean(data_max, axis=2)  # Average over strips for each detector for each event
+    neg_mask = det_avg < 0  # Select events where detector strip average is negative
+    neg_mask = np.any(neg_mask, axis=1)  # Select events where at least one detector strip average is negative
+
+    return neg_mask
+
+
+def process_chunk(chunk, pedestals, noise_thresholds, num_detectors, remove_disconnected=True):
     data = read_det_data_chunk(chunk['StripAmpl'], num_detectors)
+    if remove_disconnected:  # Zero out disconnected channels
+        data = data * connected_channels[np.newaxis, :, :, np.newaxis]
     common_noise = get_common_noise(data, pedestals)
     ped_sub_data = subtract_pedestal(data, pedestals)
     ped_com_sub_data = ped_sub_data - common_noise[:, :, np.newaxis, :]
+    # if remove_disconnected:  # Zero out disconnected channels
+    #     ped_com_sub_data = ped_com_sub_data * connected_channels[np.newaxis, :, :, np.newaxis]
     max_data = get_sample_max(ped_com_sub_data)
     noise_mask = identify_noise(max_data, noise_threshold=noise_thresholds)
-    data_no_noise = suppress_noise(data, noise_mask)
+    data_no_noise = suppress_noise(ped_com_sub_data, noise_mask)
     # signal_mask = identify_common_signal(max_data, signal_threshold=400)
     # data_signal = select_signal(data, signal_mask)
 
     return data_no_noise
+
+
+def process_chunk_all(chunk, pedestals, noise_thresholds, num_detectors):
+    data = read_det_data_chunk(chunk['StripAmpl'], num_detectors)
+    common_noise = get_common_noise(data, pedestals)
+    ped_sub_data = subtract_pedestal(data, pedestals)
+    ped_com_sub_data = ped_sub_data - common_noise[:, :, np.newaxis, :]
+
+    return ped_com_sub_data
 
 
 def process_file(file_path, pedestals, noise_thresholds, num_detectors, chunk_size=10000):
@@ -538,9 +581,28 @@ def process_file(file_path, pedestals, noise_thresholds, num_detectors, chunk_si
             tree = file[tree_name]
             for chunk in uproot.iterate(tree, branches=['StripAmpl'], step_size=chunk_size):
                 data_no_noise = process_chunk(chunk, pedestals, noise_thresholds, num_detectors)
+                # data_no_noise = process_chunk_all(chunk, pedestals, noise_thresholds, num_detectors)
                 noise_filtered_events.append(data_no_noise)
 
     return noise_filtered_events
+
+
+def get_connected_channels(data, noise_thresholds):
+    """
+    Figure out which channels are connected by looking at the average of the max strip for each event for each detector
+    where the max strip is greater than the noise threshold.
+    :param data:
+    :param noise_thresholds:
+    :return:
+    """
+    data_max = get_sample_max(data)
+    sig_avg = np.mean(data_max * (data_max > noise_thresholds), axis=0)
+    disconnect_thresholds = 0.2 * np.mean(sig_avg, axis=1)  # Hardcoded 20% of mean gets cut, ok for at least one run
+    for det_num, det in enumerate(sig_avg):
+        plot_1d_data(det, title=f'Strip Above Noise Threshold Sum Detector #{det_num}')
+        plt.axhline(disconnect_thresholds[0], ls='--', color='black')
+    connected_channels_found = sig_avg > disconnect_thresholds[:, np.newaxis]
+    print(f"connected_channels = np.array({repr(connected_channels_found.tolist())})")
 
 
 if __name__ == '__main__':
