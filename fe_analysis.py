@@ -13,6 +13,7 @@ import subprocess
 import shutil
 import re
 from datetime import datetime, timedelta
+from time import sleep
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,21 +25,31 @@ import awkward as ak
 from Measure import Measure
 
 
-def process_fdf(file, fdf_dir, raw_root_dir, overwrite):
+def process_fdf(file, fdf_dir, raw_root_dir, overwrite, file_i):
     root_name = file[:-4] + '.root'
+    spacing_time = file_i * 2  # s
     if not overwrite and root_name in os.listdir(raw_root_dir):
         print(f'{root_name} already exists in {raw_root_dir}, skipping')
     else:
-        read_fdf_to_root(file, fdf_dir, raw_root_dir, root_name)
+        read_fdf_to_root(file, fdf_dir, raw_root_dir, root_name, spacing_time)
     return root_name
 
 
-def read_fdf_to_root(file, fdf_dir, raw_root_dir, root_name):
-    print(f'./DreamDataReader {os.path.join(fdf_dir, file)}')
-    os.system(f'./DreamDataReader {os.path.join(fdf_dir, file)}')
-    # subprocess.Popen(['powershell', f'.\DreamDataReader {os.path.join(fdf_dir, file)}'])
+def read_fdf_to_root(file, fdf_dir, raw_root_dir, root_name, wait_time):
+    cmd = f'source /home/dylan/Software/root/bin/thisroot.sh && ./DreamDataReader {os.path.join(fdf_dir, file)}'
+    # os.system(f'source /home/dylan/Software/root/bin/thisroot.sh && ./DreamDataReader {os.path.join(fdf_dir, file)}')
+    # subprocess.Popen(['source', '/home/dylan/Software/root/bin/thisroot.sh', f'./DreamDataReader {os.path.join(fdf_dir, file)}'])
+    sleep(wait_time)
+    try:
+        with open('dream_data_reader_output_file_name.txt', 'w') as file:
+            file.write(root_name)
+        print(f"Filename '{root_name}' written to the file.")
+    except Exception as e:
+        print(f"Error: {e}")
+
+    subprocess.run(['bash', '-c', cmd])
     raw_root_path = os.path.join(raw_root_dir, root_name)
-    # shutil.move('output.root', raw_root_path)
+    shutil.move(root_name, raw_root_path)
     return raw_root_path
 
 

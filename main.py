@@ -21,7 +21,8 @@ from fe_analysis import *
 
 def main():
     # base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
-    base_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/dec6/'
+    # base_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/dec6/'
+    base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
     fdf_dir = base_path
     raw_root_dir = f'{base_path}raw_root/'
     ped_flag = '_pedthr_'
@@ -115,7 +116,7 @@ def process_fdfs(fdf_dir, raw_root_dir):
     overwrite = False
 
     fdf_files = [file for file in os.listdir(fdf_dir) if file.endswith('.fdf')]
-    fdf_data_list = [(file, fdf_dir, raw_root_dir, overwrite) for file in fdf_files][:2]
+    fdf_data_list = [(file, fdf_dir, raw_root_dir, overwrite, file_i) for file_i, file in enumerate(fdf_files)]
     with ProcessPoolExecutor(max_workers=num_threads) as executor:
         with tqdm(total=len(fdf_files), desc='Processing fdfs') as pbar:
             for root_name in executor.map(process_fdf, *zip(*fdf_data_list)):

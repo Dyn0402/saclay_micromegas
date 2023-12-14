@@ -137,7 +137,7 @@ void My_LorentzAngle::ReadFeuIDs(const char* filename) {
     if (tmpstr[0]==0 || tmpstr[0]=='#') continue;
     register int res = sscanf(tmpstr, "%d %d", &n, &id);
     if (res == 2 && n >=0 && n < Ndet/8)  {
-      cout<<"Feu ID "<<id<<" n° "<<n<<endl;
+      cout<<"Feu ID "<<id<<" nï¿½ "<<n<<endl;
       feuIDToN[id] = n;
       feuNToID[n] = id;
     }
@@ -170,7 +170,26 @@ void My_LorentzAngle::ReadOnline() {
 
    TTree::SetMaxTreeSize(8000000000);  // to split tree file above 8GB
   // TTree::SetMaxTreeSize(1000000);  // to split tree file above 1GB
-  TFile *file = new TFile("output.root","RECREATE");
+
+  // Open the file
+    FILE *inputFile = fopen("dream_data_reader_output_file_name.txt", "r");
+
+    // Check if the file is open
+    if (inputFile == NULL) {
+        fprintf(stderr, "Unable to open the file.\n");
+    }
+
+    // Read the filename from the file
+    char filename[100]; // Adjust the size according to your needs
+    fscanf(inputFile, "%s", filename);
+
+    // Close the file
+    fclose(inputFile);
+
+    // Display the filename
+    printf("Read filename: %s\n", filename);
+
+  TFile *file = new TFile(filename,"RECREATE");
   file->cd();
   TTree *treer = new TTree("T","event");
   treer->Branch("Nevent", &Nevent, "Nevent/I"); // event number
