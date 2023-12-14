@@ -21,33 +21,35 @@ from fe_analysis import *
 
 def main():
     # base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
-    # base_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/dec6/'
-    base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
+    base_path = 'F:/Saclay/'
+    data_base = f'{base_path}TestBeamData/2023_July_Saclay/dec6/'
+    # base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
     fdf_dir = base_path
-    raw_root_dir = f'{base_path}raw_root/'
+    raw_root_dir = f'{data_base}raw_root/'
     ped_flag = '_pedthr_'
     connected_channels = load_connected_channels()  # Hard coded into function
 
-    process_fdfs(fdf_dir, raw_root_dir)
-    # run_full_analysis(raw_root_dir, ped_flag, connected_channels)
+    # process_fdfs(fdf_dir, raw_root_dir)
+    run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # single_file_analysis(raw_root_dir, ped_flag, connected_channels)
     # get_run_periods(fdf_dir, ped_flag)
 
     print('donzo')
 
 
-def run_full_analysis(raw_root_dir, ped_flag, connected_channels):
-    num_threads = 6
+def run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels):
+    num_threads = 15
     free_memory = 2.0  # GB of memory to allocate (in theory, in reality needs a lot of wiggle room)
-    chunk_size = 3500
+    chunk_size = 25000
     print(f'{num_threads} threads, {chunk_size} chunk size')
-    run_files = ['P22_P2_2_ME_400_P2_2_DR_1000']  # If 'all' run all files found
+    # run_files = ['P22_P2_2_ME_400_P2_2_DR_1000']  # If 'all' run all files found
+    run_files = 'all'  # If 'all' run all files found
     ped_time = '_231206_14H51_'
-    out_file_path = 'F:/Saclay/TestBeamData/2023_July_Saclay/analysis_data.txt'
+    out_directory = f'{base_path}Analysis/'
+    out_file_path = f'{out_directory}analysis_data.txt'
 
     num_detectors = 2
-    noise_sigmas = 5
-    plot_pedestals = False
+    noise_sigmas = 8
 
     ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file]
     ped_file = ped_files[0] if len(ped_files) == 0 else [file for file in ped_files if ped_time in file][0]
@@ -56,25 +58,25 @@ def run_full_analysis(raw_root_dir, ped_flag, connected_channels):
 
     # Get pedestal data
     ped_root_path = os.path.join(raw_root_dir, ped_file)
-    pedestals, noise_thresholds = run_pedestal(ped_root_path, num_detectors, noise_sigmas, connected_channels,
-                                               plot_pedestals)
+    pedestals, noise_thresholds = run_pedestal(ped_root_path, num_detectors, noise_sigmas, connected_channels)
 
     data_files = [os.path.join(raw_root_dir, file) for file in os.listdir(raw_root_dir)
-                  if file.endswith('.root') and file != ped_file and
+                  if file.endswith('.root') and ped_flag not in file and
                   (run_files == 'all' or any(run_file in file for run_file in run_files))]
 
-    process_data = [(file, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size)
+    process_data = [(file, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size, out_directory)
                     for file in data_files]
     file_data = []
     with ProcessPoolExecutor(max_workers=num_threads) as executor:
         with tqdm(total=len(process_data), desc='Processing Trees') as pbar:
             for file_res in executor.map(analyze_file, *zip(*process_data)):
-                file_data.extend(file_res)
+                if file_res is not None:
+                    file_data.append(file_res)
                 pbar.update(1)
 
     write_to_file(file_data, out_file_path)
 
-    run_periods = get_run_periods(raw_root_dir, ped_flag, plot=False)
+    run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
 
     peak_analysis(file_data, run_periods)
 
@@ -83,7 +85,9 @@ def run_full_analysis(raw_root_dir, ped_flag, connected_channels):
 
 def single_file_analysis(raw_root_dir, ped_flag, connected_channels):
     chunk_size = 3500
-    file_name = 'P22_P2_2_ME_400_P2_2_DR_1000'
+    # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000'
+    # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000_231213_15H46'  # Easier one
+    file_name = 'P22_P2_2_ME_400_P2_2_DR_500_231213_11H17'  # Harder one
     ped_time = '_231206_14H51_'
 
     num_detectors = 2

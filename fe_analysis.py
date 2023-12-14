@@ -175,6 +175,10 @@ def poly2(x, a, b):
     return a * x ** 2 + b * x
 
 
+def poly2_center(x, mu, a, b):
+    return a * (x - mu) ** 2 + b * (x - mu)
+
+
 def poly1(x, a):
     return a * x
 
@@ -494,11 +498,25 @@ def process_file(file_path, pedestals, noise_thresholds, num_detectors, connecte
     return noise_filtered_events
 
 
-def fit_fe_peak(signal_events_max_sum, plot=False):
-    n_bin_vals = [50, 80, 100, 120, 200, 65]
-    percent_cutoffs, nsigma_max, nsigma_min, iterations = [0.35, 0.8], 3, 2.5, 5
-    background, bkg_pars = poly2, 2
-    fit_func = lambda x, a_, mu_, sigma_, *b: gaussian(x, a_, mu_, sigma_) + background(x, *b)
+def fit_fe_peak(signal_events_max_sum, n_bin_vals=None, plot=False, save_fit_path=None):
+    if n_bin_vals is None:
+        n_bin_vals = [50, 80, 100, 120, 200, 65]
+    percentile_cutoffs, cut_percentile, nsigma_max, nsigma_min, iterations = [40, 97], 98, 3, 3, 3
+    background, bkg_pars = poly2_center, 2
+    bkg_lower_bounds, bkg_upper_bounds = (-100, -10), (10, 10)
+    fit_func = lambda x, a_, mu_, sigma_, *b: gaussian(x, a_, mu_, sigma_) + background(x, mu_, *b)
+
+    percentile_mask = signal_events_max_sum < np.percentile(signal_events_max_sum, cut_percentile)
+    signal_events_max_sum = signal_events_max_sum[percentile_mask]
+    low_percentile, high_percentile = np.percentile(signal_events_max_sum, percentile_cutoffs)
+
+    y_min, y_max = np.max(signal_events_max_sum), np.min(signal_events_max_sum)
+    x_range = y_max - y_min
+    # low_cut, high_cut = y_min + percent_cutoffs[0] * x_range, y_max - percent_cutoffs[1] * x_range
+    peak_region_mask = (signal_events_max_sum > low_percentile) & (signal_events_max_sum < high_percentile)
+    n_bin_vals.append(np.size(signal_events_max_sum[peak_region_mask]) // 10)
+    if len(n_bin_vals) == 2:
+        n_bin_vals.pop(0)  # If analysis code only run calculated n_bins
 
     if plot:
         fig_means, ax_means = plt.subplots()
@@ -522,13 +540,16 @@ def fit_fe_peak(signal_events_max_sum, plot=False):
         hist, bin_edges = np.histogram(signal_events_max_sum, bins=n_bins)
         bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
         bin_width = bin_edges[1] - bin_edges[0]
-        lower_bin_cut, upper_bin_cut = int(percent_cutoffs[0] * bin_edges[-1]), int(percent_cutoffs[1] * bin_edges[-1])
+        x_range = bin_edges[-1] - bin_edges[0]
+        # low_range, high_range = percent_cutoffs[0] * x_range, percent_cutoffs[0] * x_range
+        # lower_bin_cut, upper_bin_cut = bin_edges[0] + low_range, bin_edges[-1] - high_range
 
-        mask = (bin_centers > lower_bin_cut) & (bin_centers < upper_bin_cut)
+        # mask = (bin_centers > lower_bin_cut) & (bin_centers < upper_bin_cut)
+        mask = (bin_centers > low_percentile) & (bin_centers < high_percentile)
         x_fit, y_fit = bin_centers[mask], hist[mask]
         mu = Measure(np.average(x_fit, weights=y_fit), 0)  # Average weighted by hist
         sigma = Measure(np.sqrt(np.average((x_fit - mu.val) ** 2, weights=y_fit)), 0)  # Weighted std
-        num_events = Measure(0, 0)
+        num_events, a = Measure(0, 0), Measure(0, 0)
 
         mus, mu_errs, sigmas, sigma_errs, events, event_errs = [], [], [], [], [], []
 
@@ -539,8 +560,16 @@ def fit_fe_peak(signal_events_max_sum, plot=False):
             err = np.where(y_fit == 0, 1, np.sqrt(y_fit))  # Set error to 1 if hist is 0
 
             p0 = [0.9 * np.max(y_fit), mu.val, sigma.val, *([0] * bkg_pars)]
-            popt, pcov = cf(fit_func, x_fit, y_fit, sigma=err, p0=p0, absolute_sigma=True)
+            lower_bounds = [0.3 * np.max(y_fit), low_percentile, 0.1 * sigma.val, *bkg_lower_bounds]
+            upper_bounds = [1.6 * np.max(y_fit), high_percentile, 1.5 * sigma.val, *bkg_upper_bounds]
+            bounds = (lower_bounds, upper_bounds)
+
+            popt, pcov = cf(fit_func, x_fit, y_fit, sigma=err, p0=p0, absolute_sigma=True, bounds=bounds)
             perr = np.sqrt(np.diag(pcov))
+
+            # if not 0 < popt[0] < max_y or not lower_bin_cut < popt[1] < upper_bin_cut or not 0 < popt[2] < upper_bin_cut:
+            #     print(f'Bad Fitting. Quitting.')
+            #     break
 
             a, mu, sigma, *bkg = [Measure(val, err) for val, err in zip(popt, perr)]
             num_events = a / bin_width * sigma * np.sqrt(2 * np.pi)
@@ -558,8 +587,8 @@ def fit_fe_peak(signal_events_max_sum, plot=False):
                 ax.plot(x_plot, fit_func(x_plot, *p0), color='gray', ls=':', label='Initial Guess')
                 ax.plot(x_plot, fit_func(x_plot, *popt), color='red', label='Fit')
                 ax.plot(x_plot, gaussian(x_plot, *popt[:3]), color='green', label='Gaussian')
-                ax.plot(x_plot, background(x_plot, *popt[-bkg_pars:]), color='orange', label='Background')
-                ax.set_ylim(bottom=0)
+                ax.plot(x_plot, background(x_plot, popt[1], *popt[-bkg_pars:]), color='orange', label='Background')
+                ax.set_ylim(bottom=0, top=np.max(hist) * 1.2)
                 ax.legend()
                 ax.set_title(f'{n_bins} Bins Fit Iteration #{i}')
                 print(f'{n_bins} Bins Fit Iteration #{i} Fit: a={a}, events={num_events}, mu={mu}, sigma={sigma}, ' +
@@ -581,6 +610,7 @@ def fit_fe_peak(signal_events_max_sum, plot=False):
         fig_sigmas.tight_layout()
         fig_events.tight_layout()
 
+    if plot or save_fit_path is not None:
         fig, ax = plt.subplots()
         ax.bar(bin_centers, hist, width=bin_width, edgecolor='black', align='center')
         fit_lab = (fr'A = {a}' + '\n' + rf'$\mu$ = {mu}' + '\n' + rf'$\sigma$ = {sigma}' +
@@ -589,18 +619,21 @@ def fit_fe_peak(signal_events_max_sum, plot=False):
         x_plot = np.linspace(fit_range[0] - 0.2 * fit_len, fit_range[1] + 0.2 * fit_len, 1000)
         ax.plot(x_plot, fit_func(x_plot, *popt), color='red', label='Fit')
         ax.plot(x_plot, gaussian(x_plot, *popt[:3]), color='pink', label='Gaussian')
-        ax.plot(x_plot, background(x_plot, *popt[-bkg_pars:]), color='orange', label='Background')
-        ax.annotate(fit_lab, xy=(0.55, 0.65), xycoords='axes fraction', ha='left', va='top',
+        ax.plot(x_plot, background(x_plot, popt[1], *popt[-bkg_pars:]), color='orange', label='Background')
+        ax.annotate(fit_lab, xy=(0.65, 0.65), xycoords='axes fraction', ha='left', va='top',
                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.2),
                     fontsize=12, color='black')
         ax.axvline(fit_range[0], ls='--', color='black', label='Fit Range')
         ax.axvline(fit_range[1], ls='--', color='black')
-        ax.set_ylim(bottom=0)
+        ax.set_ylim(bottom=0, top=np.max(hist) * 1.2)
         ax.legend()
         ax.set_xlabel('ADC')
         ax.set_ylabel('Events')
         ax.set_title('Sum of Strip Max ADCs for Pure Signal Events')
         fig.tight_layout()
+        if save_fit_path is not None:
+            fig.savefig(save_fit_path + '.png')
+            fig.savefig(save_fit_path + '.pdf')
 
     return mu, sigma, num_events
 
@@ -644,7 +677,8 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
     mu, sigma, events = fit_fe_peak(signal_events_max_sum, plot=True)
 
 
-def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size=10000):
+def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size=10000,
+                 out_dir=None):
     events = process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size)
 
     no_noise_events = np.concatenate(events, axis=0)
@@ -656,7 +690,15 @@ def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connecte
     pure_signal_events_max = no_noise_events_max[(~spark_mask) & (~neg_mask)]
 
     signal_events_max_sum = np.sum(pure_signal_events_max, axis=(1, 2))
-    mu, sigma, events = fit_fe_peak(signal_events_max_sum)
+    if len(signal_events_max_sum) < 500:
+        print(f'Warning: Less than 500 signal events found in {file_path}.')
+        return None
+    out_fig_path = f'{out_dir}{os.path.basename(file_path).split(".")[0]}_fe_peak_fit' if out_dir is not None else None
+    try:
+        mu, sigma, events = fit_fe_peak(signal_events_max_sum, n_bin_vals=[75], save_fit_path=out_fig_path)
+    except:
+        print(f'Warning: Fit failed for {file_path}.')
+        return None
 
     mesh_voltage, drift_voltage, run_date = interpret_file_name(file_path)
 
@@ -670,19 +712,26 @@ def peak_analysis(file_data, run_periods):
     ax_mus.set_xlabel('Mesh Voltage (V)')
     ax_mus.set_ylabel('Peak ADC')
 
+    plot_dict = []
     for run_i, run_period in enumerate(run_periods):
         run_period_start, run_period_end = run_period
-        mus, mu_errs, mesh_vs = [], [], []
+        mus, mu_errs, mesh_vs, events = [], [], [], []
         for file in file_data:
             if file['run_date'] < run_period_start or file['run_date'] > run_period_end:
                 continue
-            mu, sigma, mesh_v, drift_v = file['mu'], file['sigma'], file['mesh_voltage'], file['drift_voltage']
+            mu, sigma, num_events = file['mu'], file['sigma'], file['events']
+            mesh_v, drift_v = file['mesh_voltage'], file['drift_voltage']
             if drift_v - mesh_v != drift_minus_mesh:
                 continue
             mus.append(mu.val)
             mu_errs.append(mu.err)
             mesh_vs.append(mesh_v)
-        ax_mus.errorbar(mesh_vs, mus, yerr=mu_errs, marker='o', alpha=0.6, label=f'Run Period #{run_i + 1}')
+            events.append(num_events)
+        plot_dict.append({'mus': mus, 'mu_errs': mu_errs, 'mesh_vs': mesh_vs, 'events': events})
+
+    for x in sorted(plot_dict, key=lambda y: np.mean(y['events'])):
+        ax_mus.errorbar(x['mesh_vs'], x['mus'], yerr=x['mu_errs'], marker='o', alpha=0.6,
+                        label=f'{np.mean(x["events"])} Mean Events')
 
     ax_mus.legend()
     ax_mus.grid()
@@ -732,7 +781,6 @@ def identify_run_periods(run_dates, plot=False):
             tick.set_rotation(45)
 
         fig.tight_layout()
-        plt.show()
 
     return run_periods
 
@@ -746,13 +794,11 @@ def run_pedestal(ped_root_path, num_detectors, noise_sigmas=5, connected_channel
     ped_fits = get_pedestal_fits(ped_data, common_noise=ped_common_noise)
     if plot_pedestals:
         plot_combined_time_series(ped_data, max_events=10)
-        # plot_adc_scatter_vs_strip(ped_data)
         [plot_1d_data(pedestal, title=f'Detector {det_num} Pedestals') for det_num, pedestal in enumerate(pedestals)]
         means = {'Dumb Pedestals': {'vals': pedestals},
                  'Fit Peds No Noise Sub': {'vals': ped_fits_no_noise_sub['mean'],
                                            'errs': ped_fits_no_noise_sub['mean_err']},
                  'Fit Pedestals': {'vals': ped_fits['mean'], 'errs': ped_fits['mean_err']}}
-        # plot_pedestal_comp(, ped_fits_no_noise_sub, stat='mean')
         plot_pedestal_comp(means)
         rmses = {'Dumb RMSes': {'vals': ped_rms},
                  'Fit Sigma No Noise Sub': {'vals': ped_fits_no_noise_sub['sigma'],
@@ -761,7 +807,6 @@ def run_pedestal(ped_root_path, num_detectors, noise_sigmas=5, connected_channel
         plot_pedestal_comp(rmses)
         plot_2d_data(*pedestals)
         [plot_1d_data(ped_rms_det, title=f'Detector {det_num} Ped STDs') for det_num, ped_rms_det in enumerate(ped_rms)]
-        # plt.show()
     pedestals, ped_rms = ped_fits['mean'], ped_fits['sigma']
     noise_thresholds = get_noise_thresholds(ped_rms, noise_sigmas=noise_sigmas)
     if connected_channels is None:
@@ -829,15 +874,18 @@ def load_connected_channels():
 
 def write_to_file(data, file_path):
     with open(file_path, 'w') as file:
-        for key, value in data.items():
-            file.write(f'{key}: {value}\n')
+        for run in data:
+            for key, value in run.items():
+                file.write(f'{key}: {value}\t')
+            file.write('\n')
 
 
 def read_from_file(file_path):
     result = {}
     with open(file_path, 'r') as file:
         for line in file:
-            key, value = line.strip().split(': ')
-            result[key] = eval(value)  # Using eval to convert the string back to its original data type
+            for element in line.strip().split('\t'):
+                key, value = element.strip().split(': ')
+                result[key] = eval(value)  # Using eval to convert the string back to its original data type
     return result
 
