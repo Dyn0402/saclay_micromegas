@@ -15,8 +15,8 @@ from datetime import datetime
 
 
 def main():
-    # download()
-    print_expected_list()
+    download()
+    # print_expected_list()
     print('donzo')
 
 
@@ -35,7 +35,7 @@ def download():
 
     bw_limit = None  # bandwidth limit per energy in Mbps or None
     size_tolerance = 0.001  # percentage tolerance between remote and local sizes, re-download if different
-    earliest_date = datetime(2023, 12, 6)
+    earliest_date = datetime(2023, 11, 20)
 
     remote_path = 'banco_ext:/mnt/TestBeamData/2023_July_Saclay'
 
