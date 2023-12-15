@@ -20,8 +20,8 @@ from fe_analysis import *
 
 
 def main():
-    # base_path = '/local/home/dn277127/Documents/TestBeamData/2023_July_Saclay/dec6/'
-    base_path = 'F:/Saclay/'
+    base_path = '/local/home/dn277127/Documents/'
+    # base_path = 'F:/Saclay/'
     data_base = f'{base_path}TestBeamData/2023_July_Saclay/dec6/'
     # base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
     fdf_dir = base_path
@@ -30,8 +30,9 @@ def main():
     connected_channels = load_connected_channels()  # Hard coded into function
 
     # process_fdfs(fdf_dir, raw_root_dir)
-    run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
-    # single_file_analysis(raw_root_dir, ped_flag, connected_channels)
+    # run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
+    # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
+    single_file_analysis(raw_root_dir, ped_flag, connected_channels)
     # get_run_periods(fdf_dir, ped_flag)
 
     print('donzo')
@@ -84,7 +85,7 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels):
 
 
 def single_file_analysis(raw_root_dir, ped_flag, connected_channels):
-    chunk_size = 3500
+    chunk_size = 15000
     # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000'
     # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000_231213_15H46'  # Easier one
     file_name = 'P22_P2_2_ME_400_P2_2_DR_500_231213_11H17'  # Harder one
@@ -92,7 +93,7 @@ def single_file_analysis(raw_root_dir, ped_flag, connected_channels):
 
     num_detectors = 2
     noise_sigmas = 8
-    plot_pedestals = False
+    plot_pedestals = True
 
     ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file]
     ped_file = ped_files[0] if len(ped_files) == 0 else [file for file in ped_files if ped_time in file][0]
@@ -125,6 +126,15 @@ def process_fdfs(fdf_dir, raw_root_dir):
         with tqdm(total=len(fdf_files), desc='Processing fdfs') as pbar:
             for root_name in executor.map(process_fdf, *zip(*fdf_data_list)):
                 pbar.update(1)
+
+
+def plot_peaks_from_file(base_path, raw_root_dir, ped_flag):
+    file_path = f'{base_path}Analysis/analysis_data.txt'
+    file_data = read_from_file(file_path)
+
+    run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
+
+    peak_analysis(file_data, run_periods)
 
 
 if __name__ == '__main__':

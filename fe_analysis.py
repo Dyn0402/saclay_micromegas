@@ -17,6 +17,8 @@ from time import sleep
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
+import pandas as pd
 from scipy.optimize import curve_fit as cf
 
 import uproot
@@ -51,34 +53,6 @@ def read_fdf_to_root(file, fdf_dir, raw_root_dir, root_name, wait_time):
     raw_root_path = os.path.join(raw_root_dir, root_name)
     shutil.move(root_name, raw_root_path)
     return raw_root_path
-
-
-# def plot_adc_pyroot(file_path):
-#     # Create a ROOT TFile object to open the file
-#     root_file = ROOT.TFile(file_path)
-#
-#     # Access the tree in the file
-#     tree = root_file.Get('T')
-#
-#     # Create a canvas to draw the histogram
-#     canvas = ROOT.TCanvas("canvas", "Histogram Canvas", 800, 600)
-#
-#     # Create a histogram from the tree variable
-#     variable_name = 'StripAmpl'
-#     tree.Draw(variable_name)
-#     histogram = ROOT.gPad.GetPrimitive("htemp")
-#
-#     # Set histogram attributes
-#     histogram.SetTitle(f"Histogram of {variable_name}")
-#     histogram.GetXaxis().SetTitle(variable_name)
-#     histogram.GetYaxis().SetTitle("Frequency")
-#
-#     # Draw the histogram on the canvas
-#     canvas.Draw()
-#
-#     # Keep the program running to display the canvas
-#     ROOT.gApplication.Run()
-#     input()
 
 
 def plot_adc_uproot(file_path):
@@ -236,7 +210,7 @@ def plot_pedestal_comp(ped_dict):
                 ax.plot(range(len(vals_errs['vals'][det_num])), vals_errs['vals'][det_num], label=ped_name)
         ax.set_xlabel('Strip Number')
         ax.set_ylabel("ADC")
-        ax.set_title('Pedestals')
+        ax.set_title(f'Detector #{det_num} Pedestals')
         ax.legend()
         fig.tight_layout()
 
@@ -330,13 +304,15 @@ def plot_spectrum(signal_data):
     ax.set_title('ADC Spectrum')
 
 
-def plot_1d_sample_max_hist(max_data, bins=100, title=None, xlabel='ADC'):
+def plot_1d_sample_max_hist(max_data, bins=100, title=None, xlabel='ADC', log=False):
     fig, ax = plt.subplots()
     for det_num, det in enumerate(np.transpose(max_data)):
         ax.hist(det, bins=bins, edgecolor='black', label=f'Detector #{det_num}')
     ax.legend()
     ax.set_xlabel(xlabel)
     ax.set_ylabel('Events')
+    if log:
+        ax.set_yscale('log')
     if title is not None:
         ax.set_title(title)
     else:
@@ -411,17 +387,19 @@ def get_strip_max(data_max):
     return np.max(data_max, axis=2)
 
 
-def identify_spark(data_max, threshold_sigma=10):
+def identify_spark(data_max, threshold_sigma=10, spark_thresholds=None):
     """
-    Filter out events with high noise.
+    Filter out events with sparking.
     :param data_max: Max strip ADC for each detector for each event.
     :param threshold_sigma: Number of standard deviations above the mean to set the threshold.
+    :param spark_thresholds: If given, use as threshold for each detector.
     :return: Boolean array of shape (n_events,) where True means event is possible spark.
     """
 
     det_avg = np.mean(data_max, axis=2)  # Average over strips for each detector for each event
-    det_std = np.std(det_avg, axis=0)  # Standard deviation of strip average for each detector over all events
-    spark_thresholds = det_std * threshold_sigma  # Threshold for each detector
+    if spark_thresholds is None:  # Calculate thresholds if not given
+        det_std = np.std(det_avg, axis=0)  # Standard deviation of strip average for each detector over all events
+        spark_thresholds = det_std * threshold_sigma  # Threshold for each detector
     spark_mask = det_avg > spark_thresholds  # Select events where detector strip average above threshold
     spark_mask = np.any(spark_mask, axis=1)  # Select events where at least one detector strip average above threshold
 
@@ -432,8 +410,9 @@ def plot_spark_metric(data_max, thresholds):
     det_avg = np.transpose(np.mean(data_max, axis=2))
     fig, ax = plt.subplots()
     for det_num, det in enumerate(det_avg):
-        ax.scatter(range(len(det)), det, label=f'Detector #{det_num}')
-        ax.axhline(thresholds[det_num], ls='--', color='black', label='High Noise Threshold')
+        scatter = ax.scatter(range(len(det)), det, label=f'Detector #{det_num}')
+        color = scatter.get_facecolor()[0]
+        ax.axhline(thresholds[det_num], ls='--', color=color, label=f'Det #{det_num} Spark Threshold')
     ax.set_xlabel('Event #')
     ax.set_ylabel('Detector Strip Averaged ADC')
     ax.set_title('High Noise Metric')
@@ -466,39 +445,49 @@ def process_chunk(chunk, pedestals, noise_thresholds, num_detectors, connected_c
     #     ped_com_sub_data = ped_com_sub_data * connected_channels[np.newaxis, :, :, np.newaxis]
     max_data = get_sample_max(ped_com_sub_data)
     noise_mask = identify_noise(max_data, noise_threshold=noise_thresholds)
-    data_no_noise = suppress_noise(ped_com_sub_data, noise_mask)
+    data_no_noise = ped_com_sub_data[~noise_mask]
+    event_numbers = np.arange(data.shape[0])[~noise_mask]
+    total_events = data.shape[0]
+    # data_no_noise = suppress_noise(ped_com_sub_data, noise_mask)
     # signal_mask = identify_common_signal(max_data, signal_threshold=400)
     # data_signal = select_signal(data, signal_mask)
 
-    return data_no_noise
+    return data_no_noise, event_numbers, total_events
 
 
 def process_chunk_all(chunk, pedestals, num_detectors):
     data = read_det_data_chunk(chunk['StripAmpl'], num_detectors)
-    common_noise = get_common_noise(data, pedestals)
-    ped_sub_data = subtract_pedestal(data, pedestals)
-    ped_com_sub_data = ped_sub_data - common_noise[:, :, np.newaxis, :]
+    ped_com_sub_data = data  # Hack
+    # common_noise = get_common_noise(data, pedestals)
+    # ped_sub_data = subtract_pedestal(data, pedestals)
+    # ped_com_sub_data = ped_sub_data - common_noise[:, :, np.newaxis, :]
 
     return ped_com_sub_data
 
 
-def process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size=10000):
+def process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size=10000,
+                 filer_noise_events=True):
     with uproot.open(file_path) as file:
         tree_names = file.keys()
 
-    noise_filtered_events = []
-    for tree_name in tree_names:
-        with uproot.open(file_path) as file:
+        events, event_numbers = [], []
+        total_events = 0
+        for tree_name in tree_names:
             tree = file[tree_name]
             for chunk in uproot.iterate(tree, branches=['StripAmpl'], step_size=chunk_size):
-                data_no_noise = process_chunk(chunk, pedestals, noise_thresholds, num_detectors, connected_channels)
-                # data_no_noise = process_chunk_all(chunk, pedestals, num_detectors)
-                noise_filtered_events.append(data_no_noise)
+                if filer_noise_events:
+                    chunk_events, event_nums, num_events = process_chunk(chunk, pedestals, noise_thresholds,
+                                                                         num_detectors, connected_channels)
+                    event_numbers.append(event_nums + total_events)
+                    total_events += num_events
+                else:
+                    chunk_events = process_chunk_all(chunk, pedestals, num_detectors)
+                events.append(chunk_events)
 
-    return noise_filtered_events
+    return events, event_numbers, total_events
 
 
-def fit_fe_peak(signal_events_max_sum, n_bin_vals=None, plot=False, save_fit_path=None):
+def fit_fe_peak(signal_events_max_sum, n_bin_vals=None, plot=False, plot_final=False, save_fit_path=None):
     if n_bin_vals is None:
         n_bin_vals = [50, 80, 100, 120, 200, 65]
     percentile_cutoffs, cut_percentile, nsigma_max, nsigma_min, iterations = [40, 97], 98, 3, 3, 3
@@ -596,8 +585,10 @@ def fit_fe_peak(signal_events_max_sum, n_bin_vals=None, plot=False, save_fit_pat
 
         if plot:
             ax_means.errorbar(range(len(mus)), mus, yerr=mu_errs, marker='o', alpha=0.6, label=f'{n_bins} Bins')
-            ax_sigmas.errorbar(range(len(sigmas)), sigmas, yerr=sigma_errs, marker='o', alpha=0.6, label=f'{n_bins} Bins')
-            ax_events.errorbar(range(len(events)), events, yerr=event_errs, marker='o', alpha=0.6, label=f'{n_bins} Bins')
+            ax_sigmas.errorbar(range(len(sigmas)), sigmas, yerr=sigma_errs, marker='o', alpha=0.6,
+                               label=f'{n_bins} Bins')
+            ax_events.errorbar(range(len(events)), events, yerr=event_errs, marker='o', alpha=0.6,
+                               label=f'{n_bins} Bins')
 
     if plot:
         ax_means.legend()
@@ -610,7 +601,7 @@ def fit_fe_peak(signal_events_max_sum, n_bin_vals=None, plot=False, save_fit_pat
         fig_sigmas.tight_layout()
         fig_events.tight_layout()
 
-    if plot or save_fit_path is not None:
+    if plot_final or save_fit_path is not None:
         fig, ax = plt.subplots()
         ax.bar(bin_centers, hist, width=bin_width, edgecolor='black', align='center')
         fit_lab = (fr'A = {a}' + '\n' + rf'$\mu$ = {mu}' + '\n' + rf'$\sigma$ = {sigma}' +
@@ -639,9 +630,21 @@ def fit_fe_peak(signal_events_max_sum, n_bin_vals=None, plot=False, save_fit_pat
 
 
 def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size=10000):
-    events = process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size)
+    # all_events = process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size,
+    #                           filer_noise_events=False)
+    no_noise_events, event_numbers, total_events = process_file(file_path, pedestals, noise_thresholds, num_detectors,
+                                                                connected_channels, chunk_size)
+    print(f'Total events: {total_events}')
 
-    no_noise_events = np.concatenate(events, axis=0)
+    # all_events = np.concatenate(all_events, axis=0)
+    # all_events = all_events * connected_channels[np.newaxis, :, :, np.newaxis]
+    # common_noise = get_common_noise(all_events, pedestals)
+    # ped_sub_data = subtract_pedestal(all_events, pedestals)
+    # ped_com_sub_data = ped_sub_data - common_noise[:, :, np.newaxis, :]
+    # max_data = get_sample_max(ped_com_sub_data)
+    # noise_mask = identify_noise(max_data, noise_threshold=noise_thresholds)
+
+    no_noise_events = np.concatenate(no_noise_events, axis=0)
     print(f'no_noise_events.shape: {no_noise_events.shape}')
 
     # get_connected_channels(no_noise_events, noise_thresholds)  # Figure out which channels are connected
@@ -650,7 +653,7 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
     print(f'no_noise_events_max.shape: {no_noise_events_max.shape}')
     no_noise_events_adcs = no_noise_events_max.reshape(-1, 2)
     print(f'no_noise_events_adcs.shape: {no_noise_events_adcs.shape}')
-    plot_1d_sample_max_hist(no_noise_events_adcs, bins=100, title='Max Sample Strip ADC Spectrum No Noise Events')
+    plot_1d_sample_max_hist(no_noise_events_adcs, log=True, title='Max Sample Strip ADC Spectrum No Noise Events')
     no_noise_events_max_strip = get_max_strip(no_noise_events_max)
     print(f'no_noise_events_max_strip.shape: {no_noise_events_max_strip.shape}')
     bins = np.arange(np.min(no_noise_events_max_strip) - 0.5, np.max(no_noise_events_max_strip) + 1.5, 1)
@@ -658,11 +661,13 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
                             xlabel='Strip Number')
     no_noise_events_strip_max = get_strip_max(no_noise_events_max)
     print(f'no_noise_events_strip_max.shape: {no_noise_events_strip_max.shape}')
-    plot_1d_sample_max_hist(no_noise_events_strip_max, bins=100,
+    plot_1d_sample_max_hist(no_noise_events_strip_max, log=True,
                             title='Max Sample Max Strip ADC Spectrum No Noise Events')
 
     spark_mask, spark_thresholds = identify_spark(no_noise_events_max, threshold_sigma=10)
+    # all_data_spark_mask, spark_thresholds = identify_spark(max_data, spark_thresholds=spark_thresholds)
     plot_spark_metric(no_noise_events_max, spark_thresholds)
+    # plot_spark_metric(max_data, spark_thresholds)
     neg_mask = identify_negatives(no_noise_events_max)
     print(f'spark_mask.shape: {spark_mask.shape}')
     spark_events = no_noise_events[spark_mask]
@@ -674,12 +679,13 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
 
     signal_events_max_sum = np.sum(pure_signal_events_max, axis=(1, 2))
     print(f'signal_events_max_sum.shape: {signal_events_max_sum.shape}')
-    mu, sigma, events = fit_fe_peak(signal_events_max_sum, plot=True)
+    mu, sigma, events = fit_fe_peak(signal_events_max_sum, plot_final=True)
 
 
 def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size=10000,
                  out_dir=None):
-    events = process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size)
+    events, event_numbers, total_events = process_file(file_path, pedestals, noise_thresholds, num_detectors,
+                                                       connected_channels, chunk_size)
 
     no_noise_events = np.concatenate(events, axis=0)
 
@@ -706,7 +712,7 @@ def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connecte
             'mesh_voltage': mesh_voltage, 'drift_voltage': drift_voltage, 'run_date': run_date}
 
 
-def peak_analysis(file_data, run_periods):
+def peak_analysis_hold(file_data, run_periods):
     drift_minus_mesh = 600
     fig_mus, ax_mus = plt.subplots()
     ax_mus.set_xlabel('Mesh Voltage (V)')
@@ -736,6 +742,72 @@ def peak_analysis(file_data, run_periods):
     ax_mus.legend()
     ax_mus.grid()
     fig_mus.tight_layout()
+
+    plt.show()
+
+
+def peak_analysis(file_data, run_periods):
+    drift_minus_mesh = 600
+
+    df = pd.DataFrame(file_data)
+
+    # Function to determine the run period for a given date
+    def find_run_period(date):
+        for index, run_periods_row in run_periods.iterrows():
+            if run_periods_row['start_date'] <= date <= run_periods_row['end_date']:
+                return index
+        return None
+
+    def split_measures(measure, col_name):
+        return pd.Series({f'{col_name}_val': measure.val, f'{col_name}_err': measure.err})
+
+    # Apply the function to create a new column 'run_period' in the dataframe
+    df['run_period'] = df['run_date'].apply(find_run_period)
+    df = df[df['drift_voltage'] - df['mesh_voltage'] == drift_minus_mesh]
+
+    # Split measure columns into separate columns for val and err
+    for column in ['mu', 'sigma', 'events']:
+        df = df.join(df[column].apply(split_measures, col_name=column))
+
+    print(df)
+
+    run_period_event_avgs = df.groupby('run_period')['events_val'].mean().sort_values(ascending=False)
+
+    fig_mus, ax_mus = plt.subplots()
+    ax_mus.set_xlabel('Mesh Voltage (V)')
+    ax_mus.set_ylabel('Peak ADC')
+    for run_i in run_period_event_avgs.index:
+        df_i = df[df['run_period'] == run_i]
+        ax_mus.errorbar(df_i['mesh_voltage'], df_i['mu_val'], yerr=df_i['mu_err'], marker='o', alpha=0.6,
+                        label=f'Run #{run_i} {np.average(df_i["events"])} Mean Events')
+    ax_mus.legend()
+    ax_mus.grid()
+    fig_mus.tight_layout()
+
+    fig_mus_vs_events, ax_mus_vs_events = plt.subplots()
+    fig_mus_dev_vs_events, ax_mus_dev_vs_events = plt.subplots()
+    ax_mus_vs_events.set_xlabel('Number of Fe Events')
+    ax_mus_vs_events.set_ylabel('Peak ADC')
+    ax_mus_dev_vs_events.set_xlabel('Number of Fe Events')
+    ax_mus_dev_vs_events.set_ylabel('Percent Deviation of Peak ADC from Average')
+    ax_mus_dev_vs_events.yaxis.set_major_formatter(mtick.PercentFormatter())
+    ax_mus_dev_vs_events.axhline(0, ls='-', color='black')
+    for mesh_v in sorted(pd.unique(df['mesh_voltage'])):
+        df_mesh_v = df[df['mesh_voltage'] == mesh_v].sort_values(by='events_val')
+        ax_mus_vs_events.errorbar(df_mesh_v['events_val'], df_mesh_v['mu_val'], xerr=df_mesh_v['events_err'],
+                                  yerr=df_mesh_v['mu_err'], marker='o', alpha=1, label=f'{mesh_v} V Mesh Voltage')
+        average_mu = np.average(df_mesh_v['mu'])
+        mu_dev = ((df_mesh_v['mu'] - average_mu) / average_mu) * 100
+        mu_dev_vals, mu_dev_errs = mu_dev.apply(lambda x: x.val), mu_dev.apply(lambda x: x.err)
+        ax_mus_dev_vs_events.errorbar(df_mesh_v['events_val'], mu_dev_vals, xerr=df_mesh_v['events_err'],
+                                      yerr=mu_dev_errs, marker='o', alpha=0.6, label=f'{mesh_v} V Mesh Voltage')
+
+    ax_mus_vs_events.legend()
+    ax_mus_vs_events.grid()
+    ax_mus_dev_vs_events.legend()
+    ax_mus_dev_vs_events.grid()
+    fig_mus_vs_events.tight_layout()
+    fig_mus_dev_vs_events.tight_layout()
 
     plt.show()
 
@@ -782,7 +854,9 @@ def identify_run_periods(run_dates, plot=False):
 
         fig.tight_layout()
 
-    return run_periods
+    run_periods_df = pd.DataFrame(run_periods, columns=['start_date', 'end_date'])
+
+    return run_periods_df
 
 
 def run_pedestal(ped_root_path, num_detectors, noise_sigmas=5, connected_channels=None, plot_pedestals=False):
@@ -794,7 +868,6 @@ def run_pedestal(ped_root_path, num_detectors, noise_sigmas=5, connected_channel
     ped_fits = get_pedestal_fits(ped_data, common_noise=ped_common_noise)
     if plot_pedestals:
         plot_combined_time_series(ped_data, max_events=10)
-        [plot_1d_data(pedestal, title=f'Detector {det_num} Pedestals') for det_num, pedestal in enumerate(pedestals)]
         means = {'Dumb Pedestals': {'vals': pedestals},
                  'Fit Peds No Noise Sub': {'vals': ped_fits_no_noise_sub['mean'],
                                            'errs': ped_fits_no_noise_sub['mean_err']},
@@ -805,8 +878,6 @@ def run_pedestal(ped_root_path, num_detectors, noise_sigmas=5, connected_channel
                                             'errs': ped_fits_no_noise_sub['sigma_err']},
                  'Fit Sigma': {'vals': ped_fits['sigma'], 'errs': ped_fits['sigma_err']}}
         plot_pedestal_comp(rmses)
-        plot_2d_data(*pedestals)
-        [plot_1d_data(ped_rms_det, title=f'Detector {det_num} Ped STDs') for det_num, ped_rms_det in enumerate(ped_rms)]
     pedestals, ped_rms = ped_fits['mean'], ped_fits['sigma']
     noise_thresholds = get_noise_thresholds(ped_rms, noise_sigmas=noise_sigmas)
     if connected_channels is None:
@@ -872,7 +943,7 @@ def load_connected_channels():
     return connected_channels
 
 
-def write_to_file(data, file_path):
+def write_to_file(data, file_path, encoding='ISO-8859-1'):
     with open(file_path, 'w') as file:
         for run in data:
             for key, value in run.items():
@@ -881,11 +952,18 @@ def write_to_file(data, file_path):
 
 
 def read_from_file(file_path):
-    result = {}
-    with open(file_path, 'r') as file:
+    results = []
+    datetime_format = '%Y-%m-%d %H:%M:%S'
+    with open(file_path, 'r', encoding='ISO-8859-1') as file:
         for line in file:
+            result = {}
             for element in line.strip().split('\t'):
                 key, value = element.strip().split(': ')
-                result[key] = eval(value)  # Using eval to convert the string back to its original data type
-    return result
-
+                if ' ± ' in value:
+                    result[key] = Measure(*(float(x) for x in value.split(' ± ')))
+                elif key == 'run_date':
+                    result[key] = datetime.strptime(value, datetime_format)
+                else:
+                    result[key] = eval(value)  # Using eval to convert the string back to its original data type
+            results.append(result)
+    return results

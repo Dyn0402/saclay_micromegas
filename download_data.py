@@ -10,12 +10,22 @@ Created as saclay_micromegas/download_data.py
 
 import os
 from subprocess import Popen, PIPE
+import platform
 from datetime import datetime
 
 
 def main():
-    download()
+    # download()
+    print_expected_list()
     print('donzo')
+
+
+def print_expected_list():
+    expected_list = get_expected_list('banco_ext:/mnt/TestBeamData/2023_July_Saclay')
+    sorted_list = sorted(expected_list.items(), key=lambda x: x[1]['date'], reverse=True)
+    for name, data in sorted_list:
+        if name.endswith('.fdf') and not name.startswith('test_'):
+            print(data['date'], name)
 
 
 def download():
@@ -58,8 +68,19 @@ def download():
 
 
 def get_expected_list(remote_path):
-    cmd = f'\'ls -l\'|sftp {remote_path}'
-    process = Popen(["powershell", cmd], stdout=PIPE, stderr=PIPE, text=True)
+    current_os = platform.system().lower()
+
+    # cmd = f'\'ls -l\'|sftp {remote_path}'
+    # process = Popen(["powershell", cmd], stdout=PIPE, stderr=PIPE, text=True)
+    # stdout, stderr = process.communicate()
+
+    if current_os == "windows":
+        cmd = f'\'ls -l\' | sftp {remote_path}'
+        process = Popen(["powershell", cmd], stdout=PIPE, stderr=PIPE, text=True)
+    else:  # Assuming Unix-like system (Linux or macOS)
+        cmd = f'sftp -b <(echo "ls -l") {remote_path}'
+        process = Popen(["bash", "-c", cmd], stdout=PIPE, stderr=PIPE, text=True)
+
     stdout, stderr = process.communicate()
 
     files_str = stdout.split('\n')
