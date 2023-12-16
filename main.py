@@ -20,19 +20,20 @@ from fe_analysis import *
 
 
 def main():
-    base_path = '/local/home/dn277127/Documents/'
+    # base_path = '/local/home/dn277127/Documents/'
+    base_path = '/media/ucla/Saclay/'
     # base_path = 'F:/Saclay/'
     data_base = f'{base_path}TestBeamData/2023_July_Saclay/dec6/'
     # base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
-    fdf_dir = base_path
+    fdf_dir = data_base
     raw_root_dir = f'{data_base}raw_root/'
     ped_flag = '_pedthr_'
     connected_channels = load_connected_channels()  # Hard coded into function
 
-    # process_fdfs(fdf_dir, raw_root_dir)
+    process_fdfs(fdf_dir, raw_root_dir)
     # run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
-    single_file_analysis(raw_root_dir, ped_flag, connected_channels)
+    # single_file_analysis(raw_root_dir, ped_flag, connected_channels)
     # get_run_periods(fdf_dir, ped_flag)
 
     print('donzo')
@@ -120,8 +121,10 @@ def process_fdfs(fdf_dir, raw_root_dir):
     num_threads = 15
     overwrite = False
 
+    print(fdf_dir)
     fdf_files = [file for file in os.listdir(fdf_dir) if file.endswith('.fdf')]
     fdf_data_list = [(file, fdf_dir, raw_root_dir, overwrite, file_i) for file_i, file in enumerate(fdf_files)]
+    print(fdf_files)
     with ProcessPoolExecutor(max_workers=num_threads) as executor:
         with tqdm(total=len(fdf_files), desc='Processing fdfs') as pbar:
             for root_name in executor.map(process_fdf, *zip(*fdf_data_list)):
