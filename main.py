@@ -182,7 +182,7 @@ def single_file_analysis(raw_root_dir, ped_flag):
 
 def plot_p2_coverage(raw_root_dir, ped_flag):
     chunk_size = 60000
-    mesh_v = 390
+    mesh_v = 410
     drift_v = mesh_v + 600
     file_name = f'P22_P2_2_ME_{mesh_v}_P2_2_DR_{drift_v}_'
     save_path = 'F:/Saclay/Analysis/'
@@ -233,7 +233,7 @@ def plot_p2_coverage(raw_root_dir, ped_flag):
         distance = file_run_info['distance'] if not file_run_info['aluminum'] else file_run_info['distance'] + 1
         distance_fig_map.update({distance: fig_2d})  # Add 1 to distance if aluminum just for ordering
 
-    with PdfPages(f'{save_path}P2_2_coverage.pdf') as pdf:
+    with PdfPages(f'{save_path}P2_2_coverage_meshv_{mesh_v}.pdf') as pdf:
         for distance, fig_2d in sorted(distance_fig_map.items()):
             pdf.savefig(fig_2d)
 
