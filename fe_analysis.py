@@ -120,7 +120,7 @@ def get_pedestals(data):
 def get_common_noise(data, pedestals):
     data_ped_sub = data - pedestals[np.newaxis, :, :, np.newaxis]
     data_ped_sub_trans = np.transpose(data_ped_sub, axes=(0, 1, 3, 2))
-    common_noise = np.median(data_ped_sub_trans, axis=-1)
+    common_noise = np.nanmedian(data_ped_sub_trans, axis=-1)
 
     return common_noise
 
@@ -358,6 +358,71 @@ def plot_urw_position(data, max_events=None, separate_event_plots=False, thresho
             fig.subplots_adjust(hspace=0, top=0.94, bottom=0.08, left=0.07, right=0.995)
 
 
+def plot_p2_2d(channel_sum, title=None, show_chan_nums=False):
+    if show_chan_nums:
+        large_pixels = np.arange(32)
+        large_pixels = large_pixels.reshape(8, 4)
+        large_pixels = large_pixels.transpose()
+        small_pixels = np.arange(50).reshape(5, 10)
+
+        vmin, vmax = 0, 50
+
+        fig, ax = plt.subplots()
+        im_small = ax.imshow(small_pixels, cmap='plasma', extent=[0, 10, 5, 10], vmin=vmin, vmax=vmax, origin='lower')
+        im_large = ax.imshow(large_pixels, cmap='plasma', extent=[0, 10, 0, 5], vmin=vmin, vmax=vmax, origin='lower')
+        ax.set_aspect('equal', 'box')
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 10)
+
+        # Annotate each pixel with its value
+        for pixel_set, y_offset, pos_scale in zip([large_pixels, small_pixels], [0, 5], [5. / 4, 1]):
+            for i in range(pixel_set.shape[0]):
+                for j in range(pixel_set.shape[1]):
+                    plt.annotate(f'{pixel_set[i, j]}', np.array((j + 0.5, i + y_offset + 0.5)) * pos_scale,
+                                 color='white', ha='center', va='center')
+
+        # Create a single colorbar for both plots
+        cbar = fig.colorbar(im_small, ax=ax, orientation='vertical', pad=0.1)
+        cbar.set_label('Value')
+
+    # large_pixels, small_pixels = channel_sum[0][channel_sum[0] <= 0] = np.nan, channel_sum[1][channel_sum[1] <= 0] = np.nan
+    large_pixels = channel_sum[0][:32].reshape(8, 4).transpose()
+    small_pixels = channel_sum[1][:50].reshape(5, 10)[::-1, ::-1] * (5. / 4)**2
+    large_pixel_indices = np.arange(32).reshape(8, 4).transpose()
+    small_pixel_indices = np.arange(50).reshape(5, 10)[::-1, ::-1]
+
+    # large_pixels, small_pixels = large_pixels[large_pixels <= 0] = np.nan, small_pixels[small_pixels <= 0] = np.nan
+    large_pixels, small_pixels = np.where(large_pixels <= 0, np.nan, large_pixels), np.where(small_pixels <= 0, np.nan, small_pixels)
+    large_pixels, small_pixels = np.ma.masked_invalid(large_pixels), np.ma.masked_invalid(small_pixels)
+
+    vmin, vmax = np.min(channel_sum), np.max(channel_sum)
+
+    fig, ax = plt.subplots()
+    im_small = ax.imshow(small_pixels, cmap='plasma', extent=[0, 10, 5, 10], vmin=vmin, vmax=vmax, origin='lower')
+    im_large = ax.imshow(large_pixels, cmap='plasma', extent=[0, 10, 0, 5], vmin=vmin, vmax=vmax, origin='lower')
+    ax.set_aspect('equal', 'box')
+    ax.set_xlabel('Horizontal Position (arb)')
+    ax.set_ylabel('Vertical Position (arb)')
+    if title is not None:
+        ax.set_title(title)
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 10)
+
+    if show_chan_nums:  # Annotate each pixel with its value
+        for pixel_set, y_offset, pos_scale in zip([large_pixel_indices, small_pixel_indices], [0, 5], [5. / 4, 1]):
+            for i in range(pixel_set.shape[0]):
+                for j in range(pixel_set.shape[1]):
+                    plt.annotate(f'{pixel_set[i, j]}', np.array((j + 0.5, i + y_offset + 0.5)) * pos_scale,
+                                 color='white', ha='center', va='center')
+
+    # Create a single colorbar for both plots
+    cbar = fig.colorbar(im_small, ax=ax, orientation='vertical', pad=0.1)
+    cbar.set_label('ADC Sum Over All Events')
+    fig.tight_layout()
+
+    return fig
+
+
 def plot_det_spectrum(signal_data):
     fig, ax = plt.subplots()
     for det_num, det in enumerate(signal_data):
@@ -431,13 +496,14 @@ def identify_noise(max_data, noise_threshold=100):
     moving_averages = [3, 4, 5]
     noise_strips = max_data < noise_threshold  # Compare strip maxima with the threshold
     noise_mask = np.all(noise_strips, axis=2)  # Mark event as noise if all strips on all detectors below threshold
+
     if isinstance(noise_threshold, np.ndarray) and noise_threshold.ndim == 2:
         for pnts in moving_averages:
             max_data_mv_avg = np.apply_along_axis(np.convolve, -1, max_data, np.ones(pnts) / pnts, mode='same')
             noise_strips_mv_avg = max_data_mv_avg < noise_threshold / np.sqrt(pnts)  # Compare strip maxima with the threshold
             noise_mask_mv_avg = np.all(noise_strips_mv_avg, axis=2)  # Mark event as noise if all strips on all detectors below threshold
             noise_mask = noise_mask | noise_mask_mv_avg
-        neg_mask = -np.min(max_data, axis=2) > np.max(max_data, axis=2) / 3
+        neg_mask = -np.min(max_data, axis=2) > np.max(max_data, axis=2) / 3  # Mark event as noise if large negative
         noise_mask = noise_mask | neg_mask
     noise_mask = np.any(noise_mask, axis=1)  # Mark event as noise either detector below threshold
 
@@ -532,22 +598,23 @@ def identify_negatives(data_max):
 
 def process_chunk(chunk, pedestals, noise_thresholds, num_detectors, connected_channels=None):
     data = read_det_data_chunk(chunk['StripAmpl'], num_detectors)
-    if connected_channels is not None:  # Zero out disconnected channels
-        data = data * connected_channels[np.newaxis, :, :, np.newaxis]
+    data = data.astype(float)
+    if connected_channels is not None:  # Nan out disconnected channels
+        connected_mask = connected_channels.astype(float)
+        connected_mask[~connected_channels] = np.nan
+        data = data * connected_mask[np.newaxis, :, :, np.newaxis]
     common_noise = get_common_noise(data, pedestals)
     ped_sub_data = subtract_pedestal(data, pedestals)
     ped_com_sub_data = ped_sub_data - common_noise[:, :, np.newaxis, :]
-    # if remove_disconnected:  # Zero out disconnected channels
-    #     ped_com_sub_data = ped_com_sub_data * connected_channels[np.newaxis, :, :, np.newaxis]
     max_data = get_sample_max(ped_com_sub_data)
-    # fifth_smallest = np.partition(max_data, 4, axis=2)[:, :, 4]
-    max_medians = np.median(max_data, axis=2)
-    max_data = max_data - max_medians[:, :, np.newaxis]
-    ped_com_sub_data = ped_com_sub_data - max_medians[:, :, np.newaxis, np.newaxis]
+    max_medians = np.nanmedian(max_data, axis=(0, 2))
+    max_data = max_data - max_medians[np.newaxis, :, np.newaxis]
+    ped_com_sub_data = ped_com_sub_data - max_medians[np.newaxis, :, np.newaxis, np.newaxis]
     max_data = max_data.reshape((max_data.shape[0], max_data.shape[1] // 2, max_data.shape[2] * 2))  # For URWs
     noise_thresholds = noise_thresholds.reshape((noise_thresholds.shape[0] // 2, noise_thresholds.shape[1] * 2))
+    max_data = np.nan_to_num(max_data)
     noise_mask = identify_noise(max_data, noise_threshold=noise_thresholds)
-    data_no_noise = ped_com_sub_data[~noise_mask]
+    data_no_noise = np.nan_to_num(ped_com_sub_data[~noise_mask])  # Convert disconnected nan channels to 0
     event_numbers = np.arange(data.shape[0])[~noise_mask]
     total_events = data.shape[0]
     # data_no_noise = suppress_noise(ped_com_sub_data, noise_mask)
@@ -1031,6 +1098,9 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
     # plot_position_data(super_cut_event_max, event_nums=None)
     plot_urw_position(super_cut_event_max, separate_event_plots=True, thresholds=noise_thresholds, max_events=10, plot_avgs=False)
 
+    channel_sum = np.sum(no_noise_events_max, axis=0)
+    plot_p2_2d(channel_sum)
+
 
 def analyze_spectra(file_path, pedestals, noise_thresholds, num_detectors, connected_channels=None, chunk_size=10000,
                     title='Test', save_path=None):
@@ -1143,6 +1213,16 @@ def peak_analysis(file_data, run_periods):
     fig_mus_dev_vs_events.tight_layout()
 
     plt.show()
+
+
+def analyze_file_p2_coverage(file_path, pedestals, noise_thresholds, num_detectors, connected_channels,
+                             chunk_size=10000, title=None):
+    no_noise_events, event_numbers, total_events = process_file(file_path, pedestals, noise_thresholds, num_detectors,
+                                                                connected_channels, chunk_size)
+    no_noise_events_max = get_sample_max(no_noise_events)
+    channel_sum = np.sum(no_noise_events_max, axis=0)
+    fig_2d = plot_p2_2d(channel_sum, title=title)
+    return fig_2d
 
 
 def get_run_periods(dir_path, ped_flag, plot=True):
