@@ -273,6 +273,75 @@ def get_sample_max(data):
     return np.max(data, axis=-1)
 
 
+def get_max_edge_events(data, edge_strips=None):
+    """
+    Find events in which the detector's max strip's max sample is on the edge of the time window.
+    :param data: ADC data of shape (n_events, n_detectors, n_strips, n_samples)
+    :param edge_strips: List of strips to consider edge strips. If None, don't filter out edge strips.
+    :return: Boolean array of shape (n_events,) where True means event is an edge max event.
+    """
+    event_samples = data.reshape(data.shape[0], np.product(data.shape[1:]))
+    event_max_sample_indices = np.unravel_index(np.argmax(event_samples, axis=-1), data.shape[1:])
+    event_max_time_index = event_max_sample_indices[-1]
+    time_edge_max_events = np.logical_or(event_max_time_index == 0, event_max_time_index == data.shape[-1] - 1)
+
+    if edge_strips is not None:
+        event_max_det_strip_indices = np.array(event_max_sample_indices[:2]).transpose()
+        # space_edge_max_events = np.all(edge_strips[np.newaxis, :, :] == event_max_det_strip_indices, axis=1)
+        space_edge_max_events = np.any(np.all(edge_strips == event_max_det_strip_indices[:, np.newaxis, :], axis=2),
+                                       axis=1)
+
+    return time_edge_max_events if edge_strips is None else np.logical_or(time_edge_max_events, space_edge_max_events)
+
+
+def get_flat_signals(data, threshold=25):
+    """
+    Get events in which the max detector's max strip is flat vs time.
+    :param data: ADC data of shape (n_events, n_detectors, n_strips, n_samples)
+    :return:
+    """
+    event_samples = data.reshape(data.shape[0], np.product(data.shape[1:]))
+    event_max_sample_indices = np.unravel_index(np.argmax(event_samples, axis=-1), data.shape[1:])
+    det_max_indices, strip_max_indices, time_max_indices = event_max_sample_indices
+    flat_mask = []
+    for event_num, event in enumerate(data):
+        event_det_max = event[det_max_indices[event_num]]
+        event_det_max_strip = event_det_max[strip_max_indices[event_num]]
+        event_det_max_strip_sample = event_det_max_strip[time_max_indices[event_num]]
+        max_minus_mean = event_det_max_strip_sample - np.mean(event_det_max_strip)
+        flat_mask.append(max_minus_mean < threshold)
+    return np.array(flat_mask)
+
+
+def get_flat_signals_gpt(data, threshold=100):
+    """
+    Get events in which the max detector's max strip is flat vs time.
+    :param data: ADC data of shape (n_events, n_detectors, n_strips, n_samples)
+    :param threshold: Threshold of max minus mean to consider flat
+    :return: flat_mask: Boolean array indicating flat signals for each event
+    """
+    # Reshape data for easier manipulation
+    event_samples = data.reshape(data.shape[0], -1)
+
+    # Find indices of max samples
+    event_max_sample_indices = np.argmax(event_samples, axis=-1)
+    det_max_indices, strip_max_indices, time_max_indices = np.unravel_index(event_max_sample_indices, data.shape[1:])
+
+    # Extract corresponding strips and samples
+    event_det_max = data[np.arange(data.shape[0]), det_max_indices]
+    event_det_max_strip = event_det_max[np.arange(data.shape[0]), strip_max_indices]
+    event_det_max_strip_sample = event_det_max_strip[np.arange(data.shape[0]), time_max_indices]
+
+    # Calculate max_minus_mean for each event
+    mean_values = np.mean(event_det_max_strip, axis=-1, keepdims=True)
+    max_minus_mean = event_det_max_strip_sample - mean_values
+
+    # Create flat_mask based on threshold
+    flat_mask = max_minus_mean < threshold
+
+    return flat_mask
+
+
 def plot_position_data(data, event_nums=None, plot_indiv_detectors=False):
     if event_nums is not None:
         data = data[event_nums]
@@ -503,8 +572,8 @@ def identify_noise(max_data, noise_threshold=100):
             noise_strips_mv_avg = max_data_mv_avg < noise_threshold / np.sqrt(pnts)  # Compare strip maxima with the threshold
             noise_mask_mv_avg = np.all(noise_strips_mv_avg, axis=2)  # Mark event as noise if all strips on all detectors below threshold
             noise_mask = noise_mask | noise_mask_mv_avg
-        neg_mask = -np.min(max_data, axis=2) > np.max(max_data, axis=2) / 3  # Mark event as noise if large negative
-        noise_mask = noise_mask | neg_mask
+        # neg_mask = -np.min(max_data, axis=2) > np.max(max_data, axis=2) / 3  # Mark event as noise if large negative
+        # noise_mask = noise_mask | neg_mask
     noise_mask = np.any(noise_mask, axis=1)  # Mark event as noise either detector below threshold
 
     # print(f'max_data shape: {max_data.shape}, noise_threshold shape: {noise_threshold.shape}, '
@@ -1032,7 +1101,8 @@ def plot_spectrum_noise_fit(signal_events_max_sum, bins=50, title='Test'):
     fig_noise.tight_layout()
 
 
-def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, connected_channels=None, chunk_size=10000):
+def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, connected_channels=None, edge_strips=None,
+                    chunk_size=10000):
     # all_events = process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size,
     #                           filer_noise_events=False)
     no_noise_events, event_numbers, total_events = process_file(file_path, pedestals, noise_thresholds, num_detectors,
@@ -1050,6 +1120,20 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
     print(f'no_noise_events.shape: {no_noise_events.shape}')
 
     # get_connected_channels(no_noise_events, noise_thresholds)  # Figure out which channels are connected
+    max_edge_events_mask = get_max_edge_events(no_noise_events, edge_strips=edge_strips)
+    max_edge_events = no_noise_events[max_edge_events_mask]
+    max_edge_events_max = get_sample_max(max_edge_events)
+    if len(max_edge_events) > 0:
+        plot_combined_time_series(max_edge_events, max_events=10)
+        plot_urw_position(max_edge_events_max, separate_event_plots=True, thresholds=noise_thresholds, max_events=10)
+
+    flat_signals_mask = get_flat_signals(no_noise_events)
+    print(flat_signals_mask)
+    flat_signal_events = no_noise_events[flat_signals_mask]
+    flat_signal_events_max = get_sample_max(flat_signal_events)
+    if len(flat_signal_events) > 0:
+        plot_combined_time_series(flat_signal_events, max_events=10)
+        plot_urw_position(flat_signal_events_max, separate_event_plots=True, thresholds=noise_thresholds, max_events=10)
 
     no_noise_events_max = get_sample_max(no_noise_events)
     print(f'no_noise_events_max.shape: {no_noise_events_max.shape}')
@@ -1098,8 +1182,8 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
     # plot_position_data(super_cut_event_max, event_nums=None)
     plot_urw_position(super_cut_event_max, separate_event_plots=True, thresholds=noise_thresholds, max_events=10, plot_avgs=False)
 
-    channel_sum = np.sum(no_noise_events_max, axis=0)
-    plot_p2_2d(channel_sum)
+    # channel_sum = np.sum(no_noise_events_max, axis=0)
+    # plot_p2_2d(channel_sum)
 
 
 def analyze_spectra(file_path, pedestals, noise_thresholds, num_detectors, connected_channels=None, chunk_size=10000,

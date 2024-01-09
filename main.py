@@ -29,8 +29,8 @@ def main():
     # process_fdfs(fdf_dir, raw_root_dir)
     # run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
-    # single_file_analysis(raw_root_dir, ped_flag)
-    plot_p2_coverage(raw_root_dir, ped_flag)
+    single_file_analysis(raw_root_dir, ped_flag)
+    # plot_p2_coverage(raw_root_dir, ped_flag)
     # get_run_periods(fdf_dir, ped_flag)
 
     print('donzo')
@@ -101,11 +101,17 @@ def single_file_analysis(raw_root_dir, ped_flag):
         num_detectors = 4
         ped_time = '_231124_16H27_'
         connected_channels = None  # All channels connected for URW
+        edge_strips = np.array([[0, 0], [0, 1], [1, 62], [1, 63], [2, 0], [2, 1], [3, 62], [3, 63]])
         noise_sigmas = 1
     else:
         num_detectors = 2
         ped_time = '_231206_14H51_'
         connected_channels = load_connected_channels()  # Hard coded into function
+        edge_strips = np.array([[0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 8], [0, 12],
+                                [0, 16], [0, 20], [0, 24], [0, 28], [0, 29], [0, 30], [0, 31],
+                                [1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8], [1, 9],
+                                [1, 10], [1, 19], [1, 20], [1, 29], [1, 30], [1, 39], [1, 40], [1, 49]])
+        # edge_strips = None
         noise_sigmas = 3
 
     ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file.lower()]
@@ -126,7 +132,8 @@ def single_file_analysis(raw_root_dir, ped_flag):
         if len(data_files) > 1:
             print(f'Warning: Multiple data files found: {data_files}.\nUsing {data_file}')
 
-        analyze_file_qa(data_file, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size)
+        analyze_file_qa(data_file, pedestals, noise_thresholds, num_detectors, connected_channels, edge_strips,
+                        chunk_size)
 
     # run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
     # data_files = [os.path.join(raw_root_dir, file) for file in os.listdir(raw_root_dir)
