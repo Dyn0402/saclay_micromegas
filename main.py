@@ -45,12 +45,12 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
     urw_flag = 'URW_'
     ped_times = {'p2': '_231206_14H51_', 'urw': '_231124_16H27_'}
     edge_strips = {'p2': None, 'urw': np.array([[0, 0], [0, 1], [1, 62], [1, 63], [2, 0], [2, 1], [3, 62], [3, 63]])}
+    noise_sigmas = {'p2': 3, 'urw': 1}
     connected_channels = {'p2': p2_connected_channels, 'urw': None}
     out_directory = f'{base_path}Analysis/'
     out_file_path = f'{out_directory}analysis_data.txt'
 
     num_detectors = 2
-    noise_sigmas = 8
 
     ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file]
     pedestals, noise_thresholds = {}, {}
@@ -59,7 +59,7 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
             if ped_time in ped_file:
                 # Get pedestal data
                 ped_root_path = os.path.join(raw_root_dir, ped_file)
-                peds, noise_theshs = run_pedestal(ped_root_path, num_detectors, noise_sigmas,
+                peds, noise_theshs = run_pedestal(ped_root_path, num_detectors, noise_sigmas[ped_type],
                                                   connected_channels[ped_type])
                 pedestals.update({ped_type: peds})
                 noise_thresholds.update({ped_type: noise_theshs})
@@ -79,7 +79,8 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
     file_data = []
     with ProcessPoolExecutor(max_workers=num_threads) as executor:
         with tqdm(total=len(process_data), desc='Processing Trees') as pbar:
-            for file_res in executor.map(analyze_file, *zip(*process_data)):
+            for file_res in tqdm(executor.map(analyze_file, *zip(*process_data)), total=len(process_data),
+                                 desc='Processing Trees'):
                 if file_res is not None:
                     file_data.append(file_res)
                 pbar.update(1)
