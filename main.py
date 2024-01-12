@@ -27,23 +27,25 @@ def main():
     connected_channels = load_connected_channels()  # Hard coded into function
 
     # process_fdfs(fdf_dir, raw_root_dir)
-    # run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
+    run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
-    single_file_analysis(raw_root_dir, ped_flag)
+    # single_file_analysis(raw_root_dir, ped_flag)
     # plot_p2_coverage(raw_root_dir, ped_flag)
     # get_run_periods(fdf_dir, ped_flag)
 
     print('donzo')
 
 
-def run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels):
+def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
     num_threads = 15
-    free_memory = 2.0  # GB of memory to allocate (in theory, in reality needs a lot of wiggle room)
-    chunk_size = 25000
+    chunk_size = 10000
     print(f'{num_threads} threads, {chunk_size} chunk size')
     # run_files = ['P22_P2_2_ME_400_P2_2_DR_1000']  # If 'all' run all files found
     run_files = 'all'  # If 'all' run all files found
-    ped_time = '_231206_14H51_'
+    urw_flag = 'URW_'
+    ped_times = {'p2': '_231206_14H51_', 'urw': '_231124_16H27_'}
+    edge_strips = {'p2': None, 'urw': np.array([[0, 0], [0, 1], [1, 62], [1, 63], [2, 0], [2, 1], [3, 62], [3, 63]])}
+    connected_channels = {'p2': p2_connected_channels, 'urw': None}
     out_directory = f'{base_path}Analysis/'
     out_file_path = f'{out_directory}analysis_data.txt'
 
@@ -51,20 +53,29 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels):
     noise_sigmas = 8
 
     ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file]
-    ped_file = ped_files[0] if len(ped_files) == 0 else [file for file in ped_files if ped_time in file][0]
-    if len(ped_files) > 1:
-        print(f'Warning: Multiple ped files found: {ped_files}.\nUsing {ped_file}')
+    pedestals, noise_thresholds = {}, {}
+    for ped_file in ped_files:
+        for ped_type, ped_time in ped_times.items():
+            if ped_time in ped_file:
+                # Get pedestal data
+                ped_root_path = os.path.join(raw_root_dir, ped_file)
+                peds, noise_theshs = run_pedestal(ped_root_path, num_detectors, noise_sigmas,
+                                                  connected_channels[ped_type])
+                pedestals.update({ped_type: peds})
+                noise_thresholds.update({ped_type: noise_theshs})
 
     # Get pedestal data
-    ped_root_path = os.path.join(raw_root_dir, ped_file)
-    pedestals, noise_thresholds = run_pedestal(ped_root_path, num_detectors, noise_sigmas, connected_channels)
+    # ped_root_path = os.path.join(raw_root_dir, ped_file)
+    # pedestals, noise_thresholds = run_pedestal(ped_root_path, num_detectors, noise_sigmas, connected_channels)
 
     data_files = [os.path.join(raw_root_dir, file) for file in os.listdir(raw_root_dir)
                   if file.endswith('.root') and ped_flag not in file and
                   (run_files == 'all' or any(run_file in file for run_file in run_files))]
 
-    process_data = [(file, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size, out_directory)
+    process_data = [(file, pedestals, noise_thresholds, num_detectors, connected_channels, urw_flag in file,
+                     edge_strips, chunk_size, out_directory)
                     for file in data_files]
+
     file_data = []
     with ProcessPoolExecutor(max_workers=num_threads) as executor:
         with tqdm(total=len(process_data), desc='Processing Trees') as pbar:
@@ -88,12 +99,12 @@ def single_file_analysis(raw_root_dir, ped_flag):
     # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000_231213_15H46'  # Easier one
     # file_name = 'P22_P2_2_ME_400_P2_2_DR_500_231213_11H17'  # Harder one
     # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231212'  # P2 2cm
-    file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231213_15'  # P2 14cm
+    # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231213_15'  # P2 14cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130_12H51'  # URW 28cm
-    # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231201'  # URW 4cm
+    file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231201'  # URW 4cm
     # file_name = 'URW_STRIPMESH_410_STRIPDRIFT_600_231124'  # URW 14cm
     urw_flag = 'URW_'
-    multi = False
+    multi = True
     save_path = 'F:/Saclay/Analysis/'
     plot_pedestals = False
 
@@ -107,11 +118,11 @@ def single_file_analysis(raw_root_dir, ped_flag):
         num_detectors = 2
         ped_time = '_231206_14H51_'
         connected_channels = load_connected_channels()  # Hard coded into function
-        edge_strips = np.array([[0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 8], [0, 12],
-                                [0, 16], [0, 20], [0, 24], [0, 28], [0, 29], [0, 30], [0, 31],
-                                [1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8], [1, 9],
-                                [1, 10], [1, 19], [1, 20], [1, 29], [1, 30], [1, 39], [1, 40], [1, 49]])
-        # edge_strips = None
+        # edge_strips = np.array([[0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 8], [0, 12],
+        #                         [0, 16], [0, 20], [0, 24], [0, 28], [0, 29], [0, 30], [0, 31],
+        #                         [1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8], [1, 9],
+        #                         [1, 10], [1, 19], [1, 20], [1, 29], [1, 30], [1, 39], [1, 40], [1, 49]])
+        edge_strips = None
         noise_sigmas = 3
 
     ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file.lower()]
@@ -169,7 +180,7 @@ def single_file_analysis(raw_root_dir, ped_flag):
             else:
                 save_path_file = None
             peak_mu = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors, connected_channels,
-                                      chunk_size, title, save_path_file)
+                                      edge_strips, chunk_size, title, save_path_file)
             if peak_mu is None:
                 continue
             strip_vs_plot.append(strip_v)
