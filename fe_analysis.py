@@ -408,7 +408,8 @@ def plot_urw_position(data, max_events=None, separate_event_plots=False, thresho
                         mv_avg_col = axs[det_num].plot(range(len(det)), mv_avg[event_num][det_num])
                         mv_avg_colors.append(mv_avg_col[0].get_color())
                     weird_thing = np.minimum((det[1:] + det[:-1])[1:], (det[1:] + det[:-1])[:-1]) / 2
-                    weird_thing = np.insert(np.insert(weird_thing, len(weird_thing), weird_thing[-1]), 0, weird_thing[0])
+                    weird_thing = np.insert(np.insert(weird_thing, len(weird_thing), weird_thing[-1]), 0,
+                                            weird_thing[0])
                     axs[det_num].plot(range(len(weird_thing)), weird_thing)
                 axs[det_num].set_ylabel(y_label[det_num])
                 if thresholds is not None:
@@ -416,8 +417,9 @@ def plot_urw_position(data, max_events=None, separate_event_plots=False, thresho
                     if plot_avgs:
                         for mv_avg_pnt, color in zip(mv_avg_pnts, mv_avg_colors):
                             axs[det_num].plot(thresholds[det_num] / np.sqrt(mv_avg_pnt), ls='--', color=color)
-                axs[det_num].annotate(f'Detector Sum: {int(np.sum(det))}', xy=(0.95, 0.1), xycoords='axes fraction', ha='right',
-                                va='bottom', bbox=dict(boxstyle='round', fc='salmon'))
+                axs[det_num].annotate(f'Detector Sum: {int(np.sum(det))}', xy=(0.95, 0.1), xycoords='axes fraction',
+                                      ha='right',
+                                      va='bottom', bbox=dict(boxstyle='round', fc='salmon'))
             axs[-1].set_xlabel('Strip Number')
             event_sum = np.sum(event)
             axs[0].annotate(f'Event Sum: {int(event_sum)}', xy=(0.95, 0.2), xycoords='axes fraction', ha='right',
@@ -456,12 +458,13 @@ def plot_p2_2d(channel_sum, title=None, show_chan_nums=False):
 
     # large_pixels, small_pixels = channel_sum[0][channel_sum[0] <= 0] = np.nan, channel_sum[1][channel_sum[1] <= 0] = np.nan
     large_pixels = channel_sum[0][:32].reshape(8, 4).transpose()
-    small_pixels = channel_sum[1][:50].reshape(5, 10)[::-1, ::-1] * (5. / 4)**2
+    small_pixels = channel_sum[1][:50].reshape(5, 10)[::-1, ::-1] * (5. / 4) ** 2
     large_pixel_indices = np.arange(32).reshape(8, 4).transpose()
     small_pixel_indices = np.arange(50).reshape(5, 10)[::-1, ::-1]
 
     # large_pixels, small_pixels = large_pixels[large_pixels <= 0] = np.nan, small_pixels[small_pixels <= 0] = np.nan
-    large_pixels, small_pixels = np.where(large_pixels <= 0, np.nan, large_pixels), np.where(small_pixels <= 0, np.nan, small_pixels)
+    large_pixels, small_pixels = np.where(large_pixels <= 0, np.nan, large_pixels), np.where(small_pixels <= 0, np.nan,
+                                                                                             small_pixels)
     large_pixels, small_pixels = np.ma.masked_invalid(large_pixels), np.ma.masked_invalid(small_pixels)
 
     vmin, vmax = np.min(channel_sum), np.max(channel_sum)
@@ -569,8 +572,10 @@ def identify_noise(max_data, noise_threshold=100):
     if isinstance(noise_threshold, np.ndarray) and noise_threshold.ndim == 2:
         for pnts in moving_averages:
             max_data_mv_avg = np.apply_along_axis(np.convolve, -1, max_data, np.ones(pnts) / pnts, mode='same')
-            noise_strips_mv_avg = max_data_mv_avg < noise_threshold / np.sqrt(pnts)  # Compare strip maxima with the threshold
-            noise_mask_mv_avg = np.all(noise_strips_mv_avg, axis=2)  # Mark event as noise if all strips on all detectors below threshold
+            noise_strips_mv_avg = max_data_mv_avg < noise_threshold / np.sqrt(
+                pnts)  # Compare strip maxima with the threshold
+            noise_mask_mv_avg = np.all(noise_strips_mv_avg,
+                                       axis=2)  # Mark event as noise if all strips on all detectors below threshold
             noise_mask = noise_mask | noise_mask_mv_avg
         neg_mask = -np.min(max_data, axis=2) > np.max(max_data, axis=2) / 3  # Mark event as noise if large negative
         noise_mask = noise_mask | neg_mask
@@ -627,7 +632,8 @@ def identify_spark(data_max, threshold_sigma=10, spark_thresholds=None):
 
     det_event_avgs = np.mean(data_max, axis=2)  # Average over strips for each detector for each event
     if spark_thresholds is None:  # Calculate thresholds if not given
-        det_std = np.std(det_event_avgs, axis=0)  # Standard deviation of strip average for each detector over all events
+        det_std = np.std(det_event_avgs,
+                         axis=0)  # Standard deviation of strip average for each detector over all events
         det_avg = np.mean(det_event_avgs, axis=0)  # Average of strip average for each detector over all events
         spark_thresholds = det_std * threshold_sigma + det_avg  # Threshold for each detector
     spark_mask = det_event_avgs > spark_thresholds  # Select events where detector strip average above threshold
@@ -958,7 +964,8 @@ def fit_fe_peak2(signal_events_max_sum, bins=50, title='Test', plot=False, plot_
 
         fig_noise, ax_noise = plt.subplots()
         ax_noise.bar(bin_centers_noise, hist_noise, width=bin_width_noise, color='gray', edgecolor=None, align='center')
-        ax_noise.bar(bin_centers_above_noise, hist_above_noise, width=bin_width_above_noise, color='green', edgecolor=None, align='center')
+        ax_noise.bar(bin_centers_above_noise, hist_above_noise, width=bin_width_above_noise, color='green',
+                     edgecolor=None, align='center')
         ax_noise.plot(x_plot, gaussian(x_plot, *p0), color='gray', label='Guess')
         ax_noise.plot(x_plot, gaussian(x_plot, *popt_noise), color='red', label='Fit')
         ax_noise.axvline(noise_cut, ls='--', color='black', label='Noise Cut')
@@ -995,7 +1002,8 @@ def fit_fe_peak2(signal_events_max_sum, bins=50, title='Test', plot=False, plot_
     hist, bin_edges = np.histogram(signal_events[percentile_mask], bins=bins)
     bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
     bin_width = bin_edges[1] - bin_edges[0]
-    p0 = [np.max(hist) * 0.9, np.mean(signal_events[percentile_mask]), np.std(signal_events[percentile_mask]) * 0.8, 0, 0]
+    p0 = [np.max(hist) * 0.9, np.mean(signal_events[percentile_mask]), np.std(signal_events[percentile_mask]) * 0.8, 0,
+          0]
     lower_bounds = [0.3 * np.max(hist), bin_edges[0], 0.1 * p0[2], -100, -10]
     upper_bounds = [1.6 * np.max(hist), bin_edges[-1], 1.5 * p0[2], 100, 10]
     bounds = (lower_bounds, upper_bounds)
@@ -1069,24 +1077,63 @@ def fit_fe_peak2(signal_events_max_sum, bins=50, title='Test', plot=False, plot_
     return Measure(popt[1], perr[1])
 
 
-def fit_fe_peak3(signal_events_max_sum, bins=50, title='Test', plot=False, save_fit_path=None):
-    hist, bin_edges = np.histogram(signal_events_max_sum, bins=bins)
+def fit_fe_peak3(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test', plot=False, save_fit_path=None):
+    if len(signal_events_max_sum) <= 0:
+        print('Zero signal events. Returning.')
+        return
+    iv_func = eyeball_iv_curves()
+    mu_expect = iv_func(mesh_voltage)
+    sig_expect = 20 + 0.1 * mu_expect
+
+    hist_all, bin_edges_all = np.histogram(signal_events_max_sum, bins=bins)
+    bin_centers_all = (bin_edges_all[1:] + bin_edges_all[:-1]) / 2
+    bin_width_all = bin_edges_all[1] - bin_edges_all[0]
+
+    n_sig_width = 4
+    fit_events = signal_events_max_sum[(signal_events_max_sum > mu_expect - n_sig_width * sig_expect) &
+                                           (signal_events_max_sum < mu_expect + n_sig_width * sig_expect)]
+    if len(fit_events) <= 0:
+        print('Zero signal events after percentile/percent cuts. Returning.')
+        return
+    hist, bin_edges = np.histogram(fit_events, bins=bins)
     bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
     bin_width = bin_edges[1] - bin_edges[0]
 
-    p0 = [np.max(hist) * 0.9, np.mean(signal_events_max_sum), np.std(signal_events_max_sum) * 0.8]
+    p0 = [np.max(hist) * 0.9, np.mean(fit_events), np.std(fit_events) * 0.8]
     y_err = np.where(hist == 0, 1, np.sqrt(hist))
-    popt, pcov = cf(gaussian, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
-    perr = np.sqrt(np.diag(pcov))
-    mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
-    num_events = Measure(popt[0], perr[0]) / bin_width * sigma * np.sqrt(2 * np.pi)
+    fit_failed, popt = False, None
+    try:
+        popt, pcov = cf(gaussian, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
+        perr = np.sqrt(np.diag(pcov))
+        mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
+
+        n_sig_width = 4
+        fit_events = signal_events_max_sum[(signal_events_max_sum > mu.val - n_sig_width * sigma.val) &
+                                           (signal_events_max_sum < mu.val + n_sig_width * sigma.val)]
+        hist, bin_edges = np.histogram(fit_events, bins=bins)
+        bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+        bin_width = bin_edges[1] - bin_edges[0]
+        p0 = [np.max(hist) * 0.9, np.mean(fit_events), np.std(fit_events) * 0.8]
+        y_err = np.where(hist == 0, 1, np.sqrt(hist))
+
+        popt, pcov = cf(gaussian, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
+        perr = np.sqrt(np.diag(pcov))
+        mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
+        num_events = Measure(popt[0], perr[0]) / bin_width * sigma * np.sqrt(2 * np.pi)
+    except RuntimeError:
+        print('Fit failed.')
+        fit_failed = True
 
     if plot:
         x_plot = np.linspace(bin_edges[0], bin_edges[-1], 1000)
         fig, ax = plt.subplots()
         ax.bar(bin_centers, hist, width=bin_width, color='gray', edgecolor=None, align='center')
         ax.plot(x_plot, gaussian(x_plot, *p0), color='gray', label='Guess')
-        ax.plot(x_plot, gaussian(x_plot, *popt), color='red', label='Fit')
+        if fit_failed:
+            if popt is not None:
+                ax.plot(x_plot, gaussian(x_plot, *popt), color='red', ls='--', label='Next Fit Failed')
+        else:
+            ax.plot(x_plot, gaussian(x_plot, *popt), color='red', label='Fit')
         ax.set_xlabel('ADC')
         ax.set_ylabel('Events')
         ax.set_title(f'{title} Fit')
@@ -1096,6 +1143,8 @@ def fit_fe_peak3(signal_events_max_sum, bins=50, title='Test', plot=False, save_
             fig.savefig(save_fit_path + '.png')
             fig.savefig(save_fit_path + '.pdf')
 
+    if fit_failed:
+        return None
     return mu, sigma, num_events
 
 
@@ -1119,7 +1168,8 @@ def plot_spectrum_noise_fit(signal_events_max_sum, bins=50, title='Test'):
 
     fig_noise, ax_noise = plt.subplots()
     ax_noise.bar(bin_centers_noise, hist_noise, width=bin_width_noise, color='gray', edgecolor=None, align='center')
-    ax_noise.bar(bin_centers_above_noise, hist_above_noise, width=bin_width_above_noise, color='green', edgecolor=None, align='center')
+    ax_noise.bar(bin_centers_above_noise, hist_above_noise, width=bin_width_above_noise, color='green', edgecolor=None,
+                 align='center')
     ax_noise.plot(x_plot, gaussian(x_plot, *p0), color='gray', label='Guess')
     ax_noise.plot(x_plot, gaussian(x_plot, *popt_noise), color='red', label='Fit')
     ax_noise.set_xlabel('ADC')
@@ -1196,7 +1246,8 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
 
     if len(no_noise_events[neg_mask]) > 0:
         plot_combined_time_series(no_noise_events[neg_mask], max_events=10)
-        plot_urw_position(no_noise_events_max[neg_mask], separate_event_plots=True, thresholds=noise_thresholds, max_events=10)
+        plot_urw_position(no_noise_events_max[neg_mask], separate_event_plots=True, thresholds=noise_thresholds,
+                          max_events=10)
 
     signal_events_max_sum = np.sum(pure_signal_events_max, axis=(1, 2))
     print(f'signal_events_max_sum.shape: {signal_events_max_sum.shape}')
@@ -1212,7 +1263,8 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
     print(f'super_cut_events.shape: {super_cut_events.shape}')
     super_cut_event_max = get_sample_max(super_cut_events)
     # plot_position_data(super_cut_event_max, event_nums=None)
-    plot_urw_position(super_cut_event_max, separate_event_plots=True, thresholds=noise_thresholds, max_events=10, plot_avgs=False)
+    plot_urw_position(super_cut_event_max, separate_event_plots=True, thresholds=noise_thresholds, max_events=10,
+                      plot_avgs=False)
 
     # channel_sum = np.sum(no_noise_events_max, axis=0)
     # plot_p2_2d(channel_sum)
@@ -1222,6 +1274,10 @@ def analyze_spectra(file_path, pedestals, noise_thresholds, num_detectors, conne
                     chunk_size=10000, title='Test', save_path=None):
     # all_events = process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, chunk_size,
     #                           filer_noise_events=False)
+    urw_flag = 'URW_'
+    file_type = 'urw' if urw_flag in file_path else 'micromega'
+    mesh_voltage, drift_voltage, run_date = interpret_file_name(file_path, file_type)
+
     no_noise_events, event_numbers, total_events = process_file(file_path, pedestals, noise_thresholds, num_detectors,
                                                                 connected_channels, chunk_size)
     print(f'{title} total events: {total_events}')
@@ -1232,9 +1288,9 @@ def analyze_spectra(file_path, pedestals, noise_thresholds, num_detectors, conne
 
     no_noise_events_max = get_sample_max(no_noise_events)
     no_noise_events_max_sum = np.sum(no_noise_events_max, axis=(1, 2))
-    no_noise_events_max_sum = no_noise_events_max_sum[no_noise_events_max_sum < 5000]
+    no_noise_events_max_sum = no_noise_events_max_sum[no_noise_events_max_sum < 7500]
 
-    peak_mu = fit_fe_peak3(no_noise_events_max_sum, bins=30, title=title, plot=False)
+    peak_mu = fit_fe_peak3(no_noise_events_max_sum, mesh_voltage, 20, title, plot=True, save_fit_path=save_path)
     # plot_spectrum(no_noise_events_max_sum, bins=30, title=title, save_path=save_path)
     # peak_mu = Measure(0, 0)
 
@@ -1242,7 +1298,8 @@ def analyze_spectra(file_path, pedestals, noise_thresholds, num_detectors, conne
 
 
 def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, urw=False, edge_strips=None,
-                 chunk_size=10000, out_dir=None):
+                 chunk_size=10000, out_dir=None, run_periods=None, distance_mapping=None,
+                 distance_map_run_periods=None, signal_event_out_dir=None, read_events_from_file=False):
     if urw:
         pedestals, noise_thresholds, det_type = pedestals['urw'], noise_thresholds['urw'], 'urw'
         connected_channels, edge_strips = connected_channels['urw'], edge_strips['urw']
@@ -1250,17 +1307,52 @@ def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connecte
         pedestals, noise_thresholds, det_type = pedestals['p2'], noise_thresholds['p2'], 'p2'
         connected_channels, edge_strips = connected_channels['p2'], edge_strips['p2']
 
-    mesh_voltage, drift_voltage, run_date = interpret_file_name(file_path)
-    title = f'{det_type} Mesh Voltage: {mesh_voltage} V, Drift Voltage: {drift_voltage} V'
+    # Function to determine the run period for a given date
+    def find_run_period(date):
+        for index, run_periods_row in run_periods.iterrows():
+            if run_periods_row['start_date'] <= date <= run_periods_row['end_date']:
+                return index
+        return None
 
-    events, event_numbers, total_events = process_file(file_path, pedestals, noise_thresholds, num_detectors,
-                                                       connected_channels, chunk_size)
+    file_type = 'urw' if urw else 'micromega'
+    mesh_voltage, drift_voltage, run_date = interpret_file_name(file_path, file_type)
+    run_period = find_run_period(run_date)
+    if run_period in distance_map_run_periods:
+        distance = distance_mapping[distance_map_run_periods[run_period]]['distance']
+    else:
+        distance = 'N/A'
+    title = f'{det_type} {distance}cm Mesh Voltage {mesh_voltage} V, Drift Voltage {drift_voltage} V'
+
+    if read_events_from_file:
+        out_file_name = f'{signal_event_out_dir}{os.path.basename(file_path).split(".")[0]}_signal_events.npz'
+        if os.path.exists(out_file_name):
+            print(f'Reading signal events from {out_file_name}.')
+            events, event_numbers = read_signal_events_from_file(out_file_name)
+        else:
+            print(f'No signal events file found at {out_file_name}.')
+            return None
+    else:
+        events, event_numbers, total_events = process_file(file_path, pedestals, noise_thresholds, num_detectors,
+                                                           connected_channels, chunk_size)
+        if signal_event_out_dir is not None:
+            out_file_name = f'{signal_event_out_dir}{os.path.basename(file_path).split(".")[0]}_signal_events.npz'
+            write_signal_events_to_file(out_file_name, events, event_numbers)
 
     no_noise_events = events
+    og_events = len(no_noise_events)
+    if og_events == 0:
+        print(f'Warning: No events found in {file_path}.')
+        return None
     max_edge_events_mask = get_max_edge_events(no_noise_events, edge_strips=edge_strips)
     no_noise_events = no_noise_events[~max_edge_events_mask]
+    post_edge_events = len(no_noise_events)
+    if post_edge_events == 0:
+        print(f'Warning: No events found in {file_path}.')
+        return None
     flat_signal_mask = get_flat_signals(no_noise_events)
     no_noise_events = no_noise_events[~flat_signal_mask]
+    post_flat_events = len(no_noise_events)
+    print(f'{file_path} events: {og_events}->{post_edge_events}->{post_flat_events}')
 
     # spark_mask, spark_thresholds = identify_spark(no_noise_events_max, threshold_sigma=10)
     # neg_mask = identify_negatives(no_noise_events_max)
@@ -1268,9 +1360,9 @@ def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connecte
 
     no_noise_events_max = get_sample_max(no_noise_events)
     signal_events_max_sum = np.sum(no_noise_events_max, axis=(1, 2))
-    signal_events_max_sum = signal_events_max_sum[signal_events_max_sum < 7000]
-    if len(signal_events_max_sum) < 50:
-        print(f'Warning: Fewer than 50 signal events found in {file_path}.')
+    signal_events_max_sum = signal_events_max_sum[signal_events_max_sum < 6000]
+    if len(signal_events_max_sum) < 20:
+        print(f'Warning: Only {len(signal_events_max_sum)} signal events found in {file_path}.')
         return None
     out_fig_path = f'{out_dir}{os.path.basename(file_path).split(".")[0]}_fe_peak_fit' if out_dir is not None else None
     try:
@@ -1286,6 +1378,22 @@ def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connecte
 
 def peak_analysis(file_data, run_periods):
     drift_minus_mesh = 600
+    distance_map_dt_strp = '%y-%m-%d %H'
+    distance_mapping = {
+        '23-12-06 18': {'distance': 8, 'aluminum': False, 'det': 'p2', 'color': '#2ca02c'},
+        '23-12-12 13': {'distance': 2, 'aluminum': False, 'det': 'p2', 'color': '#1f77b4'},
+        '23-12-12 17': {'distance': 4, 'aluminum': False, 'det': 'p2', 'color': '#ff7f0e'},
+        # '23-12-13 11': {'distance': 4, 'aluminum': True, 'det': 'p2', 'color': 'blue'},
+        '23-12-13 16': {'distance': 14, 'aluminum': False, 'det': 'p2', 'color': '#d62728'},
+        '23-11-24 18': {'distance': 14, 'aluminum': False, 'det': 'urw', 'color': '#d62728'},
+        '23-11-28 13': {'distance': 8, 'aluminum': False, 'det': 'urw', 'color': '#2ca02c'},
+        '23-11-29 17': {'distance': 2, 'aluminum': False, 'det': 'urw', 'color': '#1f77b4'},
+        '23-11-30 12': {'distance': 28, 'aluminum': False, 'det': 'urw', 'color': '#9467bd'},
+        '23-12-01 14': {'distance': 4, 'aluminum': False, 'det': 'urw', 'color': '#ff7f0e'},
+    }
+
+    distance_map_run_periods = {get_run_period(datetime.strptime(date, distance_map_dt_strp), run_periods): date
+                                for date in distance_mapping.keys()}
 
     df = pd.DataFrame(file_data)
 
@@ -1301,7 +1409,7 @@ def peak_analysis(file_data, run_periods):
 
     # Apply the function to create a new column 'run_period' in the dataframe
     df['run_period'] = df['run_date'].apply(find_run_period)
-    df = df[df['drift_voltage'] - df['mesh_voltage'] == drift_minus_mesh]
+    df = df[(df['drift_voltage'] - df['mesh_voltage'] == drift_minus_mesh) | (df['drift_voltage'] == 600)]
 
     # Split measure columns into separate columns for val and err
     for column in ['mu', 'sigma', 'events']:
@@ -1314,10 +1422,17 @@ def peak_analysis(file_data, run_periods):
     fig_mus, ax_mus = plt.subplots()
     ax_mus.set_xlabel('Mesh Voltage (V)')
     ax_mus.set_ylabel('Peak ADC')
-    for run_i in run_period_event_avgs.index:
-        df_i = df[df['run_period'] == run_i]
-        ax_mus.errorbar(df_i['mesh_voltage'], df_i['mu_val'], yerr=df_i['mu_err'], marker='o', alpha=0.6,
-                        label=f'Run #{run_i} {np.average(df_i["events"])} Mean Events')
+    for det, marker in zip(['p2', 'urw'], ['o', 's']):
+        for run_i in run_period_event_avgs.index:
+            df_i = df[df['run_period'] == run_i]
+            if run_i in distance_map_run_periods:
+                file_run_info = distance_mapping[distance_map_run_periods[run_i]]
+                distance, file_det, c = file_run_info['distance'], file_run_info['det'], file_run_info['color']
+                if file_det != det:
+                    continue
+                ax_mus.errorbar(df_i['mesh_voltage'], df_i['mu_val'], yerr=df_i['mu_err'], marker=marker, alpha=0.6,
+                                color=c, label=f'{det} {distance}cm {np.average(df_i["events"])} Mean Events')
+    ax_mus.set_yscale('log')
     ax_mus.legend()
     ax_mus.grid()
     fig_mus.tight_layout()
@@ -1503,6 +1618,21 @@ def load_connected_channels():
     return connected_channels
 
 
+def exp_func(x, a, b):
+    return a * np.exp(b * x)
+
+
+def eyeball_iv_curves(det_type='urw'):
+    if det_type == 'urw':
+        v = np.array([300, 310, 320, 330, 340, 350, 360, 370, 380])
+        mu = np.array([120, 175, 240, 315, 465, 685, 930, 1270, 1800])
+        mu_err = np.array([5, 5, 5, 5, 5, 5, 5, 5, 5])
+        p0 = [1, 0.000034]
+    popt, pcov = cf(exp_func, v, mu, p0=p0, sigma=mu_err)
+
+    return lambda x: exp_func(x, *popt)
+
+
 def write_to_file(data, file_path, encoding='ISO-8859-1'):
     with open(file_path, 'w') as file:
         for run in data:
@@ -1527,3 +1657,12 @@ def read_from_file(file_path):
                     result[key] = eval(value)  # Using eval to convert the string back to its original data type
             results.append(result)
     return results
+
+
+def write_signal_events_to_file(file_path, signal_events, event_numbers):
+    np.savez(file_path, signal_events=signal_events, event_numbers=event_numbers)
+
+
+def read_signal_events_from_file(file_path):
+    arrays = np.load(file_path)
+    return arrays['signal_events'], arrays['event_numbers']

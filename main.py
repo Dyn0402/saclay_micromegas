@@ -20,8 +20,8 @@ def main():
     # base_path = '/local/home/dn277127/Documents/'
     # base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
     base_path = 'F:/Saclay/'
-    data_base = f'{base_path}TestBeamData/2023_July_Saclay/dec6/'
-    fdf_dir = base_path
+    data_base = f'{base_path}TestBeamData/2023_July_Saclay/'
+    fdf_dir = f'{base_path}fdfs/'
     raw_root_dir = f'{data_base}raw_root/'
     ped_flag = 'ped'
     connected_channels = load_connected_channels()  # Hard coded into function
@@ -49,10 +49,30 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
     connected_channels = {'p2': p2_connected_channels, 'urw': None}
     out_directory = f'{base_path}Analysis/'
     out_file_path = f'{out_directory}analysis_data.txt'
+    signal_event_out_dir = f'{base_path}TestBeamData/2023_July_Saclay/signal_events/'
+    read_events_from_file = True
+
+    distance_map_dt_strp = '%y-%m-%d %H'
+    distance_mapping = {
+        '23-12-06 18': {'distance': 8, 'aluminum': False, 'det': 'p2'},
+        '23-12-12 13': {'distance': 2, 'aluminum': False, 'det': 'p2'},
+        '23-12-12 17': {'distance': 4, 'aluminum': False, 'det': 'p2'},
+        '23-12-13 11': {'distance': 4, 'aluminum': True, 'det': 'p2'},
+        '23-12-13 16': {'distance': 14, 'aluminum': False, 'det': 'p2'},
+        '23-11-24 18': {'distance': 14, 'aluminum': False, 'det': 'urw'},
+        '23-11-28 13': {'distance': 8, 'aluminum': False, 'det': 'urw'},
+        '23-11-29 17': {'distance': 2, 'aluminum': False, 'det': 'urw'},
+        '23-11-30 12': {'distance': 28, 'aluminum': False, 'det': 'urw'},
+        '23-12-01 14': {'distance': 4, 'aluminum': False, 'det': 'urw'},
+    }
 
     num_detectors = 2
 
-    ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file]
+    run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
+    distance_map_run_periods = {get_run_period(datetime.strptime(date, distance_map_dt_strp), run_periods): date
+                                for date in distance_mapping.keys()}
+
+    ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file.lower()]
     pedestals, noise_thresholds = {}, {}
     for ped_file in ped_files:
         for ped_type, ped_time in ped_times.items():
@@ -73,21 +93,22 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
                   (run_files == 'all' or any(run_file in file for run_file in run_files))]
 
     process_data = [(file, pedestals, noise_thresholds, num_detectors, connected_channels, urw_flag in file,
-                     edge_strips, chunk_size, out_directory)
+                     edge_strips, chunk_size, out_directory, run_periods, distance_mapping, distance_map_run_periods,
+                     signal_event_out_dir, read_events_from_file)
                     for file in data_files]
 
+    # for params in process_data:
+    #     analyze_file(*params)
     file_data = []
     with ProcessPoolExecutor(max_workers=num_threads) as executor:
-        with tqdm(total=len(process_data), desc='Processing Trees') as pbar:
-            for file_res in tqdm(executor.map(analyze_file, *zip(*process_data)), total=len(process_data),
-                                 desc='Processing Trees'):
-                if file_res is not None:
-                    file_data.append(file_res)
-                pbar.update(1)
+        # with tqdm(total=len(process_data), desc='Processing Trees') as pbar:
+        for file_res in tqdm(executor.map(analyze_file, *zip(*process_data)), total=len(process_data),
+                             desc='Processing Trees'):
+            if file_res is not None:
+                file_data.append(file_res)
+                # pbar.update(1)
 
     write_to_file(file_data, out_file_path)
-
-    run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
 
     peak_analysis(file_data, run_periods)
 
@@ -102,8 +123,9 @@ def single_file_analysis(raw_root_dir, ped_flag):
     # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231212'  # P2 2cm
     # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231213_15'  # P2 14cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130_12H51'  # URW 28cm
-    file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231201'  # URW 4cm
-    # file_name = 'URW_STRIPMESH_410_STRIPDRIFT_600_231124'  # URW 14cm
+    # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231201'  # URW 4cm
+    file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130'  # URW 28cm
+    # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231124'  # URW 14cm
     urw_flag = 'URW_'
     multi = True
     save_path = 'F:/Saclay/Analysis/'
@@ -184,6 +206,8 @@ def single_file_analysis(raw_root_dir, ped_flag):
                                       edge_strips, chunk_size, title, save_path_file)
             if peak_mu is None:
                 continue
+            if len(peak_mu) > 1:
+                peak_mu = peak_mu[0]
             strip_vs_plot.append(strip_v)
             mus_plot.append(peak_mu.val)
             mu_errs_plot.append(peak_mu.err)
@@ -276,6 +300,7 @@ def plot_peaks_from_file(base_path, raw_root_dir, ped_flag):
     file_data = read_from_file(file_path)
 
     run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
+    print(run_periods)
 
     peak_analysis(file_data, run_periods)
 
