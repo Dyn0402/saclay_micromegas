@@ -17,9 +17,9 @@ from fe_analysis import *
 
 
 def main():
-    # base_path = '/local/home/dn277127/Documents/'
+    base_path = '/local/home/dn277127/Documents/'
     # base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
-    base_path = 'F:/Saclay/'
+    # base_path = 'F:/Saclay/'
     data_base = f'{base_path}TestBeamData/2023_July_Saclay/'
     fdf_dir = f'{base_path}fdfs/'
     raw_root_dir = f'{data_base}raw_root/'
@@ -27,9 +27,9 @@ def main():
     connected_channels = load_connected_channels()  # Hard coded into function
 
     # process_fdfs(fdf_dir, raw_root_dir)
-    run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
+    # run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
-    # single_file_analysis(raw_root_dir, ped_flag)
+    single_file_analysis(raw_root_dir, ped_flag)
     # plot_p2_coverage(raw_root_dir, ped_flag)
     # get_run_periods(fdf_dir, ped_flag)
 
