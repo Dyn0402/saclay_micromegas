@@ -572,8 +572,7 @@ def identify_noise(max_data, noise_threshold=100):
     if isinstance(noise_threshold, np.ndarray) and noise_threshold.ndim == 2:
         for pnts in moving_averages:
             max_data_mv_avg = np.apply_along_axis(np.convolve, -1, max_data, np.ones(pnts) / pnts, mode='same')
-            noise_strips_mv_avg = max_data_mv_avg < noise_threshold / np.sqrt(
-                pnts)  # Compare strip maxima with the threshold
+            noise_strips_mv_avg = max_data_mv_avg < noise_threshold / np.sqrt(pnts)  # Compare strip maxima with the threshold
             noise_mask_mv_avg = np.all(noise_strips_mv_avg,
                                        axis=2)  # Mark event as noise if all strips on all detectors below threshold
             noise_mask = noise_mask | noise_mask_mv_avg
@@ -1090,7 +1089,7 @@ def fit_fe_peak3(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test',
     bin_centers_all = (bin_edges_all[1:] + bin_edges_all[:-1]) / 2
     bin_width_all = bin_edges_all[1] - bin_edges_all[0]
 
-    n_sig_width = 4
+    n_sig_width = 7
     fit_events = signal_events_max_sum[(signal_events_max_sum > mu_expect - n_sig_width * sig_expect) &
                                            (signal_events_max_sum < mu_expect + n_sig_width * sig_expect)]
     if len(fit_events) <= 0:
@@ -1108,18 +1107,18 @@ def fit_fe_peak3(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test',
         perr = np.sqrt(np.diag(pcov))
         mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
 
-        n_sig_width = 4
-        fit_events = signal_events_max_sum[(signal_events_max_sum > mu.val - n_sig_width * sigma.val) &
-                                           (signal_events_max_sum < mu.val + n_sig_width * sigma.val)]
-        hist, bin_edges = np.histogram(fit_events, bins=bins)
-        bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
-        bin_width = bin_edges[1] - bin_edges[0]
-        p0 = [np.max(hist) * 0.9, np.mean(fit_events), np.std(fit_events) * 0.8]
-        y_err = np.where(hist == 0, 1, np.sqrt(hist))
-
-        popt, pcov = cf(gaussian, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
-        perr = np.sqrt(np.diag(pcov))
-        mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
+        # n_sig_width = 4
+        # fit_events = signal_events_max_sum[(signal_events_max_sum > mu.val - n_sig_width * sigma.val) &
+        #                                    (signal_events_max_sum < mu.val + n_sig_width * sigma.val)]
+        # hist, bin_edges = np.histogram(fit_events, bins=bins)
+        # bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+        # bin_width = bin_edges[1] - bin_edges[0]
+        # p0 = [np.max(hist) * 0.9, np.mean(fit_events), np.std(fit_events) * 0.8]
+        # y_err = np.where(hist == 0, 1, np.sqrt(hist))
+        #
+        # popt, pcov = cf(gaussian, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
+        # perr = np.sqrt(np.diag(pcov))
+        # mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
         # num_events = Measure(popt[0], perr[0]) / bin_width * sigma * np.sqrt(2 * np.pi)
     except RuntimeError:
         print('Fit failed.')
@@ -1269,6 +1268,7 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
     # plot_position_data(super_cut_event_max, event_nums=None)
     plot_urw_position(super_cut_event_max, separate_event_plots=True, thresholds=noise_thresholds, max_events=10,
                       plot_avgs=False)
+    plot_raw_fe_peak(no_noise_max_sum[no_noise_max_sum < 5000], bins=30)
 
     # channel_sum = np.sum(no_noise_events_max, axis=0)
     # plot_p2_2d(channel_sum)
@@ -1292,9 +1292,10 @@ def analyze_spectra(file_path, pedestals, noise_thresholds, num_detectors, conne
 
     no_noise_events_max = get_sample_max(no_noise_events)
     no_noise_events_max_sum = np.sum(no_noise_events_max, axis=(1, 2))
-    no_noise_events_max_sum = no_noise_events_max_sum[no_noise_events_max_sum < 7500]
+    no_noise_events_max_sum = no_noise_events_max_sum[no_noise_events_max_sum < 5000]
 
-    peak_mu = fit_fe_peak3(no_noise_events_max_sum, mesh_voltage, 20, title, plot=True, save_fit_path=save_path)
+    plot_raw_fe_peak(no_noise_events_max_sum[no_noise_events_max_sum < 5000], bins=30)
+    peak_mu = fit_fe_peak3(no_noise_events_max_sum, mesh_voltage, 15, title, plot=True, save_fit_path=save_path)
     # plot_spectrum(no_noise_events_max_sum, bins=30, title=title, save_path=save_path)
     # peak_mu = Measure(0, 0)
 
