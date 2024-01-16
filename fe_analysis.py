@@ -1084,6 +1084,7 @@ def fit_fe_peak3(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test',
     iv_func = eyeball_iv_curves()
     mu_expect = iv_func(mesh_voltage)
     sig_expect = 20 + 0.1 * mu_expect
+    num_events = Measure(len(signal_events_max_sum), np.sqrt(len(signal_events_max_sum)))  # Count all events for now
 
     hist_all, bin_edges_all = np.histogram(signal_events_max_sum, bins=bins)
     bin_centers_all = (bin_edges_all[1:] + bin_edges_all[:-1]) / 2
@@ -1119,7 +1120,7 @@ def fit_fe_peak3(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test',
         popt, pcov = cf(gaussian, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
         perr = np.sqrt(np.diag(pcov))
         mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
-        num_events = Measure(popt[0], perr[0]) / bin_width * sigma * np.sqrt(2 * np.pi)
+        # num_events = Measure(popt[0], perr[0]) / bin_width * sigma * np.sqrt(2 * np.pi)
     except RuntimeError:
         print('Fit failed.')
         fit_failed = True
@@ -1219,6 +1220,9 @@ def analyze_file_qa(file_path, pedestals, noise_thresholds, num_detectors, conne
 
     no_noise_events_max = get_sample_max(no_noise_events)
     print(f'no_noise_events_max.shape: {no_noise_events_max.shape}')
+    plot_combined_time_series(no_noise_events, max_events=3)
+    plot_urw_position(no_noise_events_max, separate_event_plots=True, thresholds=noise_thresholds, max_events=3)
+
     no_noise_events_adcs = no_noise_events_max.reshape(-1, num_detectors)
     print(f'no_noise_events_adcs.shape: {no_noise_events_adcs.shape}')
     plot_1d_sample_max_hist(no_noise_events_adcs, log=True, title='Max Sample per Strip ADC Spectrum No Noise Events')

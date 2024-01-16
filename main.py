@@ -116,10 +116,8 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
 
 
 def single_file_analysis(raw_root_dir, ped_flag):
-    chunk_size = 60000  # 15000
-    # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000'
+    chunk_size = 10000  # 15000
     # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000_231213_15H46'  # Easier one
-    # file_name = 'P22_P2_2_ME_400_P2_2_DR_500_231213_11H17'  # Harder one
     # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231212'  # P2 2cm
     # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231213_15'  # P2 14cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130_12H51'  # URW 28cm
@@ -127,7 +125,7 @@ def single_file_analysis(raw_root_dir, ped_flag):
     file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130'  # URW 28cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231124'  # URW 14cm
     urw_flag = 'URW_'
-    multi = True
+    multi = False
     save_path = 'F:/Saclay/Analysis/'
     plot_pedestals = False
 
