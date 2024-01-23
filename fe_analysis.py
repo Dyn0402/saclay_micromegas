@@ -1244,23 +1244,24 @@ def fit_fe_peak3(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test',
     return mu, sigma, num_events
 
 
-def fit_fe_peak4(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test', plot=False, save_fit_path=None):
+def fit_fe_peak4(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test', plot=False, save_fit_path=None,
+                 det_type='urw'):
     if len(signal_events_max_sum) <= 0:
         print('Zero signal events. Returning.')
         return
     num_events = Measure(len(signal_events_max_sum), np.sqrt(len(signal_events_max_sum)))  # Count all events for now
 
-    bins = min(max(len(signal_events_max_sum) // 15, 5), bins)
+    bins = min(max(len(signal_events_max_sum) // 10, 5), bins)
     hist_all, bin_edges_all = np.histogram(signal_events_max_sum, bins=bins)
     bin_centers_all = (bin_edges_all[1:] + bin_edges_all[:-1]) / 2
     bin_width_all = bin_edges_all[1] - bin_edges_all[0]
 
     mu = np.mean(signal_events_max_sum)
-    sig = np.std(signal_events_max_sum)
+    sigma = np.std(signal_events_max_sum)
 
     n_sig_width = 8
-    fit_events = signal_events_max_sum[(signal_events_max_sum > mu - n_sig_width * sig) &
-                                       (signal_events_max_sum < mu + n_sig_width * sig)]
+    fit_events = signal_events_max_sum[(signal_events_max_sum > mu - n_sig_width * sigma) &
+                                       (signal_events_max_sum < mu + n_sig_width * sigma)]
     if len(fit_events) <= 0:
         print('Zero signal events after percentile/percent cuts. Returning.')
         return
@@ -1268,27 +1269,22 @@ def fit_fe_peak4(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test',
     bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
     bin_width = bin_edges[1] - bin_edges[0]
 
-    p0 = [np.max(hist) * 0.9, np.mean(fit_events), np.std(fit_events) * 0.8]
+    if det_type == 'urw':
+        fit_func = gaussian
+        p0 = [np.max(hist) * 0.9, np.mean(fit_events), np.std(fit_events) * 0.8]
+    elif det_type == 'p2':
+        fit_func = lambda x, a1, mu1, sig1, a2, mu2, sig2: gaussian(x, a1, mu1, sig1) + gaussian(x, a2, mu2, sig2)
+        p0 = [np.max(hist) * 0.9, np.mean(fit_events) * 1.2, np.std(fit_events) * 0.7,
+              np.max(hist) * 0.3, np.mean(fit_events) * 0.4, np.std(fit_events) * 0.6]
+    else:
+        print(f'Unknown detector type: {det_type}. Returning.')
+        return
     y_err = np.where(hist == 0, 1, np.sqrt(hist))
     fit_failed, popt = False, None
     try:
-        popt, pcov = cf(gaussian, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
+        popt, pcov = cf(fit_func, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
         perr = np.sqrt(np.diag(pcov))
         mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
-
-        # n_sig_width = 4
-        # fit_events = signal_events_max_sum[(signal_events_max_sum > mu.val - n_sig_width * sigma.val) &
-        #                                    (signal_events_max_sum < mu.val + n_sig_width * sigma.val)]
-        # hist, bin_edges = np.histogram(fit_events, bins=bins)
-        # bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
-        # bin_width = bin_edges[1] - bin_edges[0]
-        # p0 = [np.max(hist) * 0.9, np.mean(fit_events), np.std(fit_events) * 0.8]
-        # y_err = np.where(hist == 0, 1, np.sqrt(hist))
-        #
-        # popt, pcov = cf(gaussian, bin_centers, hist, p0=p0, sigma=y_err, absolute_sigma=True)
-        # perr = np.sqrt(np.diag(pcov))
-        # mu, sigma = Measure(popt[1], perr[1]), Measure(popt[2], perr[2])
-        # num_events = Measure(popt[0], perr[0]) / bin_width * sigma * np.sqrt(2 * np.pi)
     except RuntimeError:
         print('Fit failed.')
         fit_failed = True
@@ -1297,12 +1293,12 @@ def fit_fe_peak4(signal_events_max_sum, mesh_voltage=300, bins=20, title='Test',
         x_plot = np.linspace(bin_edges[0], bin_edges[-1], 1000)
         fig, ax = plt.subplots()
         ax.bar(bin_centers, hist, width=bin_width, color='gray', edgecolor=None, align='center')
-        ax.plot(x_plot, gaussian(x_plot, *p0), color='gray', label='Guess')
+        ax.plot(x_plot, fit_func(x_plot, *p0), color='gray', label='Guess')
         if fit_failed:
             if popt is not None:
-                ax.plot(x_plot, gaussian(x_plot, *popt), color='red', ls='--', label='Next Fit Failed')
+                ax.plot(x_plot, fit_func(x_plot, *popt), color='red', ls='--', label='Next Fit Failed')
         else:
-            ax.plot(x_plot, gaussian(x_plot, *popt), color='red', label='Fit')
+            ax.plot(x_plot, fit_func(x_plot, *popt), color='red', label='Fit')
         ax.set_xlabel('ADC')
         ax.set_ylabel('Events')
         ax.set_title(f'{title} Fit')
@@ -1565,6 +1561,7 @@ def analyze_spectra(file_path, pedestals, noise_thresholds, num_detectors, conne
     #                           filer_noise_events=False)
     urw_flag = 'URW_'
     file_type = 'urw' if urw_flag in file_path else 'micromega'
+    det_type = 'urw' if file_type == 'urw' else 'p2'
     mesh_voltage, drift_voltage, run_date = interpret_file_name(file_path, file_type)
 
     no_noise_events, event_numbers, total_events = process_file(file_path, pedestals, noise_thresholds, num_detectors,
@@ -1580,15 +1577,19 @@ def analyze_spectra(file_path, pedestals, noise_thresholds, num_detectors, conne
 
     no_noise_events_max = get_sample_max(no_noise_events)
     # no_noise_events_max_sum = np.sum(no_noise_events_max, axis=(1, 2))
-    no_noise_events_max_sum = get_event_sum(no_noise_events_max, det_type=file_type)
-    no_noise_events_max_sum = no_noise_events_max_sum[no_noise_events_max_sum < 5000]
+    no_noise_events_max_sum = get_event_sum(no_noise_events_max, det_type=det_type)
+    signal_events_event_sum = no_noise_events_max_sum[no_noise_events_max_sum < 5000]
+    if len(signal_events_event_sum) < 5:
+        print(f'Warning: Only {len(signal_events_event_sum)} signal events found in {file_path}.')
+        return None
 
-    plot_raw_fe_peak(no_noise_events_max_sum[no_noise_events_max_sum < 5000], bins=30)
-    peak_mu = fit_fe_peak4(no_noise_events_max_sum, mesh_voltage, 15, title, plot=True, save_fit_path=save_path)
+    plot_raw_fe_peak(signal_events_event_sum, bins=30)
+    fit_pars = fit_fe_peak4(signal_events_event_sum, mesh_voltage, 25, title, plot=True,
+                                     save_fit_path=save_path, det_type=det_type)
     # plot_spectrum(no_noise_events_max_sum, bins=30, title=title, save_path=save_path)
     # peak_mu = Measure(0, 0)
 
-    return peak_mu
+    return fit_pars
 
 
 def analyze_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels, urw=False, edge_strips=None,

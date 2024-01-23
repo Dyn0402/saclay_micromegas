@@ -17,9 +17,9 @@ from fe_analysis import *
 
 
 def main():
-    base_path = '/local/home/dn277127/Documents/'
+    # base_path = '/local/home/dn277127/Documents/'
     # base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
-    # base_path = 'F:/Saclay/'
+    base_path = 'F:/Saclay/'
     data_base = f'{base_path}TestBeamData/2023_July_Saclay/'
     fdf_dir = f'{base_path}fdfs/'
     raw_root_dir = f'{data_base}raw_root/'
@@ -30,6 +30,7 @@ def main():
     # run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
     single_file_analysis(raw_root_dir, ped_flag, base_path)
+    # single_mesh_v_comparison(raw_root_dir, ped_flag, base_path)
     # plot_p2_coverage(raw_root_dir, ped_flag)
     # get_run_periods(fdf_dir, ped_flag)
     # position_map_test()
@@ -118,14 +119,17 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
 
 def single_file_analysis(raw_root_dir, ped_flag, base_path):
     chunk_size = 10000  # 15000
+    tie = False  # True to get last file of the day, False to get first. Roughly
     # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000_231213_15H46'  # Easier one
-    # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231212'  # P2 2cm
-    # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231213_15'  # P2 14cm
-    # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130_12H51'  # URW 28cm
+    # file_name, tie = 'P22_P2_2_ME_390_P2_2_DR_990_231212_13', False  # P2 2cm Tie false
+    # file_name, tie = 'P22_P2_2_ME_390_P2_2_DR_990_231212', True  # P2 4cm Tie true
+    file_name, tie = 'P22_P2_2_ME_390_P2_2_DR_990_231213', True  # P2 14cm
+    # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231206'  # P2 8cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231201'  # URW 4cm
-    file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130'  # URW 28cm
-    # file_name = 'URW_STRIPMESH_410_STRIPDRIFT_600_231130'  # URW 28cm
+    # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130'  # URW 28cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231124'  # URW 14cm
+    # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231128'  # URW 8cm
+    # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231129'  # URW 2cm
     urw_flag = 'URW_'
     multi = True
     save_path = f'{base_path}/Analysis/'
@@ -137,6 +141,7 @@ def single_file_analysis(raw_root_dir, ped_flag, base_path):
         connected_channels = None  # All channels connected for URW
         edge_strips = np.array([[0, 0], [0, 1], [1, 62], [1, 63], [2, 0], [2, 1], [3, 62], [3, 63]])
         noise_sigmas = 5
+        det_type = 'urw'
     else:
         num_detectors = 2
         ped_time = '_231206_14H51_'
@@ -147,6 +152,7 @@ def single_file_analysis(raw_root_dir, ped_flag, base_path):
         #                         [1, 10], [1, 19], [1, 20], [1, 29], [1, 30], [1, 39], [1, 40], [1, 49]])
         edge_strips = None
         noise_sigmas = 6
+        det_type = 'p2'
 
     ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file.lower()]
     ped_file = ped_files[0] if len(ped_files) == 1 else [file for file in ped_files if ped_time in file][0]
@@ -184,41 +190,172 @@ def single_file_analysis(raw_root_dir, ped_flag, base_path):
     if multi:
         run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
         strip_vs = np.arange(260, 450, 10)
-        strip_vs_plot, mus_plot, mu_errs_plot = [], [], []
+        strip_vs_plot, mus, mu_errs, sigs, sig_errs, num_fes, num_fe_errs = [], [], [], [], [], [], []
         for strip_v in strip_vs:
             v_file_name = file_name.replace('390', str(strip_v))
+            v_file_name = v_file_name.replace('990', str(strip_v + 600)) if det_type == 'p2' else v_file_name
             data_files = [os.path.join(raw_root_dir, file) for file in os.listdir(raw_root_dir)
                           if file.endswith('.root') and v_file_name in file]
             if len(data_files) == 0:
-                print(f'Warning: No data files found for {strip_v}V')
+                print(f'Warning: No data files found for {strip_v}V - {v_file_name}')
                 continue
-            data_file = data_files[0]
+            data_file = sorted(data_files, reverse=tie)[0]
             if len(data_files) > 1:
                 print(f'Warning: Multiple data files found: {data_files}.\nUsing {data_file}')
-            mesh_voltage, drift_voltage, run_date = interpret_file_name(data_file, 'urw')
+            mesh_voltage, drift_voltage, run_date = interpret_file_name(data_file, det_type)
             run_period = get_run_period(run_date, run_periods)
             title = f'{mesh_voltage}V Mesh, {drift_voltage}V Drift, Run #{run_period}'
             if save_path is not None:
                 save_path_file = f'{save_path}{v_file_name}'
             else:
                 save_path_file = None
-            peak_mu = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors, connected_channels,
-                                      edge_strips, chunk_size, title, save_path_file)
-            if peak_mu is None:
+            fit_pars = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors, connected_channels,
+                                       edge_strips, chunk_size, title, save_path_file)
+            if fit_pars is None:
                 continue
-            if len(peak_mu) > 1:
-                peak_mu = peak_mu[0]
+            if len(fit_pars) > 1:
+                peak_mu, peak_sigma, num_fe_events = fit_pars
             strip_vs_plot.append(strip_v)
-            mus_plot.append(peak_mu.val)
-            mu_errs_plot.append(peak_mu.err)
+            mus.append(peak_mu.val)
+            mu_errs.append(peak_mu.err)
+            sigs.append(peak_sigma.val)
+            sig_errs.append(peak_sigma.err)
+            num_fes.append(num_fe_events.val)
+            num_fe_errs.append(num_fe_events.err)
 
         fig, ax = plt.subplots()
-        ax.errorbar(strip_vs_plot, mus_plot, yerr=mu_errs_plot, fmt='o')
-        ax.set_xlabel('Strip Voltage (V)')
+        ax.errorbar(strip_vs_plot, mus, yerr=mu_errs, fmt='o')
+        ax.set_xlabel('Mesh Voltage (V)')
         ax.set_ylabel(r'Peak $\mu$ (ADC)')
         ax.set_title(r'Peak $\mu$ vs Strip Voltage')
         ax.grid()
         fig.tight_layout()
+
+        fig, ax = plt.subplots()
+        ax.errorbar(strip_vs_plot, sigs, yerr=sig_errs, fmt='o')
+        ax.set_xlabel('Mesh Voltage (V)')
+        ax.set_ylabel(r'Peak $\sigma$ (ADC)')
+        ax.set_title(r'Peak $\sigma$ vs Strip Voltage')
+        ax.grid()
+        fig.tight_layout()
+
+        fig, ax = plt.subplots()
+        ax.errorbar(strip_vs_plot, num_fes, yerr=num_fe_errs, fmt='o')
+        ax.set_xlabel('Mesh Voltage (V)')
+        ax.set_ylabel(r'Number of Fe Events')
+        ax.set_title(r'Number of Fe Events vs Strip Voltage')
+        ax.grid()
+        fig.tight_layout()
+
+    plt.show()
+
+
+def single_mesh_v_comparison(raw_root_dir, ped_flag, base_path):
+    chunk_size = 10000  # 15000
+    urw_flag = 'URW_'
+    plot_pedestals = False
+
+    distance_map_dt_strp = '%y-%m-%d %H'
+    distance_mapping = {
+        '23-12-06 18': {'distance': 8, 'aluminum': False, 'det': 'p2'},
+        '23-12-12 13': {'distance': 2, 'aluminum': False, 'det': 'p2'},
+        '23-12-12 17': {'distance': 4, 'aluminum': False, 'det': 'p2'},
+        '23-12-13 11': {'distance': 4, 'aluminum': True, 'det': 'p2'},
+        '23-12-13 16': {'distance': 14, 'aluminum': False, 'det': 'p2'},
+        '23-11-24 18': {'distance': 14, 'aluminum': False, 'det': 'urw'},
+        '23-11-28 13': {'distance': 8, 'aluminum': False, 'det': 'urw'},
+        '23-11-29 17': {'distance': 2, 'aluminum': False, 'det': 'urw'},
+        '23-11-30 12': {'distance': 28, 'aluminum': False, 'det': 'urw'},
+        '23-12-01 14': {'distance': 4, 'aluminum': False, 'det': 'urw'},
+    }
+    run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
+    distance_map_run_periods = {get_run_period(datetime.strptime(date, distance_map_dt_strp), run_periods): date
+                                for date in distance_mapping.keys()}
+
+    mesh_v, diff_v = 390, 600
+    file_templates = {'urw': f'URW_STRIPMESH_{mesh_v}_STRIPDRIFT_{diff_v}_231',
+                      'p2': f'P22_P2_2_ME_{mesh_v}_P2_2_DR_{mesh_v + diff_v}_231'}
+
+    fig_events, ax_events = plt.subplots()
+    fig_mus, ax_mus = plt.subplots()
+
+    for det_type, file_template in file_templates.items():
+        data_files = [os.path.join(raw_root_dir, file) for file in os.listdir(raw_root_dir)
+                      if file.endswith('.root') and file_template in file]
+        print(det_type, data_files)
+
+        if urw_flag in file_template:
+            num_detectors = 4
+            ped_time = '_231124_16H27_'
+            connected_channels = None  # All channels connected for URW
+            edge_strips = np.array([[0, 0], [0, 1], [1, 62], [1, 63], [2, 0], [2, 1], [3, 62], [3, 63]])
+            noise_sigmas = 5
+            det_type = 'urw'
+        else:
+            num_detectors = 2
+            ped_time = '_231206_14H51_'
+            connected_channels = load_connected_channels()  # Hard coded into function
+            # edge_strips = np.array([[0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 8], [0, 12],
+            #                         [0, 16], [0, 20], [0, 24], [0, 28], [0, 29], [0, 30], [0, 31],
+            #                         [1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8], [1, 9],
+            #                         [1, 10], [1, 19], [1, 20], [1, 29], [1, 30], [1, 39], [1, 40], [1, 49]])
+            edge_strips = None
+            noise_sigmas = 6
+            det_type = 'p2'
+
+        if len(data_files) == 0:
+            print(f'Warning: No data files found for {file_template}')
+            continue
+
+        ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file.lower()]
+        ped_file = ped_files[0] if len(ped_files) == 1 else [file for file in ped_files if ped_time in file][0]
+        if len(ped_files) > 1:
+            print(f'Warning: Multiple ped files found: {ped_files}.\nUsing {ped_file}')
+
+        # Get pedestal data
+        ped_root_path = os.path.join(raw_root_dir, ped_file)
+        pedestals, noise_thresholds = run_pedestal(ped_root_path, num_detectors, noise_sigmas, connected_channels,
+                                                   plot_pedestals)
+
+        distances, fe_events, fe_event_errs, peak_mus, peak_mu_errs = [], [], [], [], []
+        for data_file in data_files:
+            mesh_voltage, drift_voltage, run_date = interpret_file_name(data_file, det_type)
+            run_period = get_run_period(run_date, run_periods)
+            if run_period in distance_map_run_periods:
+                distance = distance_mapping[distance_map_run_periods[run_period]]['distance']
+            else:
+                distance = 'N/A'
+                print(f'Warning: No distance mapping for {data_file}, continuing')
+                continue
+            title = f'{det_type} {mesh_voltage}V Mesh, {drift_voltage}V Drift, {distance}cm'
+
+            fit_pars = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors, connected_channels,
+                                       edge_strips, chunk_size, title)
+            if fit_pars is None:
+                continue
+            if len(fit_pars) > 1:
+                peak_mu, peak_sigma, num_fe_events = fit_pars
+                distances.append(distance) if distance != 'N/A' else distances.append(0)
+                fe_events.append(num_fe_events.val)
+                fe_event_errs.append(num_fe_events.err)
+                peak_mus.append(peak_mu.val)
+                peak_mu_errs.append(peak_mu.err)
+        ax_events.errorbar(distances, fe_events, yerr=fe_event_errs, fmt='o', label=det_type)
+        ax_mus.errorbar(distances, peak_mus, yerr=peak_mu_errs, fmt='o', label=det_type)
+
+    ax_events.set_xlabel('Distance (cm)')
+    ax_events.set_ylabel('Number of Fe Events')
+    ax_events.set_title('Number of Fe Events vs Distance')
+    ax_events.grid()
+    ax_events.legend()
+    fig_events.tight_layout()
+
+    ax_mus.set_xlabel('Distance (cm)')
+    ax_mus.set_ylabel(r'Peak $\mu$ (ADC)')
+    ax_mus.set_title(r'Peak $\mu$ vs Distance')
+    ax_mus.grid()
+    ax_mus.legend()
+    fig_mus.tight_layout()
 
     plt.show()
 
