@@ -17,9 +17,9 @@ from fe_analysis import *
 
 
 def main():
-    # base_path = '/local/home/dn277127/Documents/'
+    base_path = '/local/home/dn277127/Documents/'
     # base_path = '/media/ucla/Saclay/TestBeamData/2023_July_Saclay/dec6/'
-    base_path = 'F:/Saclay/'
+    # base_path = 'F:/Saclay/'
     data_base = f'{base_path}TestBeamData/2023_July_Saclay/'
     fdf_dir = f'{base_path}fdfs/'
     raw_root_dir = f'{data_base}raw_root/'
@@ -27,9 +27,9 @@ def main():
     connected_channels = load_connected_channels()  # Hard coded into function
 
     # process_fdfs(fdf_dir, raw_root_dir)
-    run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
+    # run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
-    # single_file_analysis(raw_root_dir, ped_flag)
+    single_file_analysis(raw_root_dir, ped_flag, base_path)
     # plot_p2_coverage(raw_root_dir, ped_flag)
     # get_run_periods(fdf_dir, ped_flag)
     # position_map_test()
@@ -116,7 +116,7 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
     plt.show()
 
 
-def single_file_analysis(raw_root_dir, ped_flag):
+def single_file_analysis(raw_root_dir, ped_flag, base_path):
     chunk_size = 10000  # 15000
     # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000_231213_15H46'  # Easier one
     # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231212'  # P2 2cm
@@ -124,10 +124,11 @@ def single_file_analysis(raw_root_dir, ped_flag):
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130_12H51'  # URW 28cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231201'  # URW 4cm
     file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130'  # URW 28cm
+    # file_name = 'URW_STRIPMESH_410_STRIPDRIFT_600_231130'  # URW 28cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231124'  # URW 14cm
     urw_flag = 'URW_'
-    multi = False
-    save_path = 'F:/Saclay/Analysis/'
+    multi = True
+    save_path = f'{base_path}/Analysis/'
     plot_pedestals = False
 
     if urw_flag in file_name:
@@ -145,7 +146,7 @@ def single_file_analysis(raw_root_dir, ped_flag):
         #                         [1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8], [1, 9],
         #                         [1, 10], [1, 19], [1, 20], [1, 29], [1, 30], [1, 39], [1, 40], [1, 49]])
         edge_strips = None
-        noise_sigmas = 4
+        noise_sigmas = 6
 
     ped_files = [file for file in os.listdir(raw_root_dir) if file.endswith('.root') and ped_flag in file.lower()]
     ped_file = ped_files[0] if len(ped_files) == 1 else [file for file in ped_files if ped_time in file][0]
@@ -198,7 +199,7 @@ def single_file_analysis(raw_root_dir, ped_flag):
             run_period = get_run_period(run_date, run_periods)
             title = f'{mesh_voltage}V Mesh, {drift_voltage}V Drift, Run #{run_period}'
             if save_path is not None:
-                save_path_file = f'{save_path}{v_file_name}.png'
+                save_path_file = f'{save_path}{v_file_name}'
             else:
                 save_path_file = None
             peak_mu = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors, connected_channels,
