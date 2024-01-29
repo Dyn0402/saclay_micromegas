@@ -27,9 +27,9 @@ def main():
     connected_channels = load_connected_channels()  # Hard coded into function
 
     # process_fdfs(fdf_dir, raw_root_dir)
-    # run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
+    run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
-    single_file_analysis(raw_root_dir, ped_flag, base_path)
+    # single_file_analysis(raw_root_dir, ped_flag, base_path)
     # single_mesh_v_comparison(raw_root_dir, ped_flag, base_path)
     # plot_p2_coverage(raw_root_dir, ped_flag)
     # get_run_periods(fdf_dir, ped_flag)
@@ -68,8 +68,6 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
         '23-12-01 14': {'distance': 4, 'aluminum': False, 'det': 'urw'},
     }
 
-    num_detectors = 2
-
     run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
     distance_map_run_periods = {get_run_period(datetime.strptime(date, distance_map_dt_strp), run_periods): date
                                 for date in distance_mapping.keys()}
@@ -80,6 +78,10 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
         for ped_type, ped_time in ped_times.items():
             if ped_time in ped_file:
                 # Get pedestal data
+                if ped_type == 'p2':
+                    num_detectors = 2
+                else:
+                    num_detectors = 4
                 ped_root_path = os.path.join(raw_root_dir, ped_file)
                 peds, noise_theshs = run_pedestal(ped_root_path, num_detectors, noise_sigmas[ped_type],
                                                   connected_channels[ped_type])
@@ -94,7 +96,7 @@ def run_full_analysis(base_path, raw_root_dir, ped_flag, p2_connected_channels):
                   if file.endswith('.root') and ped_flag not in file and
                   (run_files == 'all' or any(run_file in file for run_file in run_files))]
 
-    process_data = [(file, pedestals, noise_thresholds, num_detectors, connected_channels, urw_flag in file,
+    process_data = [(file, pedestals, noise_thresholds, connected_channels, urw_flag in file,
                      edge_strips, chunk_size, out_directory, run_periods, distance_mapping, distance_map_run_periods,
                      signal_event_out_dir, read_events_from_file)
                     for file in data_files]
@@ -123,15 +125,15 @@ def single_file_analysis(raw_root_dir, ped_flag, base_path):
     # file_name = 'P22_P2_2_ME_400_P2_2_DR_1000_231213_15H46'  # Easier one
     # file_name, tie = 'P22_P2_2_ME_390_P2_2_DR_990_231212_13', False  # P2 2cm Tie false
     # file_name, tie = 'P22_P2_2_ME_390_P2_2_DR_990_231212', True  # P2 4cm Tie true
-    file_name, tie = 'P22_P2_2_ME_390_P2_2_DR_990_231213', True  # P2 14cm
+    # file_name, tie = 'P22_P2_2_ME_390_P2_2_DR_990_231213', True  # P2 14cm
     # file_name = 'P22_P2_2_ME_390_P2_2_DR_990_231206'  # P2 8cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231201'  # URW 4cm
-    # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130'  # URW 28cm
+    file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231130'  # URW 28cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231124'  # URW 14cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231128'  # URW 8cm
     # file_name = 'URW_STRIPMESH_390_STRIPDRIFT_600_231129'  # URW 2cm
     urw_flag = 'URW_'
-    multi = True
+    multi = False
     save_path = f'{base_path}/Analysis/'
     plot_pedestals = False
 
@@ -209,8 +211,8 @@ def single_file_analysis(raw_root_dir, ped_flag, base_path):
                 save_path_file = f'{save_path}{v_file_name}'
             else:
                 save_path_file = None
-            fit_pars = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors, connected_channels,
-                                       edge_strips, chunk_size, title, save_path_file)
+            fit_pars, total_events = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors,
+                                                     connected_channels, edge_strips, chunk_size, title, save_path_file)
             if fit_pars is None:
                 continue
             if len(fit_pars) > 1:
@@ -254,6 +256,9 @@ def single_mesh_v_comparison(raw_root_dir, ped_flag, base_path):
     chunk_size = 10000  # 15000
     urw_flag = 'URW_'
     plot_pedestals = False
+    time_per_sample = 40  # ns
+    active_samples_per_event = 30  # 32 total, filter out first and last
+    active_time_per_event = active_samples_per_event * time_per_sample / 1e9  # s
 
     distance_map_dt_strp = '%y-%m-%d %H'
     distance_mapping = {
@@ -268,6 +273,10 @@ def single_mesh_v_comparison(raw_root_dir, ped_flag, base_path):
         '23-11-30 12': {'distance': 28, 'aluminum': False, 'det': 'urw'},
         '23-12-01 14': {'distance': 4, 'aluminum': False, 'det': 'urw'},
     }
+    # Distance in cm of source from plane of detector to expected rate in Hz for 10 uCi source
+    distance_exp_rate_map = {2: 133033.50, 4: 92910.70, 6: 66159.70, 8: 47060.30, 10: 34498.80, 12: 25870.40,
+                             14: 20035.50, 16: 16072.80, 18: 12790.90, 20: 10889.10, 22: 9372.10, 24: 7795.90,
+                             26: 6926.40, 28: 5775.70, 30: 4969.10}
     run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
     distance_map_run_periods = {get_run_period(datetime.strptime(date, distance_map_dt_strp), run_periods): date
                                 for date in distance_mapping.keys()}
@@ -317,7 +326,7 @@ def single_mesh_v_comparison(raw_root_dir, ped_flag, base_path):
         pedestals, noise_thresholds = run_pedestal(ped_root_path, num_detectors, noise_sigmas, connected_channels,
                                                    plot_pedestals)
 
-        distances, fe_events, fe_event_errs, peak_mus, peak_mu_errs = [], [], [], [], []
+        expected_rates, measured_rates, measured_rates_err, peak_mus, peak_mu_errs = [], [], [], [], []
         for data_file in data_files:
             mesh_voltage, drift_voltage, run_date = interpret_file_name(data_file, det_type)
             run_period = get_run_period(run_date, run_periods)
@@ -329,30 +338,41 @@ def single_mesh_v_comparison(raw_root_dir, ped_flag, base_path):
                 continue
             title = f'{det_type} {mesh_voltage}V Mesh, {drift_voltage}V Drift, {distance}cm'
 
-            fit_pars = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors, connected_channels,
-                                       edge_strips, chunk_size, title)
+            fit_pars, total_events = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors,
+                                                     connected_channels, edge_strips, chunk_size, title)
+            active_time = total_events * active_time_per_event
             if fit_pars is None:
                 continue
             if len(fit_pars) > 1:
                 peak_mu, peak_sigma, num_fe_events = fit_pars
-                distances.append(distance) if distance != 'N/A' else distances.append(0)
-                fe_events.append(num_fe_events.val)
-                fe_event_errs.append(num_fe_events.err)
+                expected_rates.append(distance_exp_rate_map[distance] / 1000)  # Convert to kHz
+                measured_rates.append(num_fe_events.val / active_time / 1000)
+                measured_rates_err.append(num_fe_events.err / active_time / 1000)
                 peak_mus.append(peak_mu.val)
                 peak_mu_errs.append(peak_mu.err)
-        ax_events.errorbar(distances, fe_events, yerr=fe_event_errs, fmt='o', label=det_type)
-        ax_mus.errorbar(distances, peak_mus, yerr=peak_mu_errs, fmt='o', label=det_type)
+        rate_fraction = np.array(measured_rates) / np.array(expected_rates)
+        rate_fraction_err = np.array(measured_rates_err) / np.array(expected_rates)
+        ax_events.errorbar(expected_rates, rate_fraction, yerr=rate_fraction_err, fmt='o', label=det_type)
+        ax_mus.errorbar(expected_rates, peak_mus, yerr=peak_mu_errs, fmt='o', label=det_type)
 
-    ax_events.set_xlabel('Distance (cm)')
-    ax_events.set_ylabel('Number of Fe Events')
-    ax_events.set_title('Number of Fe Events vs Distance')
+    ax_events.axvline(0, color='black', linestyle='-')
+    ax_events.axhline(0, color='black', linestyle='-')
+    ax_events.set_ylim(bottom=0)
+    ax_events.set_xlim(left=0)
+    ax_events.set_xlabel('Expected Rate (kHz)')
+    ax_events.set_ylabel('Measured Rate / Expected Rate')
+    ax_events.set_title('Measured Rate Fraction vs Expected Rate')
     ax_events.grid()
     ax_events.legend()
     fig_events.tight_layout()
 
-    ax_mus.set_xlabel('Distance (cm)')
+    ax_mus.axvline(0, color='black', linestyle='-')
+    ax_mus.axhline(0, color='black', linestyle='-')
+    ax_mus.set_ylim(bottom=0)
+    ax_mus.set_xlim(left=0)
+    ax_mus.set_xlabel('Expected Rate (kHz)')
     ax_mus.set_ylabel(r'Peak $\mu$ (ADC)')
-    ax_mus.set_title(r'Peak $\mu$ vs Distance')
+    ax_mus.set_title(r'Peak $\mu$ vs Expected Rate')
     ax_mus.grid()
     ax_mus.legend()
     fig_mus.tight_layout()
