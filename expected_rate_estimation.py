@@ -10,6 +10,7 @@ Created as saclay_micromegas/expected_rate_estimation.py
 
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 
 def main():
@@ -17,7 +18,16 @@ def main():
     det_center = ((detector['x_max'] + detector['x_min']) / 2, (detector['y_max'] + detector['y_min']) / 2)
     n_rays = 100000  # Number of rays to generate
 
-    source_activity = 3.7e5  # Bq  (3.7e5 is 10 uCi, my ballpark guess for the source activity)
+    # source_activity = 3.7e5  # Bq  (3.7e5 is 10 uCi, my ballpark guess for the source activity)
+    fe55_half_life = 2.737  # years
+    nominal_activity = 9.62e6  # Bq
+    nominal_date = datetime(2023, 5, 22)
+    experiment_date = datetime(2023, 12, 1)
+    lam = np.log(2) / fe55_half_life  # Decay constant 1/years
+    source_activity = nominal_activity * np.exp(-lam * (experiment_date - nominal_date).days / 365.25)
+    print(f'Fe55 activity: {source_activity:.2e} Bq')
+
+    transmission = 0.99999  # Probability of photon passing through detector without interacting
 
     ray_z_origins = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]  # cm z origins of rays
 
@@ -28,7 +38,7 @@ def main():
         ray_hits = rays_hit_rectangular_detector(intercepts, detector['x_min'], detector['x_max'],
                                                  detector['y_min'], detector['y_max'])
         hit_fraction = len(ray_hits) / n_rays
-        expected_rate = calc_expected_rate(source_activity, hit_fraction)
+        expected_rate = calc_expected_rate(source_activity, hit_fraction) * (1 - transmission)
         print(f'z={ray_z_origin}cm,  hit fraction: '
               f'{hit_fraction * 100:.2f}% +- {np.sqrt(hit_fraction * (1 - hit_fraction) / n_rays) * 100:.2f}%,  '
               f'expected rate: {expected_rate:.2f} Hz')

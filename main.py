@@ -30,7 +30,7 @@ def main():
     run_full_analysis(base_path, raw_root_dir, ped_flag, connected_channels)
     # plot_peaks_from_file(base_path, raw_root_dir, ped_flag)
     # single_file_analysis(raw_root_dir, ped_flag, base_path)
-    # single_mesh_v_comparison(raw_root_dir, ped_flag, base_path)
+    single_mesh_v_comparison(raw_root_dir, ped_flag, base_path)
     # plot_p2_coverage(raw_root_dir, ped_flag)
     # get_run_periods(fdf_dir, ped_flag)
     # position_map_test()
@@ -274,9 +274,11 @@ def single_mesh_v_comparison(raw_root_dir, ped_flag, base_path):
         '23-12-01 14': {'distance': 4, 'aluminum': False, 'det': 'urw'},
     }
     # Distance in cm of source from plane of detector to expected rate in Hz for 10 uCi source
-    distance_exp_rate_map = {2: 133033.50, 4: 92910.70, 6: 66159.70, 8: 47060.30, 10: 34498.80, 12: 25870.40,
-                             14: 20035.50, 16: 16072.80, 18: 12790.90, 20: 10889.10, 22: 9372.10, 24: 7795.90,
-                             26: 6926.40, 28: 5775.70, 30: 4969.10}
+    # distance_exp_rate_map = {2: 133033.50, 4: 92910.70, 6: 66159.70, 8: 47060.30, 10: 34498.80, 12: 25870.40,
+    #                          14: 20035.50, 16: 16072.80, 18: 12790.90, 20: 10889.10, 22: 9372.10, 24: 7795.90,
+    #                          26: 6926.40, 28: 5775.70, 30: 4969.10}
+    distance_exp_rate_map = {2: 30.79, 4: 21.37, 6: 14.67, 8: 10.61, 10: 7.82, 12: 5.95, 14: 4.56, 16: 3.69, 18: 2.91,
+                             20: 2.42, 22: 2.10, 24: 1.70, 26: 1.51, 28: 1.35, 30: 1.11}
     run_periods = get_run_periods(raw_root_dir, ped_flag, plot=True)
     distance_map_run_periods = {get_run_period(datetime.strptime(date, distance_map_dt_strp), run_periods): date
                                 for date in distance_mapping.keys()}
@@ -340,14 +342,14 @@ def single_mesh_v_comparison(raw_root_dir, ped_flag, base_path):
 
             fit_pars, total_events = analyze_spectra(data_file, pedestals, noise_thresholds, num_detectors,
                                                      connected_channels, edge_strips, chunk_size, title)
-            active_time = total_events * active_time_per_event
+            active_time = total_events * active_time_per_event  # s
             if fit_pars is None:
                 continue
             if len(fit_pars) > 1:
                 peak_mu, peak_sigma, num_fe_events = fit_pars
-                expected_rates.append(distance_exp_rate_map[distance] / 1000)  # Convert to kHz
-                measured_rates.append(num_fe_events.val / active_time / 1000)
-                measured_rates_err.append(num_fe_events.err / active_time / 1000)
+                expected_rates.append(distance_exp_rate_map[distance])
+                measured_rates.append(num_fe_events.val / active_time)
+                measured_rates_err.append(num_fe_events.err / active_time)
                 peak_mus.append(peak_mu.val)
                 peak_mu_errs.append(peak_mu.err)
         rate_fraction = np.array(measured_rates) / np.array(expected_rates)
