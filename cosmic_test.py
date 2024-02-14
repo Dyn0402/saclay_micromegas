@@ -50,9 +50,12 @@ def main():
 
     print(f'Signal time shift: {(signal_evttime - min(signal_evttime)) * 1000}')
 
-    n_plot = int(len(ray_evttime) / 8)
+    # n_plot = int(len(ray_evttime) / 8)
+    n_plot = int(len(ray_evttime) / 1)
     fig, ax = plt.subplots()
     ax.scatter(signal_evttime[:n_plot], ray_evttime[:n_plot], s=1)
+    ax.set_xlabel('Signal Time')
+    ax.set_ylabel('Ray Time')
 
     fig, ax = plt.subplots()
     ax.plot(signal_evttime[:n_plot], marker='o', linestyle='None', label='Signal')
