@@ -69,6 +69,10 @@ def main():
     ax.set_yscale('log')
     ax.legend()
 
+    signal_strip_ampl_corr = ak.to_numpy(signal_tree['StripAmpl_MGv2_corr'].array())
+    print(signal_strip_ampl_corr)
+    print(signal_strip_ampl_corr.shape)
+
     plt.show()
 
     print('donzo')
