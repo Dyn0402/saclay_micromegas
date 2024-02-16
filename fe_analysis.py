@@ -89,15 +89,22 @@ def read_det_data(file_path, num_detectors=None, variable_name='StripAmpl', tree
     root_file.close()
 
     if num_detectors is not None:
-        variable_data = variable_data[:, :num_detectors]
+        if isinstance(num_detectors, list) and len(num_detectors) == 2:
+            variable_data = variable_data[:, num_detectors[0]:num_detectors[-1]]
+        elif isinstance(num_detectors, int):
+            variable_data = variable_data[:, :num_detectors]
 
     return variable_data
 
 
 def read_det_data_chunk(chunk, num_detectors=None):
     chunk = ak.to_numpy(chunk)
+
     if num_detectors is not None:
-        chunk = chunk[:, :num_detectors]
+        if isinstance(num_detectors, list) and len(num_detectors) == 2:
+            chunk = chunk[:, num_detectors[0]:num_detectors[-1]]
+        elif isinstance(num_detectors, int):
+            chunk = chunk[:, :num_detectors]
 
     return chunk
 
@@ -237,7 +244,7 @@ def plot_combined_time_series(data, max_events=None, event_numbers=None, title='
     n_events, n_dets, n_samples_per_event = data.shape[0], data.shape[1], data.shape[-1]
     if max_events is not None:
         data = data[:max_events]
-        event_numbers = event_numbers[:max_events]
+        event_numbers = event_numbers[:max_events] if event_numbers is not None else None
         n_events = len(data)
 
     fig, axs = plt.subplots(nrows=n_dets, figsize=(13.33, 6), dpi=144, sharex='all', sharey='all')
@@ -871,9 +878,11 @@ def process_file(file_path, pedestals, noise_thresholds, num_detectors, connecte
                  filer_noise_events=True):
     with uproot.open(file_path) as file:
         tree_names = file.keys()
-        tree_name = 'T;17' if 'T;17' in tree_names else tree_names[0]
-        if tree_name != 'T;17':
-            print(f'Warning: Tree name T;17 not found in {tree_names}. \nUsing {tree_name} for {file_path}')
+        max_tree_name = max([int(name.split(';')[-1]) for name in tree_names])
+        tree_name = f'T;{max_tree_name}'
+        # tree_name = 'T;17' if 'T;17' in tree_names else tree_names[0]
+        # if tree_name != 'T;17':
+        #     print(f'Warning: Tree name T;17 not found in {tree_names}. \nUsing {tree_name} for {file_path}')
 
         events, event_numbers = [], []
         total_events = 0
