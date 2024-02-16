@@ -39,8 +39,6 @@ def process_fdf(file, fdf_dir, raw_root_dir, overwrite, file_i):
 
 def read_fdf_to_root(file, fdf_dir, raw_root_dir, root_name, wait_time):
     cmd = f'source /home/dylan/Software/root/bin/thisroot.sh && ./DreamDataReader {os.path.join(fdf_dir, file)}'
-    # os.system(f'source /home/dylan/Software/root/bin/thisroot.sh && ./DreamDataReader {os.path.join(fdf_dir, file)}')
-    # subprocess.Popen(['source', '/home/dylan/Software/root/bin/thisroot.sh', f'./DreamDataReader {os.path.join(fdf_dir, file)}'])
     sleep(wait_time)
     try:
         with open('dream_data_reader_output_file_name.txt', 'w') as file:
