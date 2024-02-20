@@ -15,14 +15,18 @@ import shutil
 
 
 def main():
+    """
+    Currently have to push to server and run this manually
+    :return:
+    """
     input_fdf_dir = '/mnt/nas_clas12/DATA/CosmicBench/2024/W05/'
     output_root_dir = '/local/home/usernsw/dylan/output_root/'
     tracking_run_dir = '/local/home/usernsw/dylan/tracking/'
     signal_run_dir = '/local/home/usernsw/dylan/signal/'
     tracking_sh_file = '/local/home/usernsw/dylan/tracking/run_tracking.sh'
     signal_sh_file = '/local/home/usernsw/dylan/signal/run_data_reader.sh'
-    start_date = datetime(2024, 2, 12, 11, 40)
-    end_date = datetime(2024, 2, 12, 11, 45)
+    start_date = datetime(2024, 2, 20, 16, 0)
+    end_date = datetime(2024, 2, 20, 17, 0)
     ref_fdf = 1
     signal_feus = ['03']
 

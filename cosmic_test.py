@@ -8,7 +8,6 @@ Created as saclay_micromegas/cosmic_test.py
 @author: Dylan Neff, Dylan
 """
 
-
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -29,22 +28,30 @@ def main():
 
 
 def get_det_hits():
-    signal_ped_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_pedthr_240212_11H42_03.root'
-    signal_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_000_03.root'
+    # signal_ped_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_pedthr_240212_11H42_03.root'
+    # signal_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_000_03.root'
+    signal_ped_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_pedthr_240212_11H42_03.root'
+    signal_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_000_03.root'
     det_width = 130
-    num_det_ranges = [[4, 8], [0, 4]]
-    det_zs = [400, 800]
-    det_bot_def = extent_to_vertices([(-det_width / 2, -det_width / 2, det_zs[0] - 1),
-                                      (det_width / 2, det_width / 2, det_zs[0] + 1)])
-    det_top_def = extent_to_vertices([(-det_width / 2, -det_width / 2, det_zs[1] - 1),
-                                      (det_width / 2, det_width / 2, det_zs[1] + 1)])
+    num_det_ranges = [[0, 4], [4, 8]]  # [Top, Bottom]
+    # det_zs = [738, 278.6]  # mm [Top, Bottom] to bottom of the board, might want to raise a bit. Pre-stand data
+    # det_x_centers = [31.5, 37.5]  # mm [Top, Bottom] Pre-stand data
+    # det_y_centers = [-51, -55]  # mm [Top, Bottom] Pre-stand data
+    det_zs = [293.2 + 92 + 225, 293.2 + 225]  # mm [Top, Bottom] to bottom of the board maybe raise. For data with stand
+    det_x_centers = [0, 0]  # mm [Top, Bottom] For data with stand
+    det_y_centers = [0, 0]  # mm [Top, Bottom] For data with stand
+    det_bot_def = extent_to_vertices([
+        (-det_width / 2 + det_x_centers[1], -det_width / 2 + det_y_centers[1], det_zs[0] - 1),
+        (det_width / 2 + det_x_centers[1], det_width / 2 + det_y_centers[1], det_zs[0] + 1)])
+    det_top_def = extent_to_vertices([
+        (-det_width / 2 + det_x_centers[0], -det_width / 2 + det_y_centers[0], det_zs[1] - 1),
+        (det_width / 2 + det_x_centers[0], det_width / 2 + det_y_centers[0], det_zs[1] + 1)])
 
     hit_coords_dets = []
-    for num_dets, det_z in zip(num_det_ranges, det_zs):
-
-
+    for det_i, (num_dets, det_z) in enumerate(zip(num_det_ranges, det_zs)):
         pedestals, noise_thresholds = run_pedestal(signal_ped_file_path, num_dets, noise_sigmas=7, plot_pedestals=False)
-        no_noise_events, event_numbers, total_events = process_file(signal_file_path, pedestals, noise_thresholds, num_dets)
+        no_noise_events, event_numbers, total_events = process_file(signal_file_path, pedestals, noise_thresholds,
+                                                                    num_dets)
         # print(no_noise_events)
         # print(f'Number of events: {total_events}')
         # print(f'no_noise_events shape: {no_noise_events.shape}')
@@ -57,8 +64,11 @@ def get_det_hits():
         no_noise_events_max = np.reshape(no_noise_events_max, (n_events, n_dets // 2, n_strips * 2))
 
         max_strips = get_max_strip(no_noise_events_max)
-        hit_coords = max_strips / 128 * det_width - det_width / 2
+        hit_coords = max_strips / 128 * det_width - det_width / 2 + np.array([det_y_centers[1], det_x_centers[1]])
+        # Flip the innermost dimension to match the order of the detectors
         print(max_strips)
+        # print(hit_coords)
+        hit_coords = np.flip(hit_coords, axis=1)  # y comes first in the data due to how I plugged them in
         print(hit_coords)
         print(event_numbers)
         hit_coords_dets.append(dict(zip(event_numbers, hit_coords)))
@@ -83,7 +93,8 @@ def get_det_hits():
 
 
 def ray_plot_test(event_num=None, plot_if_no_track=True):
-    ray_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_rays.root'
+    # ray_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_rays.root'
+    ray_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_rays.root'
     variables = ['evn', 'evttime', 'rayN', 'Z_Up', 'X_Up', 'Y_Up', 'Z_Down', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']
     det_top_def = extent_to_vertices([(-250, -250, 1300), (250, 250, 1304)])
     det_bot_def = extent_to_vertices([(-250, -250, 22), (250, 250, 26)])
