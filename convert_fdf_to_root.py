@@ -25,7 +25,7 @@ def main():
     signal_run_dir = '/local/home/usernsw/dylan/signal/'
     tracking_sh_file = '/local/home/usernsw/dylan/tracking/run_tracking.sh'
     signal_sh_file = '/local/home/usernsw/dylan/signal/run_data_reader.sh'
-    start_date = datetime(2024, 2, 20, 16, 0)
+    start_date = datetime(2024, 2, 20, 15, 30)
     end_date = datetime(2024, 2, 20, 17, 0)
     ref_fdf = 1
     signal_feus = ['03']

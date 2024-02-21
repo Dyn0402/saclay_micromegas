@@ -28,24 +28,30 @@ def main():
 
 
 def get_det_hits():
-    # signal_ped_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_pedthr_240212_11H42_03.root'
-    # signal_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_000_03.root'
-    signal_ped_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_pedthr_240212_11H42_03.root'
-    signal_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_000_03.root'
+    signal_ped_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_pedthr_240212_11H42_03.root'
+    signal_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_000_03.root'
+    # signal_ped_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_pedthr_240212_11H42_03.root'
+    # signal_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_000_03.root'
     det_width = 130
     num_det_ranges = [[0, 4], [4, 8]]  # [Top, Bottom]
     # det_zs = [738, 278.6]  # mm [Top, Bottom] to bottom of the board, might want to raise a bit. Pre-stand data
     # det_x_centers = [31.5, 37.5]  # mm [Top, Bottom] Pre-stand data
     # det_y_centers = [-51, -55]  # mm [Top, Bottom] Pre-stand data
-    det_zs = [293.2 + 92 + 225, 293.2 + 225]  # mm [Top, Bottom] to bottom of the board maybe raise. For data with stand
-    det_x_centers = [0, 0]  # mm [Top, Bottom] For data with stand
-    det_y_centers = [0, 0]  # mm [Top, Bottom] For data with stand
-    det_bot_def = extent_to_vertices([
-        (-det_width / 2 + det_x_centers[1], -det_width / 2 + det_y_centers[1], det_zs[0] - 1),
-        (det_width / 2 + det_x_centers[1], det_width / 2 + det_y_centers[1], det_zs[0] + 1)])
-    det_top_def = extent_to_vertices([
-        (-det_width / 2 + det_x_centers[0], -det_width / 2 + det_y_centers[0], det_zs[1] - 1),
-        (det_width / 2 + det_x_centers[0], det_width / 2 + det_y_centers[0], det_zs[1] + 1)])
+    # det_zs = [293.2 + 92 + 225, 293.2 + 225]  # mm [Top, Bottom] to bottom of the board maybe raise. For data with stand
+    det_zs = [293.2 + 92 * 3 + 225, 293.2 + 92 * 2 + 225, 293.2 + 92 + 225, 293.2 + 225, 293.2 + 225 - 92]  # mm [Top, Bottom] to bottom of the board maybe raise. For data with stand
+    det_x_centers = [0, 0, 0, 0, 0]  # mm [Top, Bottom] For data with stand
+    det_y_centers = [0, 0, 0, 0, 0]  # mm [Top, Bottom] For data with stand
+    det_defs = []
+    for det_x_cent, det_y_cent, det_z in zip(det_x_centers, det_y_centers, det_zs):
+        det_defs.append(extent_to_vertices([
+            (-det_width / 2 + det_x_cent, -det_width / 2 + det_y_cent, det_z - 1),
+            (det_width / 2 + det_x_cent, det_width / 2 + det_y_cent, det_z + 1)]))
+    # det_bot_def = extent_to_vertices([
+    #     (-det_width / 2 + det_x_centers[1], -det_width / 2 + det_y_centers[1], det_zs[0] - 1),
+    #     (det_width / 2 + det_x_centers[1], det_width / 2 + det_y_centers[1], det_zs[0] + 1)])
+    # det_top_def = extent_to_vertices([
+    #     (-det_width / 2 + det_x_centers[0], -det_width / 2 + det_y_centers[0], det_zs[1] - 1),
+    #     (det_width / 2 + det_x_centers[0], det_width / 2 + det_y_centers[0], det_zs[1] + 1)])
 
     hit_coords_dets = []
     for det_i, (num_dets, det_z) in enumerate(zip(num_det_ranges, det_zs)):
@@ -81,20 +87,30 @@ def get_det_hits():
         ax, got_track = ray_plot_test(event_num, plot_if_no_track=False)
         if not got_track:
             continue
-        bot_hit_coord = None if event_num not in hit_coords_dets[0] \
-            else np.array([*hit_coords_dets[0][event_num], det_zs[0]])
-        top_hit_coord = None if event_num not in hit_coords_dets[1] \
-            else np.array([*hit_coords_dets[1][event_num], det_zs[1]])
-        plot_urw_hit(bot_hit_coord, det_bot_def, ax_in=ax)
-        plot_urw_hit(top_hit_coord, det_top_def, ax_in=ax)
+        hit_coords = []
+        for det_i, hit_coords_det in enumerate(hit_coords_dets):
+            coords = None if event_num not in hit_coords_det else np.array([*hit_coords_det[event_num], det_zs[det_i]])
+            coords = None  # Hack for now to just display boards
+            hit_coords.append(coords)
+        for det_i, det_def in enumerate(det_defs):
+            if det_i >= len(hit_coords):
+                plot_urw_hit(None, det_def, ax_in=ax)
+            else:
+                plot_urw_hit(hit_coords[det_i], det_def, ax_in=ax)
+        # bot_hit_coord = None if event_num not in hit_coords_dets[0] \
+        #     else np.array([*hit_coords_dets[0][event_num], det_zs[0]])
+        # top_hit_coord = None if event_num not in hit_coords_dets[1] \
+        #     else np.array([*hit_coords_dets[1][event_num], det_zs[1]])
+        # plot_urw_hit(bot_hit_coord, det_bot_def, ax_in=ax)
+        # plot_urw_hit(top_hit_coord, det_top_def, ax_in=ax)
         ax.set_title(f'Event {event_num}')
         ax.legend()
         plt.gcf().tight_layout()
 
 
 def ray_plot_test(event_num=None, plot_if_no_track=True):
-    # ray_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_rays.root'
-    ray_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_rays.root'
+    ray_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_rays.root'
+    # ray_file_path = '/local/home/dn277127/Documents/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_rays.root'
     variables = ['evn', 'evttime', 'rayN', 'Z_Up', 'X_Up', 'Y_Up', 'Z_Down', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']
     det_top_def = extent_to_vertices([(-250, -250, 1300), (250, 250, 1304)])
     det_bot_def = extent_to_vertices([(-250, -250, 22), (250, 250, 26)])
