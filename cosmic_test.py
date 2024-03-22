@@ -13,15 +13,21 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import pandas as pd
 
+from scipy.optimize import curve_fit as cf
+from scipy.stats import skewnorm
+
 import uproot
 import awkward as ak
+
+from Measure import Measure
 
 from fe_analysis import *
 
 
 def main():
     # ray_first_test()
-    get_det_hits()
+    # get_det_hits()
+    get_ray_angular_distribution()
     # ray_plot_test()
     plt.show()
     print('donzo')
@@ -106,6 +112,98 @@ def get_det_hits():
         ax.set_title(f'Event {event_num}')
         ax.legend()
         plt.gcf().tight_layout()
+
+
+def get_ray_angular_distribution():
+    ray_file_path = 'F:/Saclay/Cosmic_Data/CosTb_380V_stats_datrun_240212_11H42_rays.root'
+    variables = ['evn', 'evttime', 'rayN', 'Z_Up', 'X_Up', 'Y_Up', 'Z_Down', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']
+
+    ray_root_file = uproot.open(ray_file_path)
+    ray_tree = ray_root_file['T;1']
+    data = ray_tree.arrays(variables, library='np')
+    # print(data)
+    print(data.keys())
+    # Turn into pandas dataframe
+    df = pd.DataFrame(data)
+    # print(df)
+
+    # Calculate the angle of the ray with respect to vertical for each event using top and bottom hit coordinates
+    thetas, thetaxs, thetays, rs, dxs, dys = [], [], [], [], [], []
+    for row in df.itertuples():
+        if len(row.X_Up) == 0 or len(row.Y_Up) == 0 or len(row.X_Down) == 0 or len(row.Y_Down) == 0:
+            continue
+        r = np.sqrt((row.X_Up[0] - row.X_Down[0])**2 + (row.Y_Up[0] - row.Y_Down[0])**2)
+        rs.append(r)
+        theta = np.arctan(r / (row.Z_Up - row.Z_Down)) * 180 / np.pi
+        thetas.append(theta)
+        thetaxs.append(np.arctan((row.X_Up[0] - row.X_Down[0]) / (row.Z_Up - row.Z_Down)) * 180 / np.pi)
+        thetays.append(np.arctan((row.Y_Up[0] - row.Y_Down[0]) / (row.Z_Up - row.Z_Down)) * 180 / np.pi)
+        dxs.append(row.X_Up[0] - row.X_Down[0])
+        dys.append(row.Y_Up[0] - row.Y_Down[0])
+        print(f'Event {row.evn}: {theta}')
+
+    # Plot the angular distribution
+    fig, ax = plt.subplots()
+    ax.hist(thetas, bins=100, histtype='step')
+    ax.set_xlabel('Angle (rad)')
+    ax.set_ylabel('Counts')
+    ax.set_title('Angular Distribution of Cosmic Ray Tracks')
+    # ax.set_yscale('log')
+    ax.grid()
+    fig.tight_layout()
+
+    fig, ax = plt.subplots()
+    ax.hist(thetaxs, bins=100, histtype='step', label='Theta X')
+    ax.hist(thetays, bins=100, histtype='step', label='Theta Y')
+    ax.set_xlabel('Angle (rad)')
+    ax.set_ylabel('Counts')
+    ax.set_title('Angular Distribution of Cosmic Ray Tracks')
+    # ax.set_yscale('log')
+    ax.grid()
+    ax.legend()
+    fig.tight_layout()
+
+    n_bins = 100
+    rs = np.array(rs)
+    r_hist, r_bins_edges = np.histogram(rs, bins=n_bins)
+    r_bins_centers = (r_bins_edges[:-1] + r_bins_edges[1:]) / 2
+    x_fit = np.linspace(min(r_bins_centers), max(r_bins_centers), 1000)
+
+    func = lambda x, a, alpha, xi, omega: a * skewnorm.pdf(x, alpha, xi, omega)
+    p0 = [np.max(r_hist) * n_bins / (2 * np.pi), 0, np.mean(rs), 50]
+    p_names = ['a', 'alpha', 'xi', 'omega']
+    popt, pcov = cf(func, r_bins_centers, r_hist, p0=p0)
+    perr = np.sqrt(np.diag(pcov))
+    fit_pars = [Measure(val, err) for val, err in zip(popt, perr)]
+    print(fit_pars)
+    fit_pars_str = '\n'.join([f'{name}: {val}' for name, val in zip(p_names, fit_pars)])
+
+    fig, ax = plt.subplots()
+    ax.bar(r_bins_centers, r_hist, width=np.diff(r_bins_edges), align='center', edgecolor='black', linewidth=1)
+    ax.plot(x_fit, func(x_fit, *p0), label='Guess', color='gray')
+    ax.plot(x_fit, func(x_fit, *popt), label='Fit', color='red')
+    ax.set_xlabel('r (mm)')
+    ax.set_ylabel('Counts')
+    ax.set_title('r Distribution of Cosmic Ray Tracks')
+    ax.annotate(fit_pars_str, xy=(0.95, 0.1), xycoords='axes fraction', ha='right', va='bottom',
+                bbox=dict(facecolor='wheat', alpha=0.5))
+    # ax.set_yscale('log')
+    ax.grid()
+    ax.legend()
+    fig.tight_layout()
+
+    fig, ax = plt.subplots()
+    ax.hist(dxs, bins=100, histtype='step', label='dx')
+    ax.hist(dys, bins=100, histtype='step', label='dy')
+    ax.set_xlabel('r (mm)')
+    ax.set_ylabel('Counts')
+    ax.set_title('r Distribution of Cosmic Ray Tracks')
+    # ax.set_yscale('log')
+    ax.grid()
+    ax.legend()
+    fig.tight_layout()
+
+    return ax
 
 
 def ray_plot_test(event_num=None, plot_if_no_track=True):
