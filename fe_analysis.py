@@ -875,7 +875,7 @@ def process_chunk_all(chunk, pedestals, num_detectors):
 
 
 def process_file(file_path, pedestals, noise_thresholds, num_detectors, connected_channels=None, chunk_size=10000,
-                 filer_noise_events=True):
+                 filter_noise_events=True):
     with uproot.open(file_path) as file:
         tree_names = file.keys()
         max_tree_name = max([int(name.split(';')[-1]) for name in tree_names])
@@ -888,7 +888,7 @@ def process_file(file_path, pedestals, noise_thresholds, num_detectors, connecte
         total_events = 0
         tree = file[tree_name]
         for chunk in uproot.iterate(tree, branches=['StripAmpl'], step_size=chunk_size):
-            if filer_noise_events:
+            if filter_noise_events:
                 chunk_events, event_nums, num_events = process_chunk(chunk, pedestals, noise_thresholds,
                                                                      num_detectors, connected_channels)
                 event_numbers.append(event_nums + total_events)
