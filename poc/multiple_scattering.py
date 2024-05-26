@@ -73,29 +73,29 @@ def configuration_optimization():
     init_r = 200 / 10000  # cm from microns
 
     configurations = [
+        # {
+        #     'name': 'banco_first',
+        #     'banco_res': 0,
+        #     'scattering_objects':
+        #         [
+        #             {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #         ]
+        # },
         {
-            'name': 'banco_first',
-            'banco_res': 0,
-            'scattering_objects':
-                [
-                    {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                ]
-        },
-        {
-            'name': 'banco_first_10um',
+            'name': 'First Test Beam',
             'banco_res': 10 / 10000,  # um to cm
             'scattering_objects':
                 [
@@ -115,88 +115,112 @@ def configuration_optimization():
                     {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
                 ]
         },
+        # {
+        #     'name': 'banco_first_10um_no_scatter',
+        #     'banco_res': 10 / 10000,  # um to cm
+        #     'scatter': False,  # Turn off scattering if False
+        #     'scattering_objects':
+        #         [
+        #             {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #         ]
+        # },
+        # {
+        #     'name': 'banco_edges',
+        #     'scattering_objects':
+        #         [
+        #             {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #         ]
+        # },
+        # {
+        #     'name': 'banco_edges_straight_0.001_degree',
+        #     'banco_max_angle': 0.001,  # Degrees
+        #     'scattering_objects':
+        #         [
+        #             {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #         ]
+        # },
+        # {
+        #     'name': 'banco_edges_straight_0.0002_degree',
+        #     'banco_max_angle': 0.0002,  # Degrees
+        #     'scattering_objects':
+        #         [
+        #             {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+        #         ]
+        # },
         {
-            'name': 'banco_first_10um_no_scatter',
-            'banco_res': 10 / 10000,  # um to cm
-            'scatter': False,  # Turn off scattering if False
+            'name': 'Next Test Beam',
             'scattering_objects':
                 [
                     {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
                     {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                ]
-        },
-        {
-            'name': 'banco_edges',
-            'scattering_objects':
-                [
                     {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                ]
-        },
-        {
-            'name': 'banco_edges_straight_0.001_degree',
-            'banco_max_angle': 0.001,  # Degrees
-            'scattering_objects':
-                [
+                    {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco_seperator'},  # Guess, same as test
+                    {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
                     {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
                     {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                ]
-        },
-        {
-            'name': 'banco_edges_straight_0.0002_degree',
-            'banco_max_angle': 0.0002,  # Degrees
-            'scattering_objects':
-                [
                     {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
                     {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+                    {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
                     {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
+                    {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+                    {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco_seperator'},  # Guess, same as test
+                    {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
                     {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 10, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
                 ]
         },
         # {
@@ -258,25 +282,31 @@ def configuration_optimization():
                 test_det_particles.append(deepcopy(particles))
 
         banco_res = configuration['banco_res'] if 'banco_res' in configuration else 0
-        banco_tracks = calc_banco_tracks(*banco_particles, resolution=banco_res)
+        banco_tracks = calc_banco_tracks(*deepcopy(banco_particles)[:2], resolution=banco_res)
+        banco_tracks2 = None
+        if len(banco_particles) == 4:
+            banco_tracks2 = calc_banco_tracks(*deepcopy(banco_particles)[2:], resolution=banco_res)
         if 'banco_max_angle' in configuration:
             plot_banco_angles(banco_tracks)
             straight_mask = select_straight_tracks(banco_tracks, configuration['banco_max_angle'])
         else:
             straight_mask = None
-        distances, sigmas, sigma_errs = [], [], []
-        for det_i, det_particles in enumerate(test_det_particles):
-            x_res, y_res = calc_det_residuals(det_particles, banco_tracks)
-            if straight_mask is not None:
-                x_res, y_res = x_res[straight_mask], y_res[straight_mask]
-            popt_x, pcov_x, x_hist, x_bin_centers = fit_residuals(x_res * 10)
-            sigma_x, sigma_x_err = abs(popt_x[2]), np.sqrt(np.diag(pcov_x)[2])
-            distances.append(det_particles['z'])
-            sigmas.append(sigma_x)
-            sigma_errs.append(sigma_x_err)
-            # plot_res_xy_hists(x_res, y_res, f'Detector {det_i + 1} Residuals')
-
-        ax.errorbar(distances, sigmas, yerr=sigma_errs, alpha=0.8, marker=next(marker), label=configuration['name'])
+        banco_track_sets = [banco_tracks] if banco_tracks2 is None else [banco_tracks, banco_tracks2]
+        for banco_tracks_i_num, banco_tracks_i in enumerate(banco_track_sets):
+            distances, sigmas, sigma_errs = [], [], []
+            for det_i, det_particles in enumerate(test_det_particles):
+                x_res, y_res = calc_det_residuals(det_particles, banco_tracks_i)
+                if straight_mask is not None:
+                    x_res, y_res = x_res[straight_mask], y_res[straight_mask]
+                popt_x, pcov_x, x_hist, x_bin_centers = fit_residuals(x_res * 10)
+                sigma_x, sigma_x_err = abs(popt_x[2]), np.sqrt(np.diag(pcov_x)[2])
+                distances.append(det_particles['z'])
+                sigmas.append(sigma_x)
+                sigma_errs.append(sigma_x_err)
+                # plot_res_xy_hists(x_res, y_res, f'Detector {det_i + 1} Residuals')
+            lab = configuration["name"]
+            lab = lab + f' Arm {banco_tracks_i_num + 1}' if len(banco_track_sets) > 1 else lab
+            ax.errorbar(distances, sigmas, yerr=sigma_errs, alpha=0.8, marker=next(marker), label=lab)
     ax.set_title('Detector Resolution vs Distance')
     ax.set_xlabel('Distance (cm)')
     ax.set_ylabel('Resolution (mm)')
@@ -446,7 +476,7 @@ def plot_res_xy_hists(x_res, y_res, title=''):
 
 
 def plot_banco_angles(banco_tracks):
-    x0, y0, x_slope, y_slope, dz = banco_tracks
+    x0, y0, z0, x_slope, y_slope, dz = banco_tracks
     angles = calc_angles(x_slope, y_slope, dz)
     fig, ax = plt.subplots()
     ax.hist(angles, bins=50)
@@ -454,19 +484,18 @@ def plot_banco_angles(banco_tracks):
 
 def calc_banco_tracks(particles1, particles2, resolution=0):
     # Calculate tracks of particles from banco arm 1 to banco arm 2
-    x0, y0 = particles1['x'], particles1['y']
-    x1, y1 = particles2['x'], particles2['y']
+    x0, y0, z0 = particles1['x'], particles1['y'], particles1['z']
+    x1, y1, z1 = particles2['x'], particles2['y'], particles2['z']
     if resolution > 0:
         x0, y0 = np.random.normal(loc=x0, scale=resolution), np.random.normal(loc=y0, scale=resolution)
         x1, y1 = np.random.normal(loc=x1, scale=resolution), np.random.normal(loc=y1, scale=resolution)
-    dx, dy = x1 - x0, y1 - y0
-    dz = particles2['z'] - particles1['z']
+    dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
     x_slope, y_slope = dx / dz, dy / dz
-    return x0, y0, x_slope, y_slope, dz
+    return x0, y0, z0, x_slope, y_slope, dz
 
 
 def select_straight_tracks(banco_tracks, max_angle=0.1):
-    x0, y0, x_slope, y_slope, dz = banco_tracks
+    x0, y0, z0, x_slope, y_slope, dz = banco_tracks
     angles = calc_angles(x_slope, y_slope, dz)
     return angles < max_angle
 
@@ -478,9 +507,9 @@ def calc_angles(x_slope, y_slope, dz):
 
 
 def calc_det_residuals(det_particles, banco_tracks):
-    x0, y0, x_slope, y_slope, dz = banco_tracks
+    x0, y0, z0, x_slope, y_slope, dz = banco_tracks
     x, y = det_particles['x'], det_particles['y']
-    x_res, y_res = x - (x0 + x_slope * det_particles['z']), y - (y0 + y_slope * det_particles['z'])
+    x_res, y_res = x - (x0 + x_slope * (det_particles['z'] - z0)), y - (y0 + y_slope * (det_particles['z'] - z0))
     return x_res, y_res
 
 
@@ -488,8 +517,10 @@ def fit_residuals(residuals, bins=50):
     hist, bins = np.histogram(residuals, bins=bins)
     bin_centers = (bins[:-1] + bins[1:]) / 2
     try:
-        popt, pcov = cf(gauss, bin_centers, hist, p0=[1, 1, 1])
+        p0 = [max(hist) * 0.9, np.mean(residuals), np.std(residuals)]
+        popt, pcov = cf(gauss, bin_centers, hist, p0=p0)
     except:
+        print(f'Residual fit failed!')
         popt, pcov = [0, 0, 0], [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
     return popt, pcov, hist, bin_centers
 
