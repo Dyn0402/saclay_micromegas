@@ -179,7 +179,7 @@ def read_raw_banco():
     plt.show()
 
 
-def banco_analysis():
+def banco_analysis_test2():
     vector.register_awkward()
     ladders = [157, 160, 162, 163]
     noise_noise_threshold, data_noise_threshold = 2, 3
@@ -187,6 +187,54 @@ def banco_analysis():
     for ladder in ladders:
         file_path = f'C:/Users/Dylan/Desktop/banco_test2/multinoiseScan_240502_151923-B0-ladder{ladder}.root'
         noise_path = f'C:/Users/Dylan/Desktop/banco_test2/Noise_{ladder}.root'
+        noise_data = read_banco_file(noise_path)
+        # plot_noise_vs_threshold(noise_data, noise_noise_threshold, ladder)
+        noise_pixels = get_noise_pixels(noise_data, noise_noise_threshold)
+        data = read_banco_file(file_path)
+        # plot_noise_vs_threshold(data, data_noise_threshold)
+        data_noise_pixels = get_noise_pixels(data, data_noise_threshold)
+        noise_pixels = np.unique(np.concatenate([noise_pixels, data_noise_pixels]), axis=0)
+        trigger_ids, cluster_centroids = cluster_data(data, noise_pixels)
+        # Get only trigger_id/centroid pairs with a single cluster
+        trigger_ids = [trigger_ids[i] for i in range(len(cluster_centroids)) if len(cluster_centroids[i]) == 1]
+        cluster_centroids = [cluster_centroids[i] for i in range(len(cluster_centroids)) if len(cluster_centroids[i]) == 1]
+        trigger_ids, cluster_centroids = np.array(trigger_ids), np.array(cluster_centroids)
+        ladders_trigger_ids[ladder], ladders_cluster_centroids[ladder] = trigger_ids, cluster_centroids
+        # ladders_trigger_ids[ladder], ladders_cluster_centroids = trigger_ids, cluster_centroids
+        # for trigger_id, clusters in zip(trigger_ids, cluster_centroids):
+        #     print(f'Trigger {trigger_id} has {len(clusters)} clusters')
+        #     for cluster in clusters:
+        #         print(f'Cluster at {cluster}')
+        plot_cluster_number_histogram(cluster_centroids, ladder)
+        plot_cluster_scatter(cluster_centroids, ladder)
+    fig, ax = plt.subplots()
+    # plot correlation in x position of centroids between ladder pairs
+    for i in range(len(ladders) - 1):
+        ladder1, ladder2 = ladders[i], ladders[i + 1]
+        centroids1, centroids2 = ladders_cluster_centroids[ladder1], ladders_cluster_centroids[ladder2]
+        centroids1 = np.reshape(centroids1, (centroids1.shape[0], centroids1.shape[-1]))
+        centroids2 = np.reshape(centroids2, (centroids2.shape[0], centroids2.shape[-1]))
+        trigger_ids1, trigger_ids2 = ladders_trigger_ids[ladder1], ladders_trigger_ids[ladder2]
+        common_triggers = np.intersect1d(trigger_ids1, trigger_ids2)
+        common_i1 = np.where(np.isin(trigger_ids1, common_triggers))
+        common_i2 = np.where(np.isin(trigger_ids2, common_triggers))
+        centroids1, centroids2 = centroids1[common_i1], centroids2[common_i2]
+        ax.scatter(centroids1[:, 1], centroids2[:, 1], alpha=0.5, label=f'Ladders {ladder1} - {ladder2}')
+    ax.set_title('Cluster Centroid Correlation')
+    ax.set_xlabel('Column Ladder 1')
+    ax.set_ylabel('Column Ladder 2')
+    ax.legend()
+    plt.show()
+
+
+def banco_analysis_test3():
+    vector.register_awkward()
+    ladders = [157, 160, 162, 163]
+    noise_noise_threshold, data_noise_threshold = 2, 3
+    ladders_trigger_ids, ladders_cluster_centroids = {}, {}
+    for ladder in ladders:
+        file_path = f'C:/Users/Dylan/Desktop/banco_test3/multinoiseScan_240514_231935-B0-ladder{ladder}.root'
+        noise_path = f'C:/Users/Dylan/Desktop/banco_test3/Noise_{ladder}.root'
         noise_data = read_banco_file(noise_path)
         # plot_noise_vs_threshold(noise_data, noise_noise_threshold, ladder)
         noise_pixels = get_noise_pixels(noise_data, noise_noise_threshold)

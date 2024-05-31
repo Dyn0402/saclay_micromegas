@@ -103,52 +103,6 @@ def estimate_rate(dets_extents, coincidence_dets=None):
     return hits, coincident_hits
 
 
-def estimate_banco_res_rate_coverage(dets_extents, coincidence_dets=None):
-    muon_r_skew_norm_pars = {'alpha': 2.23, 'xi': 101.4, 'omega': 212.6}
-    det_top_extent = [(-250, -250, 1300), (250, 250, 1304)]
-    det_bot_extent = [(-250, -250, 22), (250, 250, 26)]
-
-    n_hits = 1000000
-    top_hits_x = np.random.uniform(det_top_extent[0][0], det_top_extent[1][0], n_hits)
-    top_hits_y = np.random.uniform(det_top_extent[0][1], det_top_extent[1][1], n_hits)
-    hit_r = skewnorm.rvs(muon_r_skew_norm_pars['alpha'], muon_r_skew_norm_pars['xi'],
-    muon_r_skew_norm_pars['omega'], n_hits)
-    hit_phi = np.random.uniform(0, 2 * np.pi, n_hits)
-    bot_hits_x = hit_r * np.cos(hit_phi) + top_hits_x
-    bot_hits_y = hit_r * np.sin(hit_phi) + top_hits_y
-
-    z_top, z_bot = (det_top_extent[0][2] + det_top_extent[1][2]) / 2, (det_bot_extent[0][2] + det_bot_extent[1][2]) / 2
-    hits = [0 for _ in dets_extents]
-    coincident_hits = [0 for _ in coincidence_dets] if coincidence_dets is not None else None
-    for x_t, y_t, x_b, y_b in zip(top_hits_x, top_hits_y, bot_hits_x, bot_hits_y):
-        track_x = lambda z: x_t + (x_b - x_t) / (z_top - z_bot) * (z - z_bot)
-    track_y = lambda z: y_t + (y_b - y_t) / (z_top - z_bot) * (z - z_bot)
-    det_hit = [False for _ in dets_extents]
-    for det_i, det_ext in enumerate(dets_extents):
-        z_det = (det_ext[0][2] + det_ext[1][2]) / 2
-    x_at_det_z = track_x(z_det)
-    y_at_det_z = track_y(z_det)
-    if point_in_extent(x_at_det_z, y_at_det_z, z_det, det_ext):
-        hits[det_i] += 1
-    det_hit[det_i] = True
-    if coincidence_dets is not None:
-        for
-    i, coincidence_group in enumerate(coincidence_dets):
-    if all(det_hit[j] for j in coincidence_group):
-        coincident_hits[i] += 1
-    # print(hits)
-    # print(coincident_hits)
-
-    hits = np.array(hits) / n_hits
-    coincident_hits = np.array(coincident_hits) / n_hits if coincidence_dets is not None else None
-
-    # print(hits)
-    # print(coincident_hits)
-
-
-return hits, coincident_hits
-
-
 def estimate_coninc_vs_sep(coincidence_dets):
     zs = np.linspace(50, 1050, 41)
     coinc_rates, indiv_rates = [], []
