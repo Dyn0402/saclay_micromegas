@@ -11,6 +11,7 @@ Created as saclay_micromegas/cosmic_det_check.py
 
 import os
 
+import numpy as np
 import uproot
 import awkward as ak
 import vector
@@ -45,27 +46,28 @@ def plot_hits(hit_events_dict, ray_data):
 
     for det, det_data in hit_events_dict.items():
         n_det_hits = len(det_data['hit_event_ids'])
-        mask = np.isin(ray_event_ids, det_data['hit_event_ids'])
-        one_track_mask = np.array([x.size == 1 for x in ray_data['X_Up']])
-        mask = mask & one_track_mask
-
-        z_up, z_down = ray_data['Z_Up'][mask], ray_data['Z_Down'][mask]
-        x_up, x_down = ray_data['X_Up'][mask], ray_data['X_Down'][mask]
-        y_up, y_down = ray_data['Y_Up'][mask], ray_data['Y_Down'][mask]
-
-        x_up, x_down = np.array([x[0] for x in x_up]), np.array([x[0] for x in x_down])
-        y_up, y_down = np.array([y[0] for y in y_up]), np.array([y[0] for y in y_down])
-
-        det_z = det_data['z']
-
-        # Calculate the interpolation factors
-        t = (det_z - z_up) / (z_down - z_up)
-        # print(t)
-        t = np.mean(t)
-
-        # Interpolate the x and y positions
-        x_positions = x_up + t * (x_down - x_up)
-        y_positions = y_up + t * (y_down - y_up)
+        # mask = np.isin(ray_event_ids, det_data['hit_event_ids'])
+        # one_track_mask = np.array([x.size == 1 for x in ray_data['X_Up']])
+        # mask = mask & one_track_mask
+        #
+        # z_up, z_down = ray_data['Z_Up'][mask], ray_data['Z_Down'][mask]
+        # x_up, x_down = ray_data['X_Up'][mask], ray_data['X_Down'][mask]
+        # y_up, y_down = ray_data['Y_Up'][mask], ray_data['Y_Down'][mask]
+        #
+        # x_up, x_down = np.array([x[0] for x in x_up]), np.array([x[0] for x in x_down])
+        # y_up, y_down = np.array([y[0] for y in y_up]), np.array([y[0] for y in y_down])
+        #
+        # det_z = det_data['z']
+        #
+        # # Calculate the interpolation factors
+        # t = (det_z - z_up) / (z_down - z_up)
+        # # print(t)
+        # t = np.mean(t)
+        #
+        # # Interpolate the x and y positions
+        # x_positions = x_up + t * (x_down - x_up)
+        # y_positions = y_up + t * (y_down - y_up)
+        x_positions, y_positions = get_xy_positions(ray_data, det_data['z'], det_data['hit_event_ids'])[:2]
 
         fig, ax = plt.subplots()
         ax.set_title(f'{det} hits')
@@ -116,7 +118,7 @@ def get_ray_data(ray_dir, file_nums):
     variables = ['evn', 'evttime', 'rayN', 'Z_Up', 'X_Up', 'Y_Up', 'Z_Down', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']
     data = None
     for file_name in os.listdir(ray_dir):
-        if not file_name.endswith('.root'):
+        if not file_name.endswith('_rays.root'):
             continue
 
         file_num = int(file_name.split('_')[-2])
@@ -124,9 +126,9 @@ def get_ray_data(ray_dir, file_nums):
             continue
 
         with uproot.open(f'{ray_dir}{file_name}') as file:
-            print(file.keys())
+            # print(file.keys())
             tree = file['T;1']
-            print(tree.keys())
+            # print(tree.keys())
             new_data = tree.arrays(variables, library='np')
             if data is None:
                 data = new_data
@@ -170,6 +172,34 @@ def get_dream_data(dream_dir, file_nums):
 
     event_ids = np.concatenate([event_ids[file_num] for file_num in file_nums])
     return dets, event_ids
+
+
+def get_xy_positions(ray_data, z, event_list=None, one_track=True):
+    mask = np.array([True for e in ray_data['evn']])  # This is what happens when I don't have copilot
+    if event_list is not None:
+        mask = np.isin(ray_data['evn'], event_list)
+    if one_track:
+        one_track_mask = np.array([x.size == 1 for x in ray_data['X_Up']])
+        mask = mask & one_track_mask
+
+    z_up, z_down = ray_data['Z_Up'][mask], ray_data['Z_Down'][mask]
+    x_up, x_down = ray_data['X_Up'][mask], ray_data['X_Down'][mask]
+    y_up, y_down = ray_data['Y_Up'][mask], ray_data['Y_Down'][mask]
+    event_nums = ray_data['evn'][mask]
+
+    x_up, x_down = np.array([x[0] for x in x_up]), np.array([x[0] for x in x_down])
+    y_up, y_down = np.array([y[0] for y in y_up]), np.array([y[0] for y in y_down])
+
+    # Calculate the interpolation factors
+    t = (z - z_up) / (z_down - z_up)
+    # print(t)
+    t = np.mean(t)
+
+    # Interpolate the x and y positions
+    x_positions = x_up + t * (x_down - x_up)
+    y_positions = y_up + t * (y_down - y_up)
+
+    return x_positions, y_positions, event_nums
 
 
 def get_det_data(json_path):
