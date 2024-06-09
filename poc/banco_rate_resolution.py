@@ -17,6 +17,28 @@ from cosmic_test import *
 
 
 def main():
+    # est_banco_rates()
+    est_mcp_rates()
+    print('donzo')
+
+
+def est_mcp_rates():
+    coincidence_dets = [[0, 1], [1,2], [0, 2], [0, 1, 2]]
+    ref_rate = 3578 / (60 * 10)  # Hz
+    ref_rate_per_day = ref_rate * 60 * 60 * 24
+    det_extents, det_verts = define_dets_mcp()
+    hits, coincident_hits = estimate_rate(det_extents, coincidence_dets)
+    print(hits)
+    print(coincident_hits)
+    hits_per_day = np.array(hits) * ref_rate_per_day
+    print(f'Reference Detector Hits per day: {ref_rate_per_day:.2f}')
+    print('Hits per day: ', ', '.join([f'Det #{det_i}: {hit:.2f}' for det_i, hit in enumerate(hits_per_day)]))
+    print('Coincident hits per day: ', ', '.join([f'Coincident #{det_i}: {hit:.2f}' for det_i, hit
+                                                  in enumerate(coincident_hits * ref_rate_per_day)]))
+    plt.show()
+
+
+def est_banco_rates():
     det_extents, det_verts = define_dets()
     ax, got_track = ray_plot_test(415)
     for det_i, det_i_verts in enumerate(det_verts):
@@ -34,7 +56,6 @@ def main():
     print('Coincident hits per day: ', ', '.join([f'Coincident #{det_i}: {hit:.2f}' for det_i, hit
                                                   in enumerate(coincident_hits * ref_rate_per_day)]))
     plt.show()
-    print('donzo')
 
 
 def define_dets(last_z=None):
@@ -47,6 +68,27 @@ def define_dets(last_z=None):
     det_x_lens = [130, 130, 130, 130, 130, 150, 150]  # mm [Top, Bottom] For data with stand
     det_y_lens = [130, 130, 130, 130, 130, 15, 15]  # mm [Top, Bottom] For data with stand
     det_z_lens = [2, 2, 2, 2, 2, 2, 2]  # mm [Top, Bottom] For data with stand
+    det_extents, det_verts = [], []
+    for x_cent, y_cent, z_cent, x_len, y_len, z_len \
+            in zip(det_x_centers, det_y_centers, det_zs, det_x_lens, det_y_lens, det_z_lens):
+        det_extents.append([(-x_len / 2 + x_cent, -y_len / 2 + y_cent, z_cent - z_len / 2),
+                            (x_len / 2 + x_cent, y_len / 2 + y_cent, z_cent + z_len / 2)])
+        det_verts.append(extent_to_vertices([
+            (-x_len / 2 + x_cent, -y_len / 2 + y_cent, z_cent - z_len / 2),
+            (x_len / 2 + x_cent, y_len / 2 + y_cent, z_cent + z_len / 2)]))
+
+    return det_extents, det_verts
+
+
+def define_dets_mcp(last_z=None):
+    det_zs = [293.2 + 225 - 92, 293.2 + 225 - 92 + 1 * 70, 293.2 + 225 - 92 + 2 * 70]  # mm [Top, Bottom]
+    if last_z is not None:
+        det_zs[-1] = last_z
+    det_x_centers = [0, 0, 0]  # mm [Top, Bottom] For data with stand
+    det_y_centers = [0, 0, 0]  # mm [Top, Bottom] For data with stand
+    det_x_lens = [14, 14, 14]  # mm [Top, Bottom] For data with stand
+    det_y_lens = [14, 14, 14]  # mm [Top, Bottom] For data with stand
+    det_z_lens = [2, 2, 2]  # mm [Top, Bottom] For data with stand
     det_extents, det_verts = [], []
     for x_cent, y_cent, z_cent, x_len, y_len, z_len \
             in zip(det_x_centers, det_y_centers, det_zs, det_x_lens, det_y_lens, det_z_lens):
