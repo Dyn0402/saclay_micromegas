@@ -26,6 +26,7 @@ def main():
     # read_decoded_banco()
     # read_raw_banco()
     banco_analysis()
+    # get_banco_largest_cluster_npix_dists()
     # find_cluster_test()
     # convert_row_col_xy_test()
     print('donzo')
@@ -47,7 +48,8 @@ def read_decoded_banco():
             print(f'Field {field}: {data[0][field]}')
         clust_rows, clust_cols, clust_sizes = [], [], []
         for event in data:
-            print(f'Event {event["eventId"]} has {len(event["clusters.size"])} clusters of size {event["clusters.size"]}')
+            print(
+                f'Event {event["eventId"]} has {len(event["clusters.size"])} clusters of size {event["clusters.size"]}')
             # if len(event['clusters.size']) == 0:
             #     continue
             event_clust_rows = list(event['clusters.rowCentroid'])
@@ -185,14 +187,18 @@ def read_raw_banco():
     plt.show()
 
 
-def banco_analysis():
+def banco_analysis_old():
     vector.register_awkward()
-    base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
-    # base_dir = '/local/home/dn277127/Bureau/banco_test3/'
+    # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
+    base_dir = '/local/home/dn277127/Bureau/banco_test3/'
+    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     run_json_path = f'{base_dir}run_config.json'
     run_data = get_det_data(run_json_path)
     print(run_data)
-    banco_data = [det for det in run_data['detectors'] if det['name'] == 'banco'][0]
+    banco_names = [det_name for det_name in run_data['included_detectors'] if 'banco' in det_name]
+    det_info_path = f'{det_info_dir}{det["det_type"]}.json'
+    det_data = get_det_data(f'{det_info_dir}{banco_names[0]}.json')
+    banco_data = [det for det in run_data['detectors'] if 'banco' in det['name']][0]
     print(banco_data)
     banco_bot_z = banco_data['det_center_coords']['z']
     bot_to_cent = run_data['bench_geometry']['banco_arm_bottom_to_center']
@@ -281,7 +287,8 @@ def banco_analysis():
         event_ladder_clusters = {}
         for ladder in ladder_nums:
             if trig_id in ladders_trigger_ids[ladder]:
-                event_ladder_clusters[ladder] = ladders_cluster_centroids[ladder][np.where(ladders_trigger_ids[ladder] == trig_id)[0][0]]
+                event_ladder_clusters[ladder] = ladders_cluster_centroids[ladder][
+                    np.where(ladders_trigger_ids[ladder] == trig_id)[0][0]]
         all_cluster_centroids[trig_id] = event_ladder_clusters
 
     for trig_id, event_clusters in all_cluster_centroids.items():
@@ -315,6 +322,137 @@ def banco_analysis():
             ax_y.set_ylabel('Ladder Z Position (mm)')
 
             plt.show()
+
+    plt.show()
+
+
+def banco_analysis():
+    vector.register_awkward()
+    # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
+    base_dir = '/local/home/dn277127/Bureau/banco_test3/'
+    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    run_json_path = f'{base_dir}run_config.json'
+    run_data = get_det_data(run_json_path)
+    print(run_data)
+    banco_names = [det_name for det_name in run_data['included_detectors'] if 'banco' in det_name]
+
+    ray_data = get_ray_data(base_dir, [0, 1])
+
+    ladders = []
+    for banco_name in banco_names:
+        det_info = [det for det in run_data['detectors'] if det['name'] == banco_name][0]
+        det_type_info = get_det_data(f'{det_info_dir}{det_info["det_type"]}.json')
+        det_info.update(det_type_info)
+        print(banco_name)
+        print(det_info)
+        ladder = BancoLadder(config=det_info)
+        ladder_num = int(ladder.name[-3:])
+        # if ladder_num != 157:
+        #     continue
+
+        file_path = f'{base_dir}multinoiseScan_240514_231935-B0-ladder{ladder_num}.root'
+        noise_path = f'{base_dir}Noise_{ladder_num}.root'
+        ladder.read_banco_noise(noise_path)
+        ladder.read_banco_data(file_path)
+        ladder.get_data_noise_pixels()
+        ladder.combine_data_noise()
+        ladder.cluster_data(min_pixels=2)
+        ladder.get_largest_clusters()
+        ladder.convert_cluster_coords()
+
+        z_aligned = banco_ref_std_z_alignment(ladder, ray_data)
+        ladder.set_center(z=z_aligned)
+        ladder.convert_cluster_coords()
+        x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
+        aligned_x, aligned_y = ladder.center[0] + x_res_mean, ladder.center[1] + y_res_mean
+        ladder.set_center(x=aligned_x, y=aligned_y)
+        ladder.convert_cluster_coords()
+        x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, True)
+        ladders.append(ladder)
+
+    # Combine ladder_cluster_centroids into single dict with trigger_id as key and {ladder: centroid} as value
+    all_trigger_ids = np.unique(np.concatenate([ladder.cluster_triggers for ladder in ladders]))
+    all_cluster_centroids = {}
+    for trig_id in all_trigger_ids:
+        event_ladder_clusters = {}
+        for ladder in ladders:
+            if trig_id in ladder.cluster_triggers:
+                event_ladder_clusters[ladder] = ladder.cluster_centroids[np.where(ladder.cluster_triggers == trig_id)[0][0]]
+        all_cluster_centroids[trig_id] = event_ladder_clusters
+
+    for trig_id, event_clusters in all_cluster_centroids.items():
+        print(f'\nTrigger {trig_id}')
+        z, x, y = [], [], []
+        for ladder, cluster in event_clusters.items():
+            print(f'Ladder {ladder.name}: {cluster}')
+            z.append(ladder.center[2])
+            x.append(cluster[0])
+            y.append(cluster[1])
+        if len(event_clusters) == 4:
+            for ladder in ladders:
+                plot_event_banco_hits(ladder.data, trig_id, ladder)
+            popt_x, pcov_x = cf(linear, x, z)
+            popt_y, pcov_y = cf(linear, y, z)
+
+            fig_x, ax_x = plt.subplots()
+            x_range = np.linspace(min(x), max(x), 100)
+            ax_x.scatter(x, z, color='b')
+            ax_x.plot(x_range, linear(x_range, *popt_x), color='r')
+            ax_x.set_title(f'X Position vs Ladder for Trigger {trig_id}')
+            ax_x.set_xlabel('X Position (mm)')
+            ax_x.set_ylabel('Ladder Z Position (mm)')
+
+            fig_y, ax_y = plt.subplots()
+            ax_y.scatter(y, z, color='g')
+            y_range = np.linspace(min(y), max(y), 100)
+            ax_y.plot(y_range, linear(y_range, *popt_y), color='r')
+            ax_y.set_title(f'Y Position vs Ladder for Trigger {trig_id}')
+            ax_y.set_xlabel('Y Position (mm)')
+            ax_y.set_ylabel('Ladder Z Position (mm)')
+
+    plt.show()
+
+
+def get_banco_largest_cluster_npix_dists():
+    vector.register_awkward()
+    # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
+    base_dir = '/local/home/dn277127/Bureau/banco_test3/'
+    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    run_json_path = f'{base_dir}run_config.json'
+    run_data = get_det_data(run_json_path)
+    print(run_data)
+    banco_names = [det_name for det_name in run_data['included_detectors'] if 'banco' in det_name]
+
+    ladders = []
+    for banco_name in banco_names:
+        det_info = [det for det in run_data['detectors'] if det['name'] == banco_name][0]
+        det_type_info = get_det_data(f'{det_info_dir}{det_info["det_type"]}.json')
+        det_info.update(det_type_info)
+        print(banco_name)
+        print(det_info)
+        ladder = BancoLadder(config=det_info)
+        ladder_num = int(ladder.name[-3:])
+
+        file_path = f'{base_dir}multinoiseScan_240514_231935-B0-ladder{ladder_num}.root'
+        noise_path = f'{base_dir}Noise_{ladder_num}.root'
+        ladder.read_banco_noise(noise_path)
+        ladder.read_banco_data(file_path)
+        ladder.get_data_noise_pixels()
+        ladder.combine_data_noise()
+        ladder.cluster_data(min_pixels=2)
+        ladder.get_largest_clusters()
+        ladder.convert_cluster_coords()
+
+        ladders.append(ladder)
+
+    for ladder in ladders:
+        fig, ax = plt.subplots()
+        max_num_pix = max(ladder.largest_cluster_num_pix)
+        counts, bin_edges = np.histogram(ladder.largest_cluster_num_pix, bins=np.arange(-0.5, max_num_pix + 1.5, 1))
+        bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+        ax.bar(bin_centers, counts)
+        ax.set_title(f'Ladder {ladder.name}')
+        fig.tight_layout()
 
     plt.show()
 
@@ -563,8 +701,7 @@ def std_align(z0, ray_data, cluster_centroids, trigger_ids, ladder, plot=True):
     return z_fit
 
 
-def align_banco_ladder_to_ref(ladder, ray_data, plot=True):
-
+def banco_ref_std_z_alignment(ladder, ray_data, plot=True, z_align_range=20, z_align_points=10):
     # Get only rays with trigger ids matching ladder triggers
     ray_trigger_ids = np.array(ladder.cluster_triggers) + 1  # Banco starts at 0, rays start at 1
 
@@ -573,23 +710,13 @@ def align_banco_ladder_to_ref(ladder, ray_data, plot=True):
 
     # Eliminate events in which ray is too far from mean
     x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, z0, ray_trigger_ids)
-    x_avg, y_avg = np.mean(x_rays), np.mean(y_rays)
-    mask = (x_rays > x_avg - 2 * ladder.size[0]) & (x_rays < x_avg + 2 * ladder.size[0]) & \
-           (y_rays > y_avg - 2 * ladder.size[1]) & (y_rays < y_avg + 2 * ladder.size[1])
-    x_rays_filter, y_rays_filter = x_rays[mask], y_rays[mask]
-
-    # Iterate once more once outliers are removed
-    x_avg, y_avg = np.mean(x_rays_filter), np.mean(y_rays_filter)
-    mask = (x_rays > x_avg - 2 * ladder.size[0]) & (x_rays < x_avg + 2 * ladder.size[0]) & \
-           (y_rays > y_avg - 2 * ladder.size[1]) & (y_rays < y_avg + 2 * ladder.size[1])
-    x_rays_filter, y_rays_filter = x_rays[mask], y_rays[mask]
-    event_num_rays = event_num_rays[mask]
+    x_rays_filter, y_rays_filter, event_num_rays = remove_outlying_rays(x_rays, y_rays, event_num_rays, ladder.size)
 
     if plot:
         fig, ax = plt.subplots()
         ax.scatter(x_rays, y_rays, alpha=0.5)
         ax.scatter(x_rays_filter, y_rays_filter, alpha=0.5)
-        ax.scatter([x_avg], [y_avg], marker='x', color='r')
+        ax.scatter([np.mean(x_rays_filter)], [np.mean(y_rays_filter)], marker='x', color='r')
         title = f'Ref Track Detector Hits Ladder {ladder.name}, z={z0}'
         ax.grid()
         ax.set_title(title)
@@ -599,48 +726,20 @@ def align_banco_ladder_to_ref(ladder, ray_data, plot=True):
         x_banco, y_banco = ladder.cluster_centroids[:, :2].T
         ax.scatter(x_banco, y_banco, alpha=0.5)
 
-
-    zs = np.linspace(z0 - 10, z0 + 10, 10)
+    zs = np.linspace(z0 - z_align_range / 2, z0 + z_align_range / 2, z_align_points)
     x_stds, y_stds, x_residuals, y_residuals = [], [], [], []
     for zi in zs:
         x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, zi, event_num_rays)
         x_std, y_std = np.std(x_rays), np.std(y_rays)
         x_stds.append(x_std)
         y_stds.append(y_std)
-        # if plot:
-        #     fig, ax = plt.subplots()
-        #     ax.scatter(x_rays, y_rays, alpha=0.5)
-        #     ax.scatter([x_avg], [y_avg], marker='x', color='r')
-        #     title = f'Ref Track Detector Hits Ladder {ladder.name}, z={zi}'
-        #     ax.annotate(f'x_std={x_std:2f}, y_std={y_std:2f}', (0.1, 0.9), xycoords='axes fraction')
-        #     ax.grid()
-        #     ax.set_title(title)
-        #     fig.tight_layout()
-        # cluster_centroids, banco_triggers = np.array(ladder.cluster_centroids), np.array(ladder.cluster_triggers)
-        # cluster_centroids = cluster_centroids[np.isin(banco_triggers, event_num_rays)]
-        # x_res, y_res = get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids)
-        # fit_x = minimize(neg_log_likelihood, [0, 10], args=(x_res,), bounds=[(-np.inf, np.inf), (1e-5, np.inf)])
-        # fitted_mu, fitted_sigma = fit_x.x
-        # print(f'X_residuals gaussian fit: mu={fitted_mu}, sigma={fitted_sigma}')
-        # fit_y = minimize(neg_log_likelihood, [0, 10], args=(y_res,), bounds=[(-np.inf, np.inf), (1e-5, np.inf)])
-        # fitted_mu, fitted_sigma = fit_y.x
-        # print(f'Y_residuals gaussian fit: mu={fitted_mu}, sigma={fitted_sigma}')
-        # # if plot:
-        # #     fig_x, ax_x = plt.subplots()
-        # #     ax_x.hist(x_res, bins=np.linspace(min(x_res), max(x_res), 25))
-        # #
 
-    #     x_std, y_std = compare_rays_to_ladder(x_rays, y_rays, event_num_rays, cluster_centroids, np.array(trigger_ids))
-    #     x_stds.append(x_std)
-    #     y_stds.append(y_std)
     z_fit, popts = [], []
     for std_name, stds in zip(['X Std', 'Y Std'], [x_stds, y_stds]):
         p0 = (-1, 4, z0)
         popt, pcov = cf(quadratic_shift, zs, stds, p0=p0)
-        print(f'{std_name} Guess: {p0} Fit: {popt}')
+        # print(f'{std_name} Guess: {p0} Fit: {popt}')
         popts.append(popt)
-        # Solve for z of minimum x_std
-        # z1 = -popt[1] / (2 * popt[0])
         z1 = popt[-1]
         z_fit.append(z1)
         if plot:
@@ -656,76 +755,94 @@ def align_banco_ladder_to_ref(ladder, ray_data, plot=True):
             ax.set_xlabel('Z (mm)')
             ax.set_ylabel(f'{std_name} (mm)')
             fig.tight_layout()
-    # p0 = (popts[0][0], popts[1][0], 0, popts[0][1], popts[1][1], np.mean(popts[0][2] + popts[1][2]))
-    # popt, pcov = cf(quadratic_2d, (x_stds, y_stds), zs, p0=p0)
-    # z_fit.append(z_min_xy)
 
-    x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, z_fit[0], event_num_rays)
+    return z_fit[0]
+
+
+def remove_outlying_rays(x_rays, y_rays, event_num_rays, det_size, mult=2.0):
+    # Eliminate events in which ray is too far from mean
+    x_avg, y_avg = np.mean(x_rays), np.mean(y_rays)
+    mask = (x_rays > x_avg - mult * det_size[0]) & (x_rays < x_avg + mult * det_size[0]) & \
+           (y_rays > y_avg - mult * det_size[1]) & (y_rays < y_avg + mult * det_size[1])
+    x_rays_filter, y_rays_filter = x_rays[mask], y_rays[mask]
+
+    # Iterate once more after outliers are removed
+    x_avg, y_avg = np.mean(x_rays_filter), np.mean(y_rays_filter)
+    mask = (x_rays > x_avg - mult * det_size[0]) & (x_rays < x_avg + mult * det_size[0]) & \
+           (y_rays > y_avg - mult * det_size[1]) & (y_rays < y_avg + mult * det_size[1])
+    x_rays_filter, y_rays_filter = x_rays[mask], y_rays[mask]
+    event_num_rays = event_num_rays[mask]
+
+    return x_rays_filter, y_rays_filter, event_num_rays
+
+
+def banco_get_residuals(ladder, ray_data, plot=False):
+    ray_trigger_ids = np.array(ladder.cluster_triggers) + 1  # Banco starts at 0, rays start at 1
+    x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, ladder.center[2], ray_trigger_ids)
+    x_rays, y_rays, event_num_rays = remove_outlying_rays(x_rays, y_rays, event_num_rays, ladder.size, 1.2)
+
     cluster_centroids, banco_triggers = np.array(ladder.cluster_centroids), np.array(ladder.cluster_triggers) + 1
     cluster_centroids = cluster_centroids[np.isin(banco_triggers, event_num_rays)]
+
     x_res, y_res = get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids)
     x_res, y_res = np.array(x_res), np.array(y_res)
+
     x_res_mean, y_res_mean = np.mean(x_res), np.mean(y_res)
     x_res_std, y_res_std = np.std(x_res), np.std(y_res)
+
+    # Mask by percentiles instead
     mask = (x_res > x_res_mean - 2 * x_res_std) & (x_res < x_res_mean + 2 * x_res_std) & \
-              (y_res > y_res_mean - 2 * y_res_std) & (y_res < y_res_mean + 2 * y_res_std)
+           (y_res > y_res_mean - 2 * y_res_std) & (y_res < y_res_mean + 2 * y_res_std)
     x_res_filter, y_res_filter = x_res[mask], y_res[mask]
+
     p0_x = np.array([np.mean(x_res_filter), np.std(x_res_filter) / 2])
     fit_x = minimize(neg_log_likelihood, p0_x, args=(x_res_filter,), bounds=[(-np.inf, np.inf), (1e-5, np.inf)])
-    fitted_mu, fitted_sigma = fit_x.x
-    print(f'X_residuals gaussian fit: mu={fitted_mu}, sigma={fitted_sigma}')
+    fitted_mu_x, fitted_sigma_x = fit_x.x
+
     p0_y = np.array([np.mean(y_res_filter), np.std(y_res_filter) / 2])
     fit_y = minimize(neg_log_likelihood, p0_y, args=(y_res_filter,), bounds=[(-np.inf, np.inf), (1e-5, np.inf)])
-    fitted_mu, fitted_sigma = fit_y.x
-    print(f'Y_residuals gaussian fit: mu={fitted_mu}, sigma={fitted_sigma}')
+    fitted_mu_y, fitted_sigma_y = fit_y.x
 
+    # Determine binning in a smarter/more robust way
     counts_x, bins_x = np.histogram(x_res_filter, bins=np.linspace(min(x_res_filter), max(x_res_filter), 50))
     bin_centers_x = (bins_x[:-1] + bins_x[1:]) / 2
+    bin_width_x = bins_x[1] - bins_x[0]
     p0_x = [len(x_res_filter), np.mean(x_res_filter), np.std(x_res_filter)]
     popt_x, pcov_x = cf(gaus_amp, bin_centers_x, counts_x, p0=p0_x)
+
     counts_y, bins_y = np.histogram(y_res_filter, bins=np.linspace(min(y_res_filter), max(y_res_filter), 50))
     bin_centers_y = (bins_y[:-1] + bins_y[1:]) / 2
+    bin_width_y = bins_y[1] - bins_y[0]
     p0_y = [len(y_res_filter), np.mean(y_res_filter), np.std(y_res_filter)]
     popt_y, pcov_y = cf(gaus_amp, bin_centers_y, counts_y, p0=p0_y)
 
     if plot:
-        fig_x, ax_x = plt.subplots()
+        print(f'X_residuals unbinned gaussian fit: mu={fitted_mu_x:.2f}mm, sigma={fitted_sigma_x:.2f}mm')
+        print(f'X_residuals binned gaussian fit: mu={popt_x[1]:.2f}mm, sigma={popt_x[2]:.2f}mm')
+        print(f'Y_residuals unbinned gaussian fit: mu={fitted_mu_y:.2f}mm, sigma={fitted_sigma_y:.2f}mm')
+        print(f'Y_residuals binned gaussian fit: mu={popt_y[1]:.2f}mm, sigma={popt_y[2]:.2f}mm')
+
         x_plot_points = np.linspace(min(x_res), max(x_res), 100)
-        ax_x.hist(x_res, bins=np.linspace(min(x_res), max(x_res), 25))
-        ax_x.plot(x_plot_points, len(x_res) * gaussian(x_plot_points, *fit_x.x), color='r')
-        ax_x.plot(x_plot_points, gaus_amp(x_plot_points, *popt_x), color='g')
-        ax_x.set_title('X Residuals')
-        ax_x.set_xlabel('X Residual (mm)')
-        ax_x.set_ylabel('Entries')
 
         fix_x_bar, ax_x_bar = plt.subplots()
-        ax_x_bar.bar(bin_centers_x, counts_x, width=0.5, align='center')
+        ax_x_bar.bar(bin_centers_x, counts_x, width=bin_width_x, align='center')
         ax_x_bar.plot(x_plot_points, len(x_res) * gaussian(x_plot_points, *fit_x.x), color='r')
         ax_x_bar.plot(x_plot_points, gaus_amp(x_plot_points, *popt_x), color='g')
         ax_x_bar.set_title('X Residuals')
         ax_x_bar.set_xlabel('X Residual (mm)')
         ax_x_bar.set_ylabel('Entries')
 
-        fig_y, ax_y = plt.subplots()
         y_plot_points = np.linspace(min(y_res), max(y_res), 100)
-        ax_y.hist(y_res, bins=np.linspace(min(y_res), max(y_res), 25))
-        ax_y.plot(y_plot_points, len(y_res) * gaussian(y_plot_points, *fit_y.x), color='r')
-        ax_y.plot(y_plot_points, gaus_amp(y_plot_points, *popt_y), color='g')
-        ax_y.set_title('Y Residuals')
-        ax_y.set_xlabel('Y Residual (mm)')
-        ax_y.set_ylabel('Entries')
 
         fix_y_bar, ax_y_bar = plt.subplots()
-        ax_y_bar.bar(bin_centers_y, counts_y, width=0.5, align='center')
+        ax_y_bar.bar(bin_centers_y, counts_y, width=bin_width_y, align='center')
         ax_y_bar.plot(y_plot_points, len(y_res) * gaussian(y_plot_points, *fit_y.x), color='r')
         ax_y_bar.plot(y_plot_points, gaus_amp(y_plot_points, *popt_y), color='g')
         ax_y_bar.set_title('Y Residuals')
         ax_y_bar.set_xlabel('Y Residual (mm)')
         ax_y_bar.set_ylabel('Entries')
 
-    # plt.show()
-
-    return z_fit
+    return fitted_mu_x, fitted_sigma_x, fitted_mu_y, fitted_sigma_y
 
 
 def linear(x, a, b):
@@ -733,16 +850,16 @@ def linear(x, a, b):
 
 
 def quadratic(x, a, b, c):
-    return a * x**2 + b * x + c
+    return a * x ** 2 + b * x + c
 
 
 def quadratic_shift(x, a, c, d):
-    return a * (x - d)**2 + c
+    return a * (x - d) ** 2 + c
 
 
 def quadratic_2d(xy, ax, ay, cross, bx, by, c):
     x, y = xy
-    return ax * x**2 + ay * y **2 + cross * x * y + bx * x + by * y + c
+    return ax * x ** 2 + ay * y ** 2 + cross * x * y + bx * x + by * y + c
 
 
 def gaussian(x, mu, sigma):

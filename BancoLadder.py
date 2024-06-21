@@ -17,11 +17,14 @@ import vector
 
 
 class BancoLadder:
-    def __init__(self, name='0'):
+    def __init__(self, name='0', config=None):
         self.name = name
         self.center = np.array([0, 0, 0])
         self.size = np.array([0, 0, 0])
         self.orientation = np.array([0, 0, 0])
+
+        if config is not None:
+            self.set_from_config(config)
 
         self.data = None
         self.noise_pixels = None
@@ -37,7 +40,13 @@ class BancoLadder:
         self.cluster_centroids = None
         self.cluster_num_pix = None
 
-    def set_center(self, x, y, z):
+    def set_center(self, x=None, y=None, z=None):
+        if x is None:
+            x = self.center[0]
+        if y is None:
+            y = self.center[1]
+        if z is None:
+            z = self.center[2]
         self.center = np.array([x, y, z])
 
     def set_size(self, x, y, z):
@@ -45,6 +54,14 @@ class BancoLadder:
 
     def set_orientation(self, x=0, y=0, z=0):
         self.orientation = np.array([x, y, z])
+
+    def set_from_config(self, det_config):
+        self.name = det_config['name']
+        self.set_size(det_config['det_size']['x'], det_config['det_size']['y'], det_config['det_size']['z'])
+        self.set_center(det_config['det_center_coords']['x'], det_config['det_center_coords']['y'],
+                        det_config['det_center_coords']['z'])
+        self.set_orientation(det_config['det_orientation']['x'], det_config['det_orientation']['y'],
+                             det_config['det_orientation']['z'])
 
     def read_banco_data(self, file_path):
         self.data = read_banco_file(file_path)
@@ -83,8 +100,8 @@ class BancoLadder:
         largest_cluster_centroids, largest_clust_pix = get_largest_cluster(self.all_cluster_centroids_local_coords,
                                                                            self.all_cluster_num_pixels)
         self.largest_cluster_centroids_local_coords = np.array(largest_cluster_centroids)
-        print(f'Largest cluster centroids: {self.largest_cluster_centroids_local_coords}')
-        print(self.largest_cluster_centroids_local_coords.shape)
+        # print(f'Largest cluster centroids: {self.largest_cluster_centroids_local_coords}')
+        # print(self.largest_cluster_centroids_local_coords.shape)
         self.largest_cluster_num_pix = largest_clust_pix
 
     def convert_cluster_coords(self):
