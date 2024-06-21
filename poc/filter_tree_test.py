@@ -17,11 +17,17 @@ import ROOT
 
 
 def main():
-    in_path = 'C:/Users/Dylan/Desktop/banco_test3/CosTb_HV7_datrun_240514_23H53_000_rays.root'
-    out_path = 'C:/Users/Dylan/Desktop/banco_test3/CosTb_HV7_datrun_240514_23H53_000_rays_filtered.root'
+    # in_path = 'C:/Users/Dylan/Desktop/banco_test3/CosTb_HV7_datrun_240514_23H53_000_rays.root'
+    # out_path = 'C:/Users/Dylan/Desktop/banco_test3/CosTb_HV7_datrun_240514_23H53_000_rays_filtered.root'
+    in_path = '/local/home/dn277127/Bureau/banco_test3/CosTb_HV7_datrun_240514_23H53_000_rays.root'
+    out_path = '/local/home/dn277127/Bureau/banco_test3/CosTb_HV7_datrun_240514_23H53_000_rays_filtered.root'
+    # in_path = '/local/home/dn277127/Bureau/banco_test3/CosTb_HV7_datrun_240514_23H53_000_03_decoded_array.root'
+    # out_path = '/local/home/dn277127/Bureau/banco_test3/CosTb_HV7_datrun_240514_23H53_000_03_decoded_array_filtered.root'
     events = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     # filter_dream_file_uproot(in_path, events, out_path)
+    # filter_dream_file_uproot(in_path, events, out_path, event_branch_name='eventId')
     filter_dream_file_pyroot(in_path, events, out_path)
+    # filter_dream_file_pyroot(in_path, events, out_path, event_branch_name='eventId')
     print('donzo')
 
 
@@ -39,14 +45,14 @@ def filter_dream_file_uproot(file_path, events, out_file_path, event_branch_name
         tree = file[tree_name]
         print(tree.arrays())
         print(tree.arrays()[0])
-        print(tree.arrays()[0]['X_Up'])
-        # data = tree
-        data = tree.arrays(library='ak')
+        # print(tree.arrays()[0]['X_Up'])
+        data = tree.arrays()
+        # data = tree.arrays(library='ak')
         print(data)
-        tree_events = ak.to_numpy(data[event_branch_name])
-        mask = np.isin(events, tree_events)
-        data = data[mask]
-        print(data)
+        # tree_events = ak.to_numpy(data[event_branch_name])
+        # mask = np.isin(events, tree_events)
+        # data = data[mask]
+        # print(data)
         # for key in data.keys():
         #     data[key] = data[key][mask]
         with uproot.recreate(out_file_path) as out_file:
@@ -69,14 +75,29 @@ def filter_dream_file_pyroot(file_path, events, out_file_path, event_branch_name
     out_file = ROOT.TFile(out_file_path, 'RECREATE')
     out_tree = in_tree.CloneTree(0)
 
+    events = sorted(list(events))
+
     event_num_branch = in_tree.GetBranch(event_branch_name)
+    event_num_leaf = event_num_branch.GetLeaf(event_branch_name)
+
+    print(events)
 
     for i in range(in_tree.GetEntries()):
+        if len(events) == 0:
+            break
         in_tree.GetEntry(i)
-        event_id = event_num_branch.GetLeaf(event_branch_name).GetValue()
-        if event_id in events:
+        event_num = int(event_num_leaf.GetValue())
+        print(event_num)
+        while events[0] < event_num:
+            events.pop(0)
+            if len(events) == 0:
+                break
+        if events[0] == event_num:
             out_tree.Fill()
+            print(f'Event {event_num} written')
+            events.pop(0)
 
+    print(f'Writing {out_file_path}')
     out_file.Write()
     out_file.Close()
     in_file.Close()

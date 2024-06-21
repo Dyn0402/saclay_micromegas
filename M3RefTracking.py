@@ -19,7 +19,8 @@ class M3RefTracking:
         self.ray_dir = ray_dir
         self.file_nums = file_nums
         self.single_track = single_track
-        self.chi2_cut = 2
+        self.chi2_cut = 1.5
+        self.detector_xy_extent_cuts = {'x': [-250, 250], 'y': [-250, 250]}
         if variables is None:
             self.variables = ['evn', 'evttime', 'rayN', 'Z_Up', 'X_Up', 'Y_Up', 'Z_Down', 'X_Down', 'Y_Down', 'Chi2X',
                               'Chi2Y']
@@ -30,20 +31,32 @@ class M3RefTracking:
         if single_track:
             self.get_single_track_events()
 
-    def get_xy_positions(self, z, event_list=None, one_track=True):
-        return get_xy_positions(self.ray_data, z, event_list, one_track)
+    def get_xy_positions(self, z, event_list=None, multi_track_events=False, one_track=True):
+        if multi_track_events:
+            return get_xy_positions_multi_track_events(self.ray_data, z, event_list, one_track)
+        else:
+            return get_xy_positions(self.ray_data, z, event_list)
 
     def cut_on_chi2(self, chi2_cut):
         chi2_x, chi2_y = self.ray_data['Chi2X'], self.ray_data['Chi2Y']
         mask = (chi2_x < chi2_cut) & (chi2_y < chi2_cut)
-        for var in self.ray_data.keys():
+        for var in ['X_Up', 'Y_Up', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']:
+            self.ray_data[var] = self.ray_data[var][mask]
+
+    def cut_on_det_size(self):
+        x_up, x_down, y_up, y_down = [self.ray_data[x_i] for x_i in ['X_Up', 'X_Down', 'Y_Up', 'Y_Down']]
+        x_min, x_max, y_min, y_max = self.detector_xy_extent_cuts['x'] + self.detector_xy_extent_cuts['y']
+        mask = ((x_min < x_up) & (x_up < x_max) & (x_min < x_down) & (x_down < x_max) &
+                (y_min < y_up) & (y_up < y_max) & (y_min < y_down) & (y_down < y_max))
+        for var in ['X_Up', 'Y_Up', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']:
             self.ray_data[var] = self.ray_data[var][mask]
 
     def get_single_track_events(self):
         """
-        Find events with only one track with both chi2_x and chi2_y less than chi2_cut.
+        Find events with only one track with both chi2_x and chi2_y less than chi2_cut and within detector areas.
         :return:
         """
+        self.cut_on_det_size()
         chi2_x, chi2_y = self.ray_data['Chi2X'], self.ray_data['Chi2Y']
         num_good_tracks = ak.sum((chi2_x < self.chi2_cut) & (chi2_y < self.chi2_cut), axis=1)
         mask = num_good_tracks == 1
@@ -57,7 +70,7 @@ class M3RefTracking:
 
         for var in ['X_Up', 'Y_Up', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']:
             if self.variables is None or var in self.variables:
-                self.ray_data[var] = self.ray_data[var][mask]
+                self.ray_data[var] = ak.ravel(self.ray_data[var][mask])
 
 
 def get_ray_data(ray_dir, file_nums='all', variables=None):
@@ -87,7 +100,14 @@ def get_ray_data(ray_dir, file_nums='all', variables=None):
     return data
 
 
-def get_xy_positions(ray_data, z, event_list=None, one_track=True):
+def get_xy_positions_multi_track_events(ray_data, z, event_list=None, one_track=True):
+    if isinstance(ray_data, ak.highlevel.Array):  # If ray data is awkward array, convert relevant entries to dict of
+        variables = ['evn', 'Z_Up', 'Z_Down', 'X_Up', 'X_Down', 'Y_Up', 'Y_Down']  # numpy arrays
+        ray_data_hold = ray_data
+        ray_data = {}
+        for var in variables:
+            ray_data[var] = ak.to_numpy(ray_data_hold[var])
+
     mask = np.full(ray_data['evn'].size, True)
     if event_list is not None:
         mask = np.isin(ray_data['evn'], event_list)
@@ -102,6 +122,34 @@ def get_xy_positions(ray_data, z, event_list=None, one_track=True):
 
     x_up, x_down = np.array([x[0] for x in x_up]), np.array([x[0] for x in x_down])
     y_up, y_down = np.array([y[0] for y in y_up]), np.array([y[0] for y in y_down])
+
+    # Calculate the interpolation factors
+    t = (z - z_up) / (z_down - z_up)
+    t = np.mean(t)
+
+    # Interpolate the x and y positions
+    x_positions = x_up + t * (x_down - x_up)
+    y_positions = y_up + t * (y_down - y_up)
+
+    return x_positions, y_positions, event_nums
+
+
+def get_xy_positions(ray_data, z, event_list=None):
+    if isinstance(ray_data, ak.highlevel.Array):  # If ray data is awkward array, convert relevant entries to dict of
+        variables = ['evn', 'Z_Up', 'Z_Down', 'X_Up', 'X_Down', 'Y_Up', 'Y_Down']  # numpy arrays
+        ray_data_hold = ray_data
+        ray_data = {}
+        for var in variables:
+            ray_data[var] = ak.to_numpy(ray_data_hold[var])
+
+    mask = np.full(ray_data['evn'].size, True)
+    if event_list is not None:
+        mask = np.isin(ray_data['evn'], event_list)
+
+    z_up, z_down = ray_data['Z_Up'][mask], ray_data['Z_Down'][mask]
+    x_up, x_down = ray_data['X_Up'][mask], ray_data['X_Down'][mask]
+    y_up, y_down = ray_data['Y_Up'][mask], ray_data['Y_Down'][mask]
+    event_nums = ray_data['evn'][mask]
 
     # Calculate the interpolation factors
     t = (z - z_up) / (z_down - z_up)
