@@ -23,6 +23,10 @@ class BancoLadder:
         self.size = np.array([0, 0, 0])
         self.orientation = np.array([0, 0, 0])
 
+        self.pitch_x = 29.24
+        self.pitch_y = 26.88
+        self.chip_space = 15
+
         if config is not None:
             self.set_from_config(config)
 
@@ -63,6 +67,12 @@ class BancoLadder:
         self.set_orientation(det_config['det_orientation']['x'], det_config['det_orientation']['y'],
                              det_config['det_orientation']['z'])
 
+    def set_pitch_x(self, pitch_x):
+        self.pitch_x = pitch_x
+
+    def set_pitch_y(self, pitch_y):
+        self.pitch_y = pitch_y
+
     def read_banco_data(self, file_path):
         self.data = read_banco_file(file_path)
 
@@ -91,7 +101,7 @@ class BancoLadder:
                 continue
             self.cluster_triggers.append(trigger_id)
             self.clusters.append(clusters)
-            clusters_xy = convert_clusters_to_xy(clusters)
+            clusters_xy = convert_clusters_to_xy(clusters, self.pitch_x, self.pitch_y, self.chip_space)
             centroids, num_pixels = get_cluster_centroids(clusters_xy)
             self.all_cluster_centroids_local_coords.append(centroids)
             self.all_cluster_num_pixels.append(num_pixels)
@@ -106,14 +116,20 @@ class BancoLadder:
 
     def convert_cluster_coords(self):
         self.cluster_centroids = self.largest_cluster_centroids_local_coords
-        zs = np.full((len(self.cluster_centroids), 1), self.center[2])  # Add z coordinate to centroids
+        # print(f'Cluster centroids from clustering: {self.cluster_centroids[:4]}')
+        zs = np.full((len(self.cluster_centroids), 1), 0)  # Add z coordinate to centroids
+        # print(f'Zs: {zs[:4]}')
         self.cluster_centroids = np.hstack((self.cluster_centroids, zs))  # Combine x, y, z
+        # print(f'Cluster centroids after hstack: {self.cluster_centroids[:4]}')
 
         # Rotate cluster centroids to global coordinates
         self.cluster_centroids = rotate_coordinates(self.cluster_centroids, self.orientation)
+        # print(f'Cluster centroids after rotation: {self.cluster_centroids[:4]}')
 
         # Translate cluster centroids to global coordinates
-        self.cluster_centroids = self.cluster_centroids + self.center - self.size / 2
+        # print(f'Translation: {self.center}')
+        self.cluster_centroids = self.cluster_centroids + self.center
+        # print(f'Cluster centroids after translation: {self.cluster_centroids[:4]}')
 
 
 def read_banco_file(file_path):
@@ -222,12 +238,13 @@ def get_largest_cluster(cluster_centroids, cluster_num_pixels):
     return new_cluster_centroids, new_cluster_num_pixels
 
 
-def convert_clusters_to_xy(cluster_centroids):
+def convert_clusters_to_xy(cluster_centroids, pitch_x=30., pitch_y=30., chip_space=15.):
     cluster_centroids_xy = []
     for event in cluster_centroids:
         event_xy = []
         for cluster in event:
-            x, y = convert_row_col_to_xy(cluster[0], cluster[1], chip=None)
+            x, y = convert_row_col_to_xy(cluster[0], cluster[1], chip=None, n_pix_y=1024, pix_size_x=pitch_x,
+                                         pix_size_y=pitch_y, chip_space=chip_space)
             event_xy.append([x, y])
         cluster_centroids_xy.append(event_xy)
     return cluster_centroids_xy
@@ -237,7 +254,7 @@ def is_neighbor(pixel1, pixel2, threshold=1.9):
     return np.sqrt(np.sum((pixel1 - pixel2) ** 2)) <= threshold
 
 
-def convert_row_col_to_xy(row, col, chip=None, n_pix_y=1024, pix_size_x=30, pix_size_y=30, chip_space=15):
+def convert_row_col_to_xy(row, col, chip=None, n_pix_y=1024, pix_size_x=30., pix_size_y=30., chip_space=15.):
     """
     Given a row, column, and chip number, return the x and y coordinates of the pixel.
     :param row: Row pixel number, 0-511
