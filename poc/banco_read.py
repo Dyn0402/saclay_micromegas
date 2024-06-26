@@ -218,11 +218,11 @@ def banco_analysis():
         ladder.read_banco_data(file_path)
         ladder.get_data_noise_pixels()
         ladder.combine_data_noise()
-        ladder.cluster_data(min_pixels=2)
+        ladder.cluster_data(min_pixels=2, max_pixels=5, chip=0)
         ladder.get_largest_clusters()
         ladder.convert_cluster_coords()
 
-        z_aligned = banco_ref_std_z_alignment(ladder, ray_data)
+        z_aligned = banco_ref_std_z_alignment(ladder, ray_data, plot=False)
         ladder.set_center(z=z_aligned)
         ladder.convert_cluster_coords()
         # print(f'Ladder {ladder.name} Center: {ladder.center}')
@@ -234,6 +234,15 @@ def banco_analysis():
         ladder.convert_cluster_coords()
         x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, True)
 
+        # banco_get_pixel_spacing(ladder, ray_data, True)
+        # plt.show()
+
+        x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=True)
+        # plt.show()
+        ladder.set_orientation(x_rot_align, y_rot_align, z_rot_align)
+        print(f'{ladder.name} new orientation: {ladder.orientation}')
+        ladder.convert_cluster_coords()
+
         # Manually align
         # x_align, y_align, z_align = ladder.center
         # x_align -= manual_align[ladder_num]['x']
@@ -243,6 +252,7 @@ def banco_analysis():
         # ladder.convert_cluster_coords()
 
         ladders.append(ladder)
+    plt.show()
 
     # Combine ladder_cluster_centroids into single dict with trigger_id as key and {ladder: centroid} as value
     all_trigger_ids = np.unique(np.concatenate([ladder.cluster_triggers for ladder in ladders]))
@@ -673,12 +683,156 @@ def banco_get_pixel_spacing(ladder, ray_data, plot=True):
     """
     # Minimize x residuals varying x spacing
     original_pitch_x = ladder.pitch_x
-    pitch_xs = np.linspace(ladder.pitch_x - 5, ladder.pitch_x + 5, 25)
-    x_res_sds = []
+    pitch_xs = np.linspace(ladder.pitch_x - 4, ladder.pitch_x + 4, 100)
+    x_res_widths = []
     for pitch_x in pitch_xs:
         ladder.set_pitch_x(pitch_x)
-        x_res_sds.append(banco_get_residuals(ladder, ray_data, False)[1])
+        ladder.get_cluster_centroids()
+        ladder.get_largest_clusters()
+        ladder.convert_cluster_coords()
+        x_res_widths.append(banco_get_residuals(ladder, ray_data, False)[1])
 
+    original_pitch_y = ladder.pitch_y
+    original_chip_space = ladder.chip_space
+    pitch_ys = np.linspace(ladder.pitch_y - 0.5, ladder.pitch_y + 0.5, 100)
+    chip_spacings = np.linspace(0, 100, 20)
+
+    y_res_widths_chip_spaces = []
+    for chip_space in chip_spacings:
+        y_res_widths = []
+        for pitch_y in pitch_ys:
+            ladder.set_pitch_y(pitch_y)
+            ladder.set_chip_space(chip_space)
+            ladder.get_cluster_centroids()
+            ladder.get_largest_clusters()
+            ladder.convert_cluster_coords()
+            y_res_widths.append(banco_get_residuals(ladder, ray_data, False)[3])
+        y_res_widths_chip_spaces.append(y_res_widths)
+
+    ladder.set_pitch_x(original_pitch_x)
+    ladder.set_pitch_y(original_pitch_y)
+    ladder.set_chip_space(original_chip_space)
+
+    if plot:
+        fig, ax = plt.subplots()
+        ax.plot(pitch_xs, x_res_widths, marker='o')
+        ax.axvline(original_pitch_x, color='g', linestyle='--')
+        ax.set_title(f'X Residuals vs X Pitch {ladder.name}')
+        ax.set_xlabel(r'X Pitch ($\mu m$)')
+        ax.set_ylabel(r'X Residual Distribution Gaussian Width ($\mu m$)')
+        fig.tight_layout()
+
+        fig_y, ax_y = plt.subplots()
+        for chip_space, y_res_widths in zip(chip_spacings, y_res_widths_chip_spaces):
+            ax_y.plot(pitch_ys, y_res_widths, marker='o', label=f'Chip Space {chip_space:.1f}')
+        ax_y.axvline(original_pitch_y, color='g', linestyle='--')
+        ax_y.set_title(f'Y Residuals vs Y Pitch {ladder.name}')
+        ax_y.set_xlabel(r'Y Pitch ($\mu m$)')
+        ax_y.set_ylabel(r'Y Residual Distribution Gaussian Width ($\mu m$)')
+        ax_y.legend()
+        fig_y.tight_layout()
+
+        fig_space, ax_space = plt.subplots()
+        transposed_y_res_spaces = np.array(y_res_widths_chip_spaces).transpose()
+        for i, pitch_y in enumerate(pitch_ys):
+            if i % 10 == 0:
+                ax_space.plot(chip_spacings, transposed_y_res_spaces[i], marker='o', label=f'Pitch {pitch_y:.2f}')
+        ax_space.axvline(original_chip_space, color='g', linestyle='--')
+        ax_space.set_title(f'Y Residuals vs Chip Space {ladder.name}')
+        ax_space.set_xlabel(r'Chip Space ($\mu m$)')
+        ax_space.set_ylabel(r'Y Residual Distribution Gaussian Width ($\mu m$)')
+        ax_space.legend()
+        fig_space.tight_layout()
+
+
+def banco_align_rotation(ladder, ray_data, plot=True):
+    """
+    Align ladder by minimizing residuals between ray and cluster centroids
+    :param ladder:
+    :param ray_data:
+    :param plot:
+    :return:
+    """
+
+    original_orientation = ladder.orientation
+    x_rot, y_rot, z_rot = original_orientation
+    x_orientations = np.linspace(x_rot - 8, x_rot + 8, 1000)
+    y_orientations = np.linspace(y_rot - 8, y_rot + 8, 1000)
+    z_orientations = np.linspace(z_rot - 8, z_rot + 8, 1000)
+
+    y_res_x_rots = []
+    for x_rot_i in x_orientations:
+        ladder.set_orientation(x_rot_i, y_rot, z_rot)
+        # ladder.get_cluster_centroids()
+        # ladder.get_largest_clusters()
+        ladder.convert_cluster_coords()
+        y_res_x_rots.append(banco_get_residuals(ladder, ray_data, False)[3])
+    # filter out nans
+    y_res_x_rots_fit = np.array(y_res_x_rots)
+    x_orientations_fit = x_orientations[~np.isnan(y_res_x_rots_fit)]
+    y_res_x_rots_fit = y_res_x_rots_fit[~np.isnan(y_res_x_rots_fit)]
+    popt_x, pcov_x = cf(quadratic_shift, x_orientations_fit, y_res_x_rots_fit, p0=(1, 1, x_rot))
+    # x_rot = x_orientations[np.argmin(y_res_x_rots)]
+    x_rot_min = popt_x[-1]
+
+    x_res_y_rots = []
+    for y_rot_i in y_orientations:
+        ladder.set_orientation(x_rot, y_rot_i, z_rot)
+        # ladder.get_cluster_centroids()
+        # ladder.get_largest_clusters()
+        ladder.convert_cluster_coords()
+        x_res_y_rots.append(banco_get_residuals(ladder, ray_data, False)[1])
+    # y_rot = y_orientations[np.argmin(x_res_y_rots)]
+    y_rot_min = y_rot
+
+    x_res_z_rots, y_res_z_rots = [], []
+    for z_rot_i in z_orientations:
+        ladder.set_orientation(x_rot, y_rot, z_rot_i)
+        # ladder.get_cluster_centroids()
+        # ladder.get_largest_clusters()
+        ladder.convert_cluster_coords()
+        x_res_z_rots.append(banco_get_residuals(ladder, ray_data, False)[1])
+        y_res_z_rots.append(banco_get_residuals(ladder, ray_data, False)[3])
+    z_rot_min = z_rot
+
+    if plot:
+        fig_xrot, ax_xrot = plt.subplots()
+        x_plot_points = np.linspace(min(x_orientations), max(x_orientations), 1000)
+        ax_xrot.plot(x_orientations, y_res_x_rots, marker='o')
+        ax_xrot.plot(x_plot_points, quadratic_shift(x_plot_points, *popt_x), color='r', alpha=0.4)
+        ax_xrot.axvline(original_orientation[0], color='g', linestyle='--', label='Original X Rotation')
+        ax_xrot.axvline(x_rot_min, color='r', linestyle='--', label='Minimized X Rotation')
+        ax_xrot.set_title(f'Y Residuals vs X Rotation {ladder.name}')
+        ax_xrot.set_xlabel('X Rotation (degrees)')
+        ax_xrot.set_ylabel('Y Residual Distribution Gaussian Width (mm)')
+        fig_xrot.tight_layout()
+        fig_xrot.canvas.manager.set_window_title(f'Y Residuals vs X Rotation {ladder.name}')
+
+        fig_yrot, ax_yrot = plt.subplots()
+        ax_yrot.plot(y_orientations, x_res_y_rots, marker='o')
+        ax_yrot.axvline(original_orientation[1], color='g', linestyle='--', label='Original Y Rotation')
+        ax_yrot.axvline(y_rot, color='r', linestyle='--', label='Minimized Y Rotation')
+        ax_yrot.set_title(f'X Residuals vs Y Rotation {ladder.name}')
+        ax_yrot.set_xlabel('Y Rotation (degrees)')
+        ax_yrot.set_ylabel('X Residual Distribution Gaussian Width (mm)')
+        fig_yrot.tight_layout()
+        fig_yrot.canvas.manager.set_window_title(f'X Residuals vs Y Rotation {ladder.name}')
+
+        fig_zrot, ax_zrot = plt.subplots()
+        ax_zrot.plot(z_orientations, x_res_z_rots, marker='o', label='X Residuals')
+        ax_zrot.plot(z_orientations, y_res_z_rots, marker='o', label='Y Residuals')
+        ax_zrot.axvline(original_orientation[2], color='g', linestyle='--', label='Original Z Rotation')
+        ax_zrot.axvline(z_rot, color='r', linestyle='--', label='Minimized Z Rotation')
+        ax_zrot.set_title(f'Residuals vs Z Rotation {ladder.name}')
+        ax_zrot.set_xlabel('Z Rotation (degrees)')
+        ax_zrot.set_ylabel('Residual Distribution Gaussian Width (mm)')
+        ax_zrot.legend()
+        fig_zrot.tight_layout()
+        fig_zrot.canvas.manager.set_window_title(f'Residuals vs Z Rotation {ladder.name}')
+
+    ladder.set_orientation(*original_orientation)
+
+    return x_rot_min, y_rot_min, z_rot_min
 
 
 def remove_outlying_rays(x_rays, y_rays, event_num_rays, det_size, mult=2.0):
@@ -717,54 +871,78 @@ def banco_get_residuals(ladder, ray_data, plot=False):
            (y_res > y_res_mean - 2 * y_res_std) & (y_res < y_res_mean + 2 * y_res_std)
     x_res_filter, y_res_filter = x_res[mask], y_res[mask]
 
-    p0_x = np.array([np.mean(x_res_filter), np.std(x_res_filter) / 2])
-    fit_x = minimize(neg_log_likelihood, p0_x, args=(x_res_filter,), bounds=[(-np.inf, np.inf), (1e-5, np.inf)])
-    fitted_mu_x, fitted_sigma_x = fit_x.x
+    # p0_x = np.array([np.mean(x_res_filter), np.std(x_res_filter) / 2])
+    # fit_x = minimize(neg_log_likelihood, p0_x, args=(x_res_filter,), bounds=[(-np.inf, np.inf), (1e-5, np.inf)])
+    # fitted_mu_x, fitted_sigma_x = fit_x.x
+    #
+    # p0_y = np.array([np.mean(y_res_filter), np.std(y_res_filter) / 2])
+    # fit_y = minimize(neg_log_likelihood, p0_y, args=(y_res_filter,), bounds=[(-np.inf, np.inf), (1e-5, np.inf)])
+    # fitted_mu_y, fitted_sigma_y = fit_y.x
 
-    p0_y = np.array([np.mean(y_res_filter), np.std(y_res_filter) / 2])
-    fit_y = minimize(neg_log_likelihood, p0_y, args=(y_res_filter,), bounds=[(-np.inf, np.inf), (1e-5, np.inf)])
-    fitted_mu_y, fitted_sigma_y = fit_y.x
+    try:
+        # Determine binning in a smarter/more robust way
+        counts_x, bins_x = np.histogram(x_res_filter, bins=np.linspace(min(x_res_filter), max(x_res_filter), 50))
+        bin_centers_x = (bins_x[:-1] + bins_x[1:]) / 2
+        bin_width_x = bins_x[1] - bins_x[0]
+        p0_x = [len(x_res_filter), np.mean(x_res_filter), np.std(x_res_filter)]
+        popt_x, pcov_x = cf(gaus_amp, bin_centers_x, counts_x, p0=p0_x)
 
-    # Determine binning in a smarter/more robust way
-    counts_x, bins_x = np.histogram(x_res_filter, bins=np.linspace(min(x_res_filter), max(x_res_filter), 50))
-    bin_centers_x = (bins_x[:-1] + bins_x[1:]) / 2
-    bin_width_x = bins_x[1] - bins_x[0]
-    p0_x = [len(x_res_filter), np.mean(x_res_filter), np.std(x_res_filter)]
-    popt_x, pcov_x = cf(gaus_amp, bin_centers_x, counts_x, p0=p0_x)
+        # Filter out outliers for stable binning and refit
+        x_res_filter2 = x_res_filter[np.abs(x_res_filter - popt_x[1]) < 3 * popt_x[2]]
+        counts_x, bins_x = np.histogram(x_res_filter2, bins=np.linspace(min(x_res_filter2), max(x_res_filter2), 50))
+        bin_centers_x = (bins_x[:-1] + bins_x[1:]) / 2
+        bin_width_x = bins_x[1] - bins_x[0]
+        p0_x = [len(x_res_filter2), np.mean(x_res_filter2), np.std(x_res_filter2)]
+        popt_x, pcov_x = cf(gaus_amp, bin_centers_x, counts_x, p0=p0_x)
 
-    counts_y, bins_y = np.histogram(y_res_filter, bins=np.linspace(min(y_res_filter), max(y_res_filter), 50))
-    bin_centers_y = (bins_y[:-1] + bins_y[1:]) / 2
-    bin_width_y = bins_y[1] - bins_y[0]
-    p0_y = [len(y_res_filter), np.mean(y_res_filter), np.std(y_res_filter)]
-    popt_y, pcov_y = cf(gaus_amp, bin_centers_y, counts_y, p0=p0_y)
+        # Similar for y
+        counts_y, bins_y = np.histogram(y_res_filter, bins=np.linspace(min(y_res_filter), max(y_res_filter), 50))
+        bin_centers_y = (bins_y[:-1] + bins_y[1:]) / 2
+        bin_width_y = bins_y[1] - bins_y[0]
+        p0_y = [len(y_res_filter), np.mean(y_res_filter), np.std(y_res_filter)]
+        popt_y, pcov_y = cf(gaus_amp, bin_centers_y, counts_y, p0=p0_y)
+
+        # Filter out outliers for stable binning and refit
+        y_res_filter2 = y_res_filter[np.abs(y_res_filter - popt_y[1]) < 3 * popt_y[2]]
+        counts_y, bins_y = np.histogram(y_res_filter2, bins=np.linspace(min(y_res_filter2), max(y_res_filter2), 50))
+        bin_centers_y = (bins_y[:-1] + bins_y[1:]) / 2
+        bin_width_y = bins_y[1] - bins_y[0]
+        p0_y = [len(y_res_filter2), np.mean(y_res_filter2), np.std(y_res_filter2)]
+        popt_y, pcov_y = cf(gaus_amp, bin_centers_y, counts_y, p0=p0_y)
+    except RuntimeError:
+        print(f'Error fitting residuals for ladder {ladder.name}')
+        return float('nan'), float('nan'), float('nan'), float('nan')
 
     if plot:
-        print(f'X_residuals unbinned gaussian fit: mu={fitted_mu_x:.2f}mm, sigma={fitted_sigma_x:.2f}mm')
+        # print(f'X_residuals unbinned gaussian fit: mu={fitted_mu_x:.2f}mm, sigma={fitted_sigma_x:.2f}mm')
         print(f'X_residuals binned gaussian fit: mu={popt_x[1]:.2f}mm, sigma={popt_x[2]:.2f}mm')
-        print(f'Y_residuals unbinned gaussian fit: mu={fitted_mu_y:.2f}mm, sigma={fitted_sigma_y:.2f}mm')
+        # print(f'Y_residuals unbinned gaussian fit: mu={fitted_mu_y:.2f}mm, sigma={fitted_sigma_y:.2f}mm')
         print(f'Y_residuals binned gaussian fit: mu={popt_y[1]:.2f}mm, sigma={popt_y[2]:.2f}mm')
 
-        x_plot_points = np.linspace(min(x_res), max(x_res), 100)
-
-        fix_x_bar, ax_x_bar = plt.subplots()
+        x_plot_points = np.linspace(min(x_res_filter2), max(x_res_filter2), 1000)
+        fig_x_bar, ax_x_bar = plt.subplots()
         ax_x_bar.bar(bin_centers_x, counts_x, width=bin_width_x, align='center')
-        ax_x_bar.plot(x_plot_points, len(x_res) * gaussian(x_plot_points, *fit_x.x), color='r')
+        # ax_x_bar.plot(x_plot_points, len(x_res) * gaussian(x_plot_points, *fit_x.x), color='r')
         ax_x_bar.plot(x_plot_points, gaus_amp(x_plot_points, *popt_x), color='g')
-        ax_x_bar.set_title('X Residuals')
+        ax_x_bar.set_title(f'X Residuals {ladder.name}')
         ax_x_bar.set_xlabel('X Residual (mm)')
         ax_x_bar.set_ylabel('Entries')
+        fig_x_bar.tight_layout()
+        fig_x_bar.canvas.manager.set_window_title(f'X Residuals {ladder.name}')
 
-        y_plot_points = np.linspace(min(y_res), max(y_res), 100)
-
-        fix_y_bar, ax_y_bar = plt.subplots()
+        y_plot_points = np.linspace(min(y_res_filter2), max(y_res_filter2), 1000)
+        fig_y_bar, ax_y_bar = plt.subplots()
         ax_y_bar.bar(bin_centers_y, counts_y, width=bin_width_y, align='center')
-        ax_y_bar.plot(y_plot_points, len(y_res) * gaussian(y_plot_points, *fit_y.x), color='r')
+        # ax_y_bar.plot(y_plot_points, len(y_res) * gaussian(y_plot_points, *fit_y.x), color='r')
         ax_y_bar.plot(y_plot_points, gaus_amp(y_plot_points, *popt_y), color='g')
-        ax_y_bar.set_title('Y Residuals')
+        ax_y_bar.set_title(f'Y Residuals {ladder.name}')
         ax_y_bar.set_xlabel('Y Residual (mm)')
         ax_y_bar.set_ylabel('Entries')
+        fig_y_bar.tight_layout()
+        fig_y_bar.canvas.manager.set_window_title(f'Y Residuals {ladder.name}')
 
-    return fitted_mu_x, fitted_sigma_x, fitted_mu_y, fitted_sigma_y
+    # return fitted_mu_x, fitted_sigma_x, fitted_mu_y, fitted_sigma_y
+    return popt_x[1], popt_x[2], popt_y[1], popt_y[2]
 
 
 def linear(x, a, b):

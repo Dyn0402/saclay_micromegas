@@ -21,11 +21,12 @@ class BancoLadder:
         self.name = name
         self.center = np.array([0, 0, 0])
         self.size = np.array([0, 0, 0])
-        self.orientation = np.array([0, 0, 0])
+        self.orientation = np.array([0, 0, 0])  # degrees Rotation along x, y, z axes
 
-        self.pitch_x = 29.24
-        self.pitch_y = 26.88
-        self.chip_space = 15
+        self.pitch_x = 26.88  # microns spacing between pixels in x direction
+        self.pitch_y = 29.24  # microns spacing between pixels in y direction
+        self.chip_space = 75  # microns space between chips in y direction
+        self.n_pix_y = 1024  # Number of pixels in y direction
 
         if config is not None:
             self.set_from_config(config)
@@ -38,6 +39,7 @@ class BancoLadder:
         self.cluster_triggers = None
         self.all_cluster_centroids_local_coords = None
         self.all_cluster_num_pixels = None
+        self.largest_clusters = None
         self.largest_cluster_centroids_local_coords = None
         self.largest_cluster_num_pix = None
 
@@ -73,6 +75,9 @@ class BancoLadder:
     def set_pitch_y(self, pitch_y):
         self.pitch_y = pitch_y
 
+    def set_chip_space(self, chip_space):
+        self.chip_space = chip_space
+
     def read_banco_data(self, file_path):
         self.data = read_banco_file(file_path)
 
@@ -85,34 +90,52 @@ class BancoLadder:
     def combine_data_noise(self):
         self.noise_pixels = np.concatenate([self.noise_pixels, self.data_noise_pixels], axis=0)
 
-    def cluster_data(self, min_pixels=2):
+    def cluster_data(self, min_pixels=2, max_pixels=100, chip=None):
         trigger_col = self.data[:, 0]  # Get all triggers, repeated if more than one hit per trigger
         unique_trigger_rows = np.unique(trigger_col, return_index=True)[1]  # Get first row indices of unique triggers
         event_split_data = np.split(self.data, unique_trigger_rows[1:])  # Split the data into events
         event_split_data = {event[0][0]: event[:, 1:] for event in event_split_data}  # Dict of events by trigger
 
-        self.cluster_triggers, self.all_cluster_centroids_local_coords, self.all_cluster_num_pixels = [], [], []
-        self.clusters = []
+        self.cluster_triggers, self.clusters = [], []
         for trigger_id, hit_pixels in event_split_data.items():
-            if len(hit_pixels) < min_pixels:
+            if len(hit_pixels) < min_pixels or len(hit_pixels) > max_pixels:
                 continue
             clusters = find_clusters(hit_pixels, self.noise_pixels, min_pixels=min_pixels)
+            if chip is not None:
+                clusters = [cluster for cluster in clusters if np.all(cluster[:, 1] // 1024 == chip)]
             if len(clusters) == 0:
                 continue
             self.cluster_triggers.append(trigger_id)
             self.clusters.append(clusters)
-            clusters_xy = convert_clusters_to_xy(clusters, self.pitch_x, self.pitch_y, self.chip_space)
+            # clusters_xy = convert_clusters_to_xy(clusters, self.pitch_x, self.pitch_y, self.chip_space)
+            # centroids, num_pixels = get_cluster_centroids(clusters_xy)
+            # self.all_cluster_centroids_local_coords.append(centroids)
+            # self.all_cluster_num_pixels.append(num_pixels)
+        self.get_cluster_centroids()
+
+    def get_cluster_centroids(self):
+        self.all_cluster_centroids_local_coords, self.all_cluster_num_pixels = [], []
+        for trigger_id, clusters in zip(self.cluster_triggers, self.clusters):
+            clusters_xy = convert_clusters_to_xy(clusters, self.pitch_x, self.pitch_y, self.chip_space, self.n_pix_y)
             centroids, num_pixels = get_cluster_centroids(clusters_xy)
             self.all_cluster_centroids_local_coords.append(centroids)
             self.all_cluster_num_pixels.append(num_pixels)
 
     def get_largest_clusters(self):
-        largest_cluster_centroids, largest_clust_pix = get_largest_cluster(self.all_cluster_centroids_local_coords,
-                                                                           self.all_cluster_num_pixels)
+        largest_clusters_data = get_largest_cluster(self.clusters, self.all_cluster_centroids_local_coords,
+                                                    self.all_cluster_num_pixels)
+        largest_clusters, largest_cluster_centroids, largest_clust_pix = largest_clusters_data
+        self.largest_clusters = largest_clusters
         self.largest_cluster_centroids_local_coords = np.array(largest_cluster_centroids)
         # print(f'Largest cluster centroids: {self.largest_cluster_centroids_local_coords}')
         # print(self.largest_cluster_centroids_local_coords.shape)
         self.largest_cluster_num_pix = largest_clust_pix
+
+    def get_clusters_on_chip(self, chip):
+        chip_clusters = []
+        for clusters in self.clusters:
+            chip_clusters.append([cluster for cluster in clusters if np.all(cluster[:, 1] // self.n_pix_y == chip)])
+        return chip_clusters
 
     def convert_cluster_coords(self):
         self.cluster_centroids = self.largest_cluster_centroids_local_coords
@@ -160,19 +183,19 @@ def get_noise_pixels(data, noise_threshold=0.01):
     return noise_pixels
 
 
-def cluster_data(data, noise_pixels=None, min_pixels=1):
-    data = np.split(data, np.unique(data[:, 0], return_index=True)[1][1:])
-
-    trigger_ids, cluster_centroids, cluster_num_pixels = [], [], []
-    for trigger in data:
-        trigger_ids.append(trigger[0][0])
-        clusters = find_clusters(trigger[:, 1:], noise_pixels, min_pixels=min_pixels)
-        clusters_xy = convert_clusters_to_xy(clusters)
-        centroids, num_pixels = get_cluster_centroids(clusters_xy)
-        cluster_centroids.append(centroids)
-        cluster_num_pixels.append(num_pixels)
-
-    return trigger_ids, cluster_centroids, cluster_num_pixels
+# def cluster_data(data, noise_pixels=None, min_pixels=1):
+#     data = np.split(data, np.unique(data[:, 0], return_index=True)[1][1:])
+#
+#     trigger_ids, cluster_centroids, cluster_num_pixels = [], [], []
+#     for trigger in data:
+#         trigger_ids.append(trigger[0][0])
+#         clusters = find_clusters(trigger[:, 1:], noise_pixels, min_pixels=min_pixels)
+#         clusters_xy = convert_clusters_to_xy(clusters)
+#         centroids, num_pixels = get_cluster_centroids(clusters_xy)
+#         cluster_centroids.append(centroids)
+#         cluster_num_pixels.append(num_pixels)
+#
+#     return trigger_ids, cluster_centroids, cluster_num_pixels
 
 
 def find_clusters(data, noise_pixels=None, min_pixels=1):
@@ -225,25 +248,27 @@ def get_cluster_centroids(clusters):
     return cluster_centroids, cluster_num_pixels
 
 
-def get_largest_cluster(cluster_centroids, cluster_num_pixels):
-    new_cluster_centroids, new_cluster_num_pixels = [], []
-    for clusters, num_pixels in zip(cluster_centroids, cluster_num_pixels):
+def get_largest_cluster(clusters, cluster_centroids, cluster_num_pixels):
+    largest_clusters, largest_cluster_centroids, largest_cluster_num_pixels = [], [], []
+    for clusters_i, cluster_centroids, num_pixels in zip(clusters, cluster_centroids, cluster_num_pixels):
         if len(clusters) == 1:
-            new_cluster_centroids.append(clusters[0])
-            new_cluster_num_pixels.append(num_pixels[0])
+            largest_clusters.append(clusters_i[0])
+            largest_cluster_centroids.append(cluster_centroids[0])
+            largest_cluster_num_pixels.append(num_pixels[0])
         else:
             max_pix_i = np.argmax(num_pixels)
-            new_cluster_centroids.append(clusters[max_pix_i])
-            new_cluster_num_pixels.append(num_pixels[max_pix_i])
-    return new_cluster_centroids, new_cluster_num_pixels
+            largest_clusters.append(clusters_i[max_pix_i])
+            largest_cluster_centroids.append(cluster_centroids[max_pix_i])
+            largest_cluster_num_pixels.append(num_pixels[max_pix_i])
+    return largest_clusters, largest_cluster_centroids, largest_cluster_num_pixels
 
 
-def convert_clusters_to_xy(cluster_centroids, pitch_x=30., pitch_y=30., chip_space=15.):
+def convert_clusters_to_xy(cluster_centroids, pitch_x=30., pitch_y=30., chip_space=15., n_pix_y=1024):
     cluster_centroids_xy = []
     for event in cluster_centroids:
         event_xy = []
         for cluster in event:
-            x, y = convert_row_col_to_xy(cluster[0], cluster[1], chip=None, n_pix_y=1024, pix_size_x=pitch_x,
+            x, y = convert_row_col_to_xy(cluster[0], cluster[1], chip=None, n_pix_y=n_pix_y, pix_size_x=pitch_x,
                                          pix_size_y=pitch_y, chip_space=chip_space)
             event_xy.append([x, y])
         cluster_centroids_xy.append(event_xy)

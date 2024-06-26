@@ -18,9 +18,11 @@ from M3RefTracking import M3RefTracking
 
 
 def main():
-    base_path = '/local/home/dn277127/Bureau/banco_test3/'
+    # base_path = '/local/home/dn277127/Bureau/banco_test3/'
+    # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_path = 'C:/Users/Dylan/Desktop/banco_test3/'
+    det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     run_config_file_name = 'run_config.json'
-    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
 
     m3_track_data = M3RefTracking(base_path)
     print(m3_track_data.ray_data)
