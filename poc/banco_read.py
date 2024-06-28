@@ -248,6 +248,9 @@ def banco_analysis():
 
         print('Converting cluster coords')
         ladder.convert_cluster_coords()
+        # ladder.plot_largest_cluster_centroids_local_coords()
+        # ladder.plot_cluster_centroids()
+        # plt.show()
 
         # z_aligned = banco_ref_std_z_alignment(ladder, ray_data, plot=True)
         # plt.show()
@@ -259,7 +262,9 @@ def banco_analysis():
         iterations, zs = list(np.arange(10)), []
         for i in iterations:
             print()
-            print(f'Getting residuals for ladder {ladder.name} with z={ladder.center[2]:.2f}mm iteration {i}')
+            print(f'Iteration {i}: Getting residuals for ladder {ladder_num} with '
+                  f'center=[{ladder.center[0]:.2f}, {ladder.center[1]:.2f}, {ladder.center[2]:.2f}] mm, orientation='
+                  f'[{ladder.orientation[0]:.2f}, {ladder.orientation[1]:.2f}, {ladder.orientation[2]:.2f}] deg')
             zs.append(ladder.center[2])
             x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
             print(f'Ladder {ladder.name} X Residuals Mean: {x_res_mean} Sigma: {x_res_sigma}')
@@ -272,6 +277,8 @@ def banco_analysis():
             z_align = banco_res_z_alignment(ladder, ray_data, z_range=(20 / (i + 1)), plot=False)
             ladder.set_center(z=z_align)
             ladder.convert_cluster_coords()
+
+            # x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=False)
 
         fig, ax = plt.subplots()
         ax.plot(iterations + [iterations[-1] + 1], zs + [ladder.center[2]], marker='o')
@@ -305,9 +312,11 @@ def banco_analysis():
         # ladder.set_center(x=x_align, y=y_align, z=z_align)
         # ladder.convert_cluster_coords()
 
+        ladder.plot_cluster_centroids()
+        # plt.show()
         ladders.append(ladder)
 
-    plt.show()
+    # plt.show()
 
     # Combine ladder_cluster_centroids into single dict with trigger_id as key and {ladder: centroid} as value
     all_trigger_ids = np.unique(np.concatenate([ladder.cluster_triggers for ladder in ladders]))
@@ -319,7 +328,6 @@ def banco_analysis():
                 event_ladder_clusters[ladder] = ladder.cluster_centroids[np.where(ladder.cluster_triggers == trig_id)[0][0]]
         all_cluster_centroids[trig_id] = event_ladder_clusters
 
-    plt.show()
     residuals = {ladder.name: {'x': [], 'y': []} for ladder in ladders}
     for trig_id, event_clusters in all_cluster_centroids.items():
         print(f'\nTrigger {trig_id}')
@@ -332,7 +340,9 @@ def banco_analysis():
         if len(event_clusters) == 4:
             for ladder in ladders:
                 plot_event_banco_hits(ladder.data, trig_id, ladder.name)
-                plot_event_banco_hits_coords(ladder, trig_id)
+                plot_event_banco_largest_hit_coords(ladder, trig_id)
+                plot_event_banco_hits_global_coords(ladder, trig_id)
+
 
             popt_x, pcov_x = cf(linear, x, z)
             popt_y, pcov_y = cf(linear, y, z)
@@ -704,20 +714,37 @@ def plot_event_banco_hits(data, trigger_id, ladder=None):
     fig.tight_layout()
 
 
-def plot_event_banco_hits_coords(ladder, trigger_id):
-    clusters, cluster_centroids = ladder.get_clusters_global_coords()
-    event_clusters = clusters[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
-    event_cluster_centroids = cluster_centroids[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
-    event_cluster_sizes = ladder.all_cluster_num_pixels[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
-    event_clusters = np.array([hit for cluster in event_clusters for hit in cluster])
-    event_cluster_centroids = np.array(event_cluster_centroids)
-    event_cluster_sizes = np.array(event_cluster_sizes)
+def plot_event_banco_largest_hit_coords(ladder, trigger_id):
+    event_cluster_centroid = ladder.cluster_centroids[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
+    event_cluster_size = ladder.largest_cluster_num_pix[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
     fig, ax = plt.subplots()
-    ax.scatter(event_clusters[:, 0], event_clusters[:, 1], color='b', alpha=0.5)
-    ax.scatter(event_cluster_centroids[:, 0], event_cluster_centroids[:, 1], s=event_cluster_sizes * 10, color='g', alpha=0.5)
+    print(event_cluster_size)
+    ax.scatter([event_cluster_centroid[0]], [event_cluster_centroid[1]], s=event_cluster_size * 10, color='g', zorder=1)
+    # Write the event_cluster_sizes inside each circle
+    # for i, (x, y, z) in enumerate(event_cluster_centroids):
+    #     ax.text(x, y, event_cluster_sizes[i], color='w', ha='center', va='center')
     ax.set_xlim(ladder.center[0] - ladder.size[0] / 2, ladder.center[0] + ladder.size[0] / 2)
     ax.set_ylim(ladder.center[1] - ladder.size[1] / 2, ladder.center[1] + ladder.size[1] / 2)
     ax.grid(zorder=0)
+    ax.set_title(f'Event {trigger_id} Banco Hits Global Coordinates Ladder {ladder.name}')
+    ax.set_xlabel('X (mm)')
+    ax.set_ylabel('Y (mm)')
+    fig.tight_layout()
+
+
+def plot_event_banco_hits_global_coords(ladder, trigger_id):
+    cluster_centroids = ladder.get_cluster_centroids_global_coords()
+    event_cluster_centroids = cluster_centroids[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
+    event_cluster_sizes = ladder.all[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
+    fig, ax = plt.subplots()
+    ax.scatter(event_cluster_centroids[:, 0], event_cluster_centroids[:, 1], s=event_cluster_sizes * 10, color='g',
+               alpha=0.8, zorder=1)
+    # Write the event_cluster_sizes inside each circle
+    for i, (x, y, z) in enumerate(event_cluster_centroids):
+        ax.text(x, y, event_cluster_sizes[i], color='w', ha='center', va='center')
+    ax.grid(zorder=0)
+    ax.set_xlim(ladder.center[0] - ladder.size[0] / 2, ladder.center[0] + ladder.size[0] / 2)
+    ax.set_ylim(ladder.center[1] - ladder.size[1] / 2, ladder.center[1] + ladder.size[1] / 2)
     ax.set_title(f'Event {trigger_id} Banco Hits Global Coordinates Ladder {ladder.name}')
     ax.set_xlabel('X (mm)')
     ax.set_ylabel('Y (mm)')

@@ -26,11 +26,16 @@ class BancoLadder:
         self.pitch_x = 26.88  # microns spacing between pixels in x direction
         self.pitch_y = 29.24  # microns spacing between pixels in y direction
         self.passive_edge_y = 29.12  # microns inactive edge on the y side of each chip
+        self.passive_edge_x = 26.88  # microns inactive edge on the x side of each chip
         self.chip_space = 100 + 2 * self.passive_edge_y  # microns space between chips in y direction
 
         self.n_pix_y = 1024  # Number of pixels in y direction
         self.n_pix_x = 512  # Number of pixels in x direction
         self.n_chips = 5  # Number of chips in y direction
+
+        self.active_size = np.array([self.pitch_x * self.n_pix_x,
+                                     self.pitch_y * self.n_pix_y * self.n_chips + (self.n_chips - 1) * self.chip_space,
+                                     30]) / 1000  # Active area of detector in mm
 
         if config is not None:
             self.set_from_config(config)
@@ -48,7 +53,6 @@ class BancoLadder:
         self.largest_cluster_num_pix = None
 
         self.cluster_centroids = None
-        self.cluster_num_pix = None
 
     def set_center(self, x=None, y=None, z=None):
         if x is None:
@@ -159,6 +163,9 @@ class BancoLadder:
         self.cluster_centroids = np.hstack((self.cluster_centroids, zs))  # Combine x, y, z
         # print(f'Cluster centroids after hstack: {self.cluster_centroids[:4]}')
 
+        # Center coordinates around center of detector
+        self.cluster_centroids = self.cluster_centroids - self.active_size / 2
+
         # Rotate cluster centroids to global coordinates
         self.cluster_centroids = rotate_coordinates(self.cluster_centroids, self.orientation)
         # print(f'Cluster centroids after rotation: {self.cluster_centroids[:4]}')
@@ -168,14 +175,36 @@ class BancoLadder:
         self.cluster_centroids = self.cluster_centroids + self.center
         # print(f'Cluster centroids after translation: {self.cluster_centroids[:4]}')
 
-    def get_clusters_global_coords(self):
-        clusters_global_coords, cluster_centoids_global_coords = [], []
+    def get_cluster_centroids_global_coords(self):
+        cluster_centoids_global_coords = []
         for clusters, cluster_centroids in zip(self.clusters, self.all_cluster_centroids_local_coords):
             clusters_xy = convert_clusters_to_xy(clusters, self.pitch_x, self.pitch_y, self.chip_space, self.n_pix_y)
-            clusters_global_coords.append(clusters_xy)
             centroids, num_pixels = get_cluster_centroids(clusters_xy)
+            zs = np.full((len(centroids), 1), 0)  # Add z coordinate to centroids
+            centroids = np.hstack((centroids, zs))  # Combine x, y, z
+            centroids = centroids - self.active_size / 2
+            centroids = rotate_coordinates(centroids, self.orientation)
+            centroids = centroids + self.center
             cluster_centoids_global_coords.append(centroids)
-        return clusters_global_coords, cluster_centoids_global_coords
+        return cluster_centoids_global_coords
+
+    def plot_largest_cluster_centroids_local_coords(self):
+        fig, ax = plt.subplots()
+        ax.scatter(self.largest_cluster_centroids_local_coords[:, 0], self.largest_cluster_centroids_local_coords[:, 1],
+                   marker='o', alpha=0.5)
+        ax.set_title('Largest Cluster Centroids Local Coordinates')
+        ax.set_xlabel('X Position (mm)')
+        ax.set_ylabel('Y Position (mm)')
+        fig.tight_layout()
+
+    def plot_cluster_centroids(self):
+        fig, ax = plt.subplots()
+        print(self.cluster_centroids)
+        ax.scatter(self.cluster_centroids[:, 0], self.cluster_centroids[:, 1], marker='o', alpha=0.5)
+        ax.set_title('Largest Cluster Centroids')
+        ax.set_xlabel('X Position (mm)')
+        ax.set_ylabel('Y Position (mm)')
+        fig.tight_layout()
 
 
 def read_banco_file(file_path):
@@ -204,21 +233,6 @@ def get_noise_pixels(data, noise_threshold=0.01):
     counts = counts / num_triggers if noise_threshold < 1 else counts
     noise_pixels = noise_pixels[counts > noise_threshold]
     return noise_pixels
-
-
-# def cluster_data(data, noise_pixels=None, min_pixels=1):
-#     data = np.split(data, np.unique(data[:, 0], return_index=True)[1][1:])
-#
-#     trigger_ids, cluster_centroids, cluster_num_pixels = [], [], []
-#     for trigger in data:
-#         trigger_ids.append(trigger[0][0])
-#         clusters = find_clusters(trigger[:, 1:], noise_pixels, min_pixels=min_pixels)
-#         clusters_xy = convert_clusters_to_xy(clusters)
-#         centroids, num_pixels = get_cluster_centroids(clusters_xy)
-#         cluster_centroids.append(centroids)
-#         cluster_num_pixels.append(num_pixels)
-#
-#     return trigger_ids, cluster_centroids, cluster_num_pixels
 
 
 def find_clusters(data, noise_pixels=None, min_pixels=1):
@@ -312,7 +326,7 @@ def convert_row_col_to_xy(row, col, chip=None, n_pix_y=1024, pix_size_x=30., pix
     :param pix_size_x: Pixel size in the x direction
     :param pix_size_y: Pixel size in the y direction
     :param chip_space: Space between chips
-    :return:
+    :return: x, y coordinates of the pixel in mm
     """
 
     x = (row + 0.5) * pix_size_x
