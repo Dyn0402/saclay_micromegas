@@ -8,6 +8,7 @@ Created as saclay_micromegas/banco_read.py
 @author: Dylan Neff, Dylan
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -27,6 +28,7 @@ def main():
     # read_raw_banco()
     banco_analysis()
     # get_banco_largest_cluster_npix_dists()
+    # banco_noise_analysis()
     # find_cluster_test()
     # convert_row_col_xy_test()
     print('donzo')
@@ -190,13 +192,14 @@ def read_raw_banco():
 def banco_analysis():
     vector.register_awkward()
     # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
-    # det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    base_dir = '/local/home/dn277127/Bureau/banco_test4/'
-    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    run_name = 'multinoiseScan_240626_130901-B0-ladder'
+    base_dir = 'F:/Saclay/banco_data/banco_stats2/'
+    det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = '/local/home/dn277127/Bureau/banco_test4/'
+    # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     run_json_path = f'{base_dir}run_config.json'
+    run_name = get_banco_run_name(base_dir)
     run_data = get_det_data(run_json_path)
-    print(run_data)
+    # print(run_data)
     banco_names = [det_name for det_name in run_data['included_detectors'] if 'banco' in det_name]
     manual_align = {160: {'x': 6.970, 'y': 1.360, 'z': 0}, 163: {'x': -9.668, 'y': -1.776, 'z': 0},
                     157: {'x': 9.865, 'y': 1.232, 'z': 0}, 162: {'x': -7.166, 'y': -0.817, 'z': 0}}
@@ -208,6 +211,7 @@ def banco_analysis():
         det_info = [det for det in run_data['detectors'] if det['name'] == banco_name][0]
         det_type_info = get_det_data(f'{det_info_dir}{det_info["det_type"]}.json')
         det_info.update(det_type_info)
+        print()
         print(banco_name)
         print(det_info)
         ladder = BancoLadder(config=det_info)
@@ -215,34 +219,83 @@ def banco_analysis():
 
         file_path = f'{base_dir}{run_name}{ladder_num}.root'
         noise_path = f'{base_dir}Noise_{ladder_num}.root'
+        print('Reading banco_noise')
         ladder.read_banco_noise(noise_path)
+        print('Reading banco_data')
         ladder.read_banco_data(file_path)
+        print('Getting data noise pixels')
         ladder.get_data_noise_pixels()
+        print('Combining data noise')
         ladder.combine_data_noise()
-        ladder.cluster_data(min_pixels=2, max_pixels=5, chip=None)
+        print('Clustering data')
+        ladder.cluster_data(min_pixels=1, max_pixels=8, chip=None)
+        print('Getting largest clusters')
         ladder.get_largest_clusters()
+
+        # for trigger, n_pix in zip(ladder.cluster_triggers, ladder.all_cluster_num_pixels):
+        #     if len(n_pix) > 1:
+        #         plot_event_banco_hits(ladder.data, trigger, ladder.name)
+        #         plot_event_banco_hits_coords(ladder, trigger)
+        #         plt.show()
+
+        # Manual align
+        # if ladder_num in manual_align.keys():
+        #     x_align, y_align, z_align = ladder.center
+        #     x_align -= manual_align[ladder_num]['x']
+        #     y_align -= manual_align[ladder_num]['y']
+        #     z_align -= manual_align[ladder_num]['z']
+        #     ladder.set_center(x=x_align, y=y_align, z=z_align)
+
+        print('Converting cluster coords')
         ladder.convert_cluster_coords()
 
-        z_aligned = banco_ref_std_z_alignment(ladder, ray_data, plot=False)
-        ladder.set_center(z=z_aligned)
-        ladder.convert_cluster_coords()
+        # z_aligned = banco_ref_std_z_alignment(ladder, ray_data, plot=True)
+        # plt.show()
+        # ladder.set_center(z=z_aligned)
+        # ladder.convert_cluster_coords()
         # print(f'Ladder {ladder.name} Center: {ladder.center}')
         # print(ladder.cluster_centroids[:4])
         # input()
+        iterations, zs = list(np.arange(10)), []
+        for i in iterations:
+            print()
+            print(f'Getting residuals for ladder {ladder.name} with z={ladder.center[2]:.2f}mm iteration {i}')
+            zs.append(ladder.center[2])
+            x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
+            print(f'Ladder {ladder.name} X Residuals Mean: {x_res_mean} Sigma: {x_res_sigma}')
+            print(f'Ladder {ladder.name} Y Residuals Mean: {y_res_mean} Sigma: {y_res_sigma}')
+            # plt.show()
+            aligned_x, aligned_y = ladder.center[0] + x_res_mean, ladder.center[1] + y_res_mean
+            ladder.set_center(x=aligned_x, y=aligned_y)
+            ladder.convert_cluster_coords()
+
+            z_align = banco_res_z_alignment(ladder, ray_data, z_range=(20 / (i + 1)), plot=False)
+            ladder.set_center(z=z_align)
+            ladder.convert_cluster_coords()
+
+        fig, ax = plt.subplots()
+        ax.plot(iterations + [iterations[-1] + 1], zs + [ladder.center[2]], marker='o')
+        ax.grid(zorder=0)
+        ax.set_title(f'Ladder {ladder.name} Z Alignment Iterations')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Z Alignment (mm)')
+        fig.tight_layout()
+
+        # banco_res_z_alignment(ladder, ray_data, plot=True)
+        # banco_xyz_alignment(ladder, ray_data, plot=True)
+        # plt.show()
+
         x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
-        aligned_x, aligned_y = ladder.center[0] + x_res_mean, ladder.center[1] + y_res_mean
-        ladder.set_center(x=aligned_x, y=aligned_y)
-        ladder.convert_cluster_coords()
-        x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, True)
+        # plt.show()
 
         # banco_get_pixel_spacing(ladder, ray_data, True)
         # plt.show()
 
-        x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=True)
+        # x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=False)
         # plt.show()
-        ladder.set_orientation(x_rot_align, y_rot_align, z_rot_align)
-        print(f'{ladder.name} new orientation: {ladder.orientation}')
-        ladder.convert_cluster_coords()
+        # ladder.set_orientation(x_rot_align, y_rot_align, z_rot_align)
+        # print(f'{ladder.name} new orientation: {ladder.orientation}')
+        # ladder.convert_cluster_coords()
 
         # Manually align
         # x_align, y_align, z_align = ladder.center
@@ -253,6 +306,7 @@ def banco_analysis():
         # ladder.convert_cluster_coords()
 
         ladders.append(ladder)
+
     plt.show()
 
     # Combine ladder_cluster_centroids into single dict with trigger_id as key and {ladder: centroid} as value
@@ -278,6 +332,8 @@ def banco_analysis():
         if len(event_clusters) == 4:
             for ladder in ladders:
                 plot_event_banco_hits(ladder.data, trig_id, ladder.name)
+                plot_event_banco_hits_coords(ladder, trig_id)
+
             popt_x, pcov_x = cf(linear, x, z)
             popt_y, pcov_y = cf(linear, y, z)
 
@@ -330,9 +386,10 @@ def banco_analysis():
 
 def get_banco_largest_cluster_npix_dists():
     vector.register_awkward()
-    # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
-    base_dir = '/local/home/dn277127/Bureau/banco_test3/'
-    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
+    det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = '/local/home/dn277127/Bureau/banco_test3/'
+    # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     run_json_path = f'{base_dir}run_config.json'
     run_data = get_det_data(run_json_path)
     print(run_data)
@@ -354,9 +411,14 @@ def get_banco_largest_cluster_npix_dists():
         ladder.read_banco_data(file_path)
         ladder.get_data_noise_pixels()
         ladder.combine_data_noise()
-        ladder.cluster_data(min_pixels=2)
+        # ladder.cluster_data(min_pixels=2)
+        ladder.cluster_data(min_pixels=1)
         ladder.get_largest_clusters()
         ladder.convert_cluster_coords()
+
+        for largest_clust_num_pix, trig_id in zip(ladder.largest_cluster_num_pix, ladder.cluster_triggers):
+            if largest_clust_num_pix > 10:
+                plot_event_banco_hits(ladder.data, trig_id, ladder.name)
 
         ladders.append(ladder)
 
@@ -372,12 +434,55 @@ def get_banco_largest_cluster_npix_dists():
     plt.show()
 
 
+def banco_noise_analysis():
+    vector.register_awkward()
+    base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
+    det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = '/local/home/dn277127/Bureau/banco_test3/'
+    # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    run_json_path = f'{base_dir}run_config.json'
+    run_data = get_det_data(run_json_path)
+    print(run_data)
+    banco_names = [det_name for det_name in run_data['included_detectors'] if 'banco' in det_name]
+
+    for banco_name in banco_names:
+        det_info = [det for det in run_data['detectors'] if det['name'] == banco_name][0]
+        det_type_info = get_det_data(f'{det_info_dir}{det_info["det_type"]}.json')
+        det_info.update(det_type_info)
+        print(banco_name)
+        print(det_info)
+        ladder = BancoLadder(config=det_info)
+        ladder_num = int(ladder.name[-3:])
+
+        file_path = f'{base_dir}multinoiseScan_240514_231935-B0-ladder{ladder_num}.root'
+        noise_path = f'{base_dir}Noise_{ladder_num}.root'
+        ladder.read_banco_noise(noise_path)
+        ladder.read_banco_data(file_path)
+        ladder.get_data_noise_pixels()
+        ladder.combine_data_noise()
+
+        plot_noise_vs_threshold(ladder.data, default_threshold=2, ladder=ladder_num)
+
+    plt.show()
+
+
+# def get_ray_ladder_residuals_old(x_rays, y_rays, cluster_centroids):
+#     x_residuals, y_residuals = [], []
+#     for x, y, centroid in zip(x_rays, y_rays, cluster_centroids):
+#         x_centroid, y_centroid, z_centroid = centroid
+#         x_residuals.append(x - x_centroid)
+#         y_residuals.append(y - y_centroid)
+#     return x_residuals, y_residuals
+
+
 def get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids):
-    x_residuals, y_residuals = [], []
-    for x, y, centroid in zip(x_rays, y_rays, cluster_centroids):
-        x_centroid, y_centroid, z_centroid = centroid
-        x_residuals.append(x - x_centroid)
-        y_residuals.append(y - y_centroid)
+    x_rays = np.array(x_rays)
+    y_rays = np.array(y_rays)
+    cluster_centroids = np.array(cluster_centroids)
+
+    x_residuals = x_rays - cluster_centroids[:, 0]
+    y_residuals = y_rays - cluster_centroids[:, 1]
+
     return x_residuals, y_residuals
 
 
@@ -414,7 +519,7 @@ def compare_rays_to_ladder(x_rays, y_rays, event_num_rays, cluster_centroids, tr
         fig, ax = plt.subplots()
         ax.scatter(xs, ys, alpha=0.5)
         title = 'Ref Track Detector Hits' if ladder is None else f'Ref Track Detector Hits Ladder {ladder}'
-        ax.grid()
+        ax.grid(zorder=0)
         ax.set_title(title)
         fig.tight_layout()
 
@@ -512,6 +617,18 @@ def plot_noise_vs_threshold(data, default_threshold=None, ladder=None):
     for threshold in thresholds:
         num_noise.append(len(noise_pixels[counts >= threshold]))
 
+    rows_cols_denoised = None
+    if default_threshold is not None:  # Remove noisy pixels from rows_columns data
+        if default_threshold >= 1:
+            def_noise_pixels = noise_pixels[counts >= default_threshold]
+        elif default_threshold < 1:
+            def_noise_pixels = noise_pixels[counts >= default_threshold * num_triggers]
+        # Remove 2d noise pixels from data
+        rows_cols_denoised = rows_cols
+        for noise_pixel in def_noise_pixels:
+            rows_cols_denoised = rows_cols_denoised[~np.all(rows_cols_denoised == noise_pixel, axis=1)]
+        rows_cols_denoised = np.array(rows_cols_denoised)
+
     title_suffix = '' if ladder is None else f' Ladder {ladder}'
 
     fig, ax = plt.subplots()
@@ -526,7 +643,11 @@ def plot_noise_vs_threshold(data, default_threshold=None, ladder=None):
     rows = np.arange(0, np.max(data[:, 1]) + 1, 1)
     row_counts = np.array([np.count_nonzero(data[:, 1] == row) for row in rows])
     fig, ax = plt.subplots()
-    ax.plot(rows, row_counts)
+    ax.plot(rows, row_counts, label='Before Denoising')
+    if rows_cols_denoised is not None:
+        denoised_row_counts = np.array([np.count_nonzero(rows_cols_denoised[:, 0] == row) for row in rows])
+        ax.plot(rows, denoised_row_counts, label='After Denoising')
+        ax.legend()
     ax.set_title('Row Noise Pixel Counts' + title_suffix)
     ax.set_xlabel('Row Number')
     ax.set_ylabel('Total Hits in Row')
@@ -537,7 +658,11 @@ def plot_noise_vs_threshold(data, default_threshold=None, ladder=None):
     cols = np.arange(0, np.max(data[:, 2]) + 1, 1)
     col_counts = np.array([np.count_nonzero(data[:, 2] == col) for col in cols])
     fig, ax = plt.subplots()
-    ax.plot(cols, col_counts)
+    ax.plot(cols, col_counts, label='Before Denoising')
+    if rows_cols_denoised is not None:
+        denoised_col_counts = np.array([np.count_nonzero(rows_cols_denoised[:, 1] == col) for col in cols])
+        ax.plot(cols, denoised_col_counts, label='After Denoising')
+        ax.legend()
     ax.set_title('Column Noise Pixel Counts' + title_suffix)
     ax.set_xlabel('Column Number')
     ax.set_ylabel('Total Hits in Column')
@@ -551,7 +676,7 @@ def plot_noise_vs_threshold(data, default_threshold=None, ladder=None):
     ax.set_title('Noise Pixels vs Threshold' + title_suffix)
     ax.set_xlabel('Threshold')
     ax.set_ylabel('Noise Pixels')
-    ax.grid()
+    ax.grid(zorder=0)
     fig.tight_layout()
 
     fig, ax = plt.subplots()
@@ -562,19 +687,40 @@ def plot_noise_vs_threshold(data, default_threshold=None, ladder=None):
     ax.set_xlabel('Threshold Fraction')
     ax.set_ylabel('Noise Pixels')
     ax.set_xticklabels([f'{x * 100:.1f}%' for x in ax.get_xticks()])
-    ax.grid()
+    ax.grid(zorder=0)
 
 
 def plot_event_banco_hits(data, trigger_id, ladder=None):
     event = data[data[:, 0] == trigger_id]
     fig, ax = plt.subplots()
     ax.scatter(event[:, 2], event[:, 1], alpha=0.5)
+    ax.grid(zorder=0)
     title = f'Event {trigger_id} Banco Hits' if ladder is None else f'Event {trigger_id} Banco Hits Ladder {ladder}'
     ax.set_title(title)
     ax.set_xlabel('Column')
     ax.set_xlim(0, 1024 * 5)
     ax.set_ylabel('Row')
     ax.set_ylim(0, 512)
+    fig.tight_layout()
+
+
+def plot_event_banco_hits_coords(ladder, trigger_id):
+    clusters, cluster_centroids = ladder.get_clusters_global_coords()
+    event_clusters = clusters[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
+    event_cluster_centroids = cluster_centroids[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
+    event_cluster_sizes = ladder.all_cluster_num_pixels[np.where(ladder.cluster_triggers == trigger_id)[0][0]]
+    event_clusters = np.array([hit for cluster in event_clusters for hit in cluster])
+    event_cluster_centroids = np.array(event_cluster_centroids)
+    event_cluster_sizes = np.array(event_cluster_sizes)
+    fig, ax = plt.subplots()
+    ax.scatter(event_clusters[:, 0], event_clusters[:, 1], color='b', alpha=0.5)
+    ax.scatter(event_cluster_centroids[:, 0], event_cluster_centroids[:, 1], s=event_cluster_sizes * 10, color='g', alpha=0.5)
+    ax.set_xlim(ladder.center[0] - ladder.size[0] / 2, ladder.center[0] + ladder.size[0] / 2)
+    ax.set_ylim(ladder.center[1] - ladder.size[1] / 2, ladder.center[1] + ladder.size[1] / 2)
+    ax.grid(zorder=0)
+    ax.set_title(f'Event {trigger_id} Banco Hits Global Coordinates Ladder {ladder.name}')
+    ax.set_xlabel('X (mm)')
+    ax.set_ylabel('Y (mm)')
     fig.tight_layout()
 
 
@@ -603,7 +749,7 @@ def std_align(z0, ray_data, cluster_centroids, trigger_ids, ladder, plot=True):
             ax.plot(plot_z_range, quadratic_shift(plot_z_range, *popt), color='r', alpha=0.4)
             ax.axvline(z0, color='r', linestyle='--', label='Measured z')
             ax.axvline(z1, color='g', linestyle='--', label='Minimized z')
-            ax.grid()
+            ax.grid(zorder=0)
             ax.legend()
             ax.set_title(f'Ladder {ladder} {std_name} vs Z')
             ax.set_xlabel('Z (mm)')
@@ -625,7 +771,7 @@ def banco_ref_std_z_alignment(ladder, ray_data, plot=True, z_align_range=20, z_a
 
     # Eliminate events in which ray is too far from mean
     x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, z0, ray_trigger_ids)
-    x_rays_filter, y_rays_filter, event_num_rays = remove_outlying_rays(x_rays, y_rays, event_num_rays, ladder.size)
+    x_rays_filter, y_rays_filter, event_num_rays = remove_outlying_rays(x_rays, y_rays, event_num_rays, ladder.size, 1.2)
 
     if plot:
         fig, ax = plt.subplots()
@@ -633,7 +779,7 @@ def banco_ref_std_z_alignment(ladder, ray_data, plot=True, z_align_range=20, z_a
         ax.scatter(x_rays_filter, y_rays_filter, alpha=0.5)
         ax.scatter([np.mean(x_rays_filter)], [np.mean(y_rays_filter)], marker='x', color='r')
         title = f'Ref Track Detector Hits Ladder {ladder.name}, z={z0}'
-        ax.grid()
+        ax.grid(zorder=0)
         ax.set_title(title)
         fig.tight_layout()
 
@@ -642,12 +788,42 @@ def banco_ref_std_z_alignment(ladder, ray_data, plot=True, z_align_range=20, z_a
         ax.scatter(x_banco, y_banco, alpha=0.5)
 
     zs = np.linspace(z0 - z_align_range / 2, z0 + z_align_range / 2, z_align_points)
-    x_stds, y_stds, x_residuals, y_residuals = [], [], [], []
+    x_stds, y_stds, x_sigmas, y_sigmas, x_residuals, y_residuals = [], [], [], [], [], []
     for zi in zs:
         x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, zi, event_num_rays)
+        # x_counts, x_bins = np.histogram(x_rays, bins=np.linspace(min(x_rays), max(x_rays), 25))
+        # x_bin_centers = (x_bins[:-1] + x_bins[1:]) / 2
+        # y_counts, y_bins = np.histogram(y_rays, bins=np.linspace(min(y_rays), max(y_rays), 25))
+        # y_bin_centers = (y_bins[:-1] + y_bins[1:]) / 2
+        # popt_x, pcov_x = cf(gaus_amp, x_bin_centers, x_counts, p0=(1, np.mean(x_rays), np.std(x_rays)))
+        # popt_y, pcov_y = cf(gaus_amp, y_bin_centers, y_counts, p0=(1, np.mean(y_rays), np.std(y_rays)))
+        # x_plot = np.linspace(min(x_rays), max(x_rays), 1000)
+        # y_plot = np.linspace(min(y_rays), max(y_rays), 1000)
+        # if plot:
+        #     fig_x, ax_x = plt.subplots()
+        #     ax_x.bar(x_bin_centers, x_counts, width=x_bin_centers[1] - x_bin_centers[0])
+        #     ax_x.plot(x_plot, gaus_amp(x_plot, *popt_x), color='r')
+        #     ax_x.set_title(f'X Ray Distribution z={zi}')
+        #     ax_x.set_xlabel('X Position (mm)')
+        #     ax_x.set_ylabel('Entries')
+        #     fig_x.tight_layout()
+        #
+        #     fig_y, ax_y = plt.subplots()
+        #     ax_y.bar(y_bin_centers, y_counts, width=y_bin_centers[1] - y_bin_centers[0])
+        #     ax_y.plot(y_plot, gaus_amp(y_plot, *popt_y), color='r')
+        #     ax_y.set_title(f'Y Ray Distribution z={zi}')
+        #     ax_y.set_xlabel('Y Position (mm)')
+        #     ax_y.set_ylabel('Entries')
+        #     fig_y.tight_layout()
+
         x_std, y_std = np.std(x_rays), np.std(y_rays)
         x_stds.append(x_std)
         y_stds.append(y_std)
+        # if plot:
+        #     print(f'Z: {zi} X Std: {x_std} Y Std: {y_std}')
+        #     print(f'X Fit_sigma: {popt_x[-1]} Y Fit Sigma: {popt_y[-1]}')
+        # x_sigmas.append(popt_x[-1])
+        # y_sigmas.append(popt_y[-1])
 
     z_fit, popts = [], []
     for std_name, stds in zip(['X Std', 'Y Std'], [x_stds, y_stds]):
@@ -659,12 +835,13 @@ def banco_ref_std_z_alignment(ladder, ray_data, plot=True, z_align_range=20, z_a
         z_fit.append(z1)
         if plot:
             fig, ax = plt.subplots()
-            ax.plot(zs, stds, marker='o')
+            ax.plot(zs, stds, marker='o', label='Measured Std')
+            # ax.plot(zs, sigmas, marker='o', label='Fit Sigma')
             plot_z_range = np.linspace(min(zs), max(zs), 100)
             ax.plot(plot_z_range, quadratic_shift(plot_z_range, *popt), color='r', alpha=0.4)
             ax.axvline(z0, color='r', linestyle='--', label='Measured z')
             ax.axvline(z1, color='g', linestyle='--', label='Minimized z')
-            ax.grid()
+            ax.grid(zorder=0)
             ax.legend()
             ax.set_title(f'Ladder {ladder.name} {std_name} vs Z')
             ax.set_xlabel('Z (mm)')
@@ -672,6 +849,120 @@ def banco_ref_std_z_alignment(ladder, ray_data, plot=True, z_align_range=20, z_a
             fig.tight_layout()
 
     return z_fit[0]
+
+
+def banco_res_z_alignment(ladder, ray_data, z_range=20., plot=True):
+    """
+    Align ladder by minimizing residuals between ray and cluster centroids
+    :param ladder:
+    :param ray_data:
+    :param z_range:
+    :param plot:
+    :return:
+    """
+    original_z = ladder.center[2]
+    zs = np.linspace(original_z - z_range / 2, original_z + z_range / 2, 20)
+    x_res_widths, y_res_widths, sum_res_widths = [], [], []
+    for zi in zs:
+        ladder.set_center(z=zi)
+        x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, plot=False)
+        x_res_widths.append(x_res_sigma)
+        y_res_widths.append(y_res_sigma)
+        sum_res_widths.append(np.sqrt(x_res_sigma ** 2 + y_res_sigma ** 2))
+
+    # Fit both x, y and total residuals to a quadratic function
+    # x_res_widths = np.array(x_res_widths)
+    # y_res_widths = np.array(y_res_widths)
+    # sum_res_widths = np.array(sum_res_widths)
+    # p0 = (-1, 4, original_z)
+    # popt_x, pcov_x = cf(quadratic_shift, zs, x_res_widths, p0=p0)
+    # popt_y, pcov_y = cf(quadratic_shift, zs, y_res_widths, p0=p0)
+    # popt_sum, pcov_sum = cf(quadratic_shift, zs, sum_res_widths, p0=p0)
+
+    # Get min of popt_sum
+    # z_min_sum = popt_sum[-1]
+    z_min_sum = zs[np.argmin(sum_res_widths)]
+
+    if plot:
+        fig, ax = plt.subplots()
+        ax.grid(zorder=0)
+        ax.scatter(zs, x_res_widths, color='blue', marker='o', label='X Residuals')
+        ax.scatter(zs, y_res_widths, color='orange', marker='o', label='Y Residuals')
+        ax.scatter(zs, sum_res_widths, color='green', marker='o', label='Sum Residuals')
+        # zs_plt = np.linspace(min(zs), max(zs), 100)
+        # ax.plot(zs_plt, quadratic_shift(zs_plt, *popt_x), color='blue', alpha=0.3)
+        # ax.plot(zs_plt, quadratic_shift(zs_plt, *popt_y), color='orange', alpha=0.3)
+        # ax.plot(zs_plt, quadratic_shift(zs_plt, *popt_sum), color='green', alpha=0.6)
+        ax.axvline(original_z, color='g', linestyle='--', label='Original Z')
+        ax.axvline(z_min_sum, color='r', linestyle='--', label='Minimized Z')
+        ax.set_title(f'X Residuals vs Z {ladder.name}')
+        ax.set_xlabel('Z (mm)')
+        ax.set_ylabel('X Residual Distribution Gaussian Width (mm)')
+        ax.legend()
+        fig.tight_layout()
+
+    return z_min_sum
+
+
+def banco_xyz_alignment(ladder, ray_data, plot=True):
+    """
+    Align spatial x, y, z simultaneously of ladder by minimizing residuals between ray and cluster centroids
+    :param ladder:
+    :param ray_data:
+    :param plot:
+    :return:
+    """
+    original_center = ladder.center
+    x0, y0, z0 = original_center
+    xs = np.linspace(x0 - 10, x0 + 10, 20)
+    ys = np.linspace(y0 - 10, y0 + 10, 20)
+    zs = np.linspace(z0 - 10, z0 + 10, 20)
+    x_res_widths, y_res_widths, sum_res_widths = [], [], []
+    for xi in xs:
+        for yi in ys:
+            for zi in zs:
+                ladder.set_center(x=xi, y=yi, z=zi)
+                x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, plot=False)
+                x_res_widths.append(x_res_sigma)
+                y_res_widths.append(y_res_sigma)
+                sum_res_widths.append(np.sqrt(x_res_sigma ** 2 + y_res_sigma ** 2))
+
+    z_min_sum = zs[np.argmin(sum_res_widths)]
+
+    if plot:
+        # Converting the lists into numpy arrays for easier manipulation
+        sum_res_widths = np.array(sum_res_widths)
+
+        # Create a meshgrid for plotting
+        X, Y, Z = np.meshgrid(xs, ys, zs)
+        X = X.flatten()
+        Y = Y.flatten()
+        Z = Z.flatten()
+
+        # Find the index of the minimum sum_res_widths value
+        min_index = np.argmin(sum_res_widths)
+
+        # Plotting
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Scatter plot
+        sc = ax.scatter(X, Y, Z, c=sum_res_widths, cmap='viridis', marker='o')
+
+        # Marking the smallest value with a red star
+        ax.scatter(X[min_index], Y[min_index], Z[min_index], color='red', s=100, label='Min sum_res_widths')
+
+        # Adding color bar for the sum_res_widths
+        cb = plt.colorbar(sc)
+        cb.set_label('Sum of Residual Widths')
+
+        # Labels and title
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title('3D Scatter Plot of Residual Widths')
+
+        fig.tight_layout()
 
 
 def banco_get_pixel_spacing(ladder, ray_data, plot=True):
@@ -944,6 +1235,24 @@ def banco_get_residuals(ladder, ray_data, plot=False):
 
     # return fitted_mu_x, fitted_sigma_x, fitted_mu_y, fitted_sigma_y
     return popt_x[1], popt_x[2], popt_y[1], popt_y[2]
+
+
+def get_banco_run_name(base_dir, start_string='multinoiseScan', end_string='-ladder'):
+    """
+    Find the name of the banco run from the base directory. Run name starts with start string and ends with end string,
+    with the date and time in between. Use the first file containing both strings.
+    :param base_dir: Base directory to search for run name.
+    :param start_string: String to start run name.
+    :param end_string: String to end run name.
+    :return: Run name.
+    """
+    run_name = None
+    for file in os.listdir(base_dir):
+        if start_string in file and end_string in file:
+            # Run name is string up to end string
+            run_name = file.split(end_string)[0] + end_string
+            break
+    return run_name
 
 
 def linear(x, a, b):

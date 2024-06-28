@@ -25,8 +25,12 @@ class BancoLadder:
 
         self.pitch_x = 26.88  # microns spacing between pixels in x direction
         self.pitch_y = 29.24  # microns spacing between pixels in y direction
-        self.chip_space = 75  # microns space between chips in y direction
+        self.passive_edge_y = 29.12  # microns inactive edge on the y side of each chip
+        self.chip_space = 100 + 2 * self.passive_edge_y  # microns space between chips in y direction
+
         self.n_pix_y = 1024  # Number of pixels in y direction
+        self.n_pix_x = 512  # Number of pixels in x direction
+        self.n_chips = 5  # Number of chips in y direction
 
         if config is not None:
             self.set_from_config(config)
@@ -81,10 +85,13 @@ class BancoLadder:
     def read_banco_data(self, file_path):
         self.data = read_banco_file(file_path)
 
-    def read_banco_noise(self, file_path, noise_threshold=0.01):
+    def read_banco_noise(self, file_path, noise_threshold=1):
         self.noise_pixels = get_noise_pixels(read_banco_file(file_path), noise_threshold)
 
-    def get_data_noise_pixels(self, noise_threshold=0.01):
+    def get_data_noise_pixels(self, noise_threshold=None):
+        if noise_threshold is None:  # Calc prob of pixel firing for 4 hits per event. Multiply for fluctuations
+            noise_threshold = 4.0 / (self.n_pix_y * self.n_pix_x * self.n_chips) * 10
+        noise_threshold = max(1, int(noise_threshold * len(self.data)))
         self.data_noise_pixels = get_noise_pixels(self.data, noise_threshold)
 
     def combine_data_noise(self):
@@ -100,9 +107,16 @@ class BancoLadder:
         for trigger_id, hit_pixels in event_split_data.items():
             if len(hit_pixels) < min_pixels or len(hit_pixels) > max_pixels:
                 continue
-            clusters = find_clusters(hit_pixels, self.noise_pixels, min_pixels=min_pixels)
-            if chip is not None:
-                clusters = [cluster for cluster in clusters if np.all(cluster[:, 1] // 1024 == chip)]
+            clusters = []  # Cluster chip by chip. Gap between is too wide for clusters to span chips.
+            for chip_i in range(max(hit_pixels[:, 1] // self.n_pix_y) + 1):
+                if chip is not None and chip_i != chip:
+                    continue
+                chip_hit_pixels = hit_pixels[np.where(hit_pixels[:, 1] // self.n_pix_y == chip_i)]
+                chip_clusters = find_clusters(chip_hit_pixels, self.noise_pixels, min_pixels=min_pixels)
+                clusters.extend(chip_clusters)
+            # clusters = find_clusters(hit_pixels, self.noise_pixels, min_pixels=min_pixels)
+            # if chip is not None:
+            #     clusters = [cluster for cluster in clusters if np.all(cluster[:, 1] // self.n_pix_y == chip)]
             if len(clusters) == 0:
                 continue
             self.cluster_triggers.append(trigger_id)
@@ -153,6 +167,15 @@ class BancoLadder:
         # print(f'Translation: {self.center}')
         self.cluster_centroids = self.cluster_centroids + self.center
         # print(f'Cluster centroids after translation: {self.cluster_centroids[:4]}')
+
+    def get_clusters_global_coords(self):
+        clusters_global_coords, cluster_centoids_global_coords = [], []
+        for clusters, cluster_centroids in zip(self.clusters, self.all_cluster_centroids_local_coords):
+            clusters_xy = convert_clusters_to_xy(clusters, self.pitch_x, self.pitch_y, self.chip_space, self.n_pix_y)
+            clusters_global_coords.append(clusters_xy)
+            centroids, num_pixels = get_cluster_centroids(clusters_xy)
+            cluster_centoids_global_coords.append(centroids)
+        return clusters_global_coords, cluster_centoids_global_coords
 
 
 def read_banco_file(file_path):
