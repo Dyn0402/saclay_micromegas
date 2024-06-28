@@ -189,10 +189,11 @@ def read_raw_banco():
 
 def banco_analysis():
     vector.register_awkward()
-    base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
-    det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # base_dir = '/local/home/dn277127/Bureau/banco_test3/'
-    # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
+    # det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_dir = '/local/home/dn277127/Bureau/banco_test4/'
+    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    run_name = 'multinoiseScan_240626_130901-B0-ladder'
     run_json_path = f'{base_dir}run_config.json'
     run_data = get_det_data(run_json_path)
     print(run_data)
@@ -212,13 +213,13 @@ def banco_analysis():
         ladder = BancoLadder(config=det_info)
         ladder_num = int(ladder.name[-3:])
 
-        file_path = f'{base_dir}multinoiseScan_240514_231935-B0-ladder{ladder_num}.root'
+        file_path = f'{base_dir}{run_name}{ladder_num}.root'
         noise_path = f'{base_dir}Noise_{ladder_num}.root'
         ladder.read_banco_noise(noise_path)
         ladder.read_banco_data(file_path)
         ladder.get_data_noise_pixels()
         ladder.combine_data_noise()
-        ladder.cluster_data(min_pixels=2, max_pixels=5, chip=0)
+        ladder.cluster_data(min_pixels=2, max_pixels=5, chip=None)
         ladder.get_largest_clusters()
         ladder.convert_cluster_coords()
 
