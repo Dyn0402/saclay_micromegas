@@ -37,6 +37,23 @@ class M3RefTracking:
         else:
             return get_xy_positions(self.ray_data, z, event_list)
 
+    def get_traversing_triggers(self, z, x_bounds, y_bounds, expansion_factor=1):
+        """
+        Get the event numbers of events that traverse the detector, given by the x and y bounds at altitude z.
+        :param z: mm Altitude at which to get the traversing events.
+        :param x_bounds: mm Tuple of x bounds of detector at altitude z.
+        :param y_bounds: mm Tuple of y bounds of detector at altitude z.
+        :param expansion_factor: Factor to expand the bounds by.
+        :return: List of event numbers that traverse the detector.
+        """
+        x_positions, y_positions, event_nums = self.get_xy_positions(z)
+        x_min, x_max = x_bounds
+        y_min, y_max = y_bounds
+        x_min, x_max = x_min - (x_max - x_min) * expansion_factor, x_max + (x_max - x_min) * expansion_factor
+        y_min, y_max = y_min - (y_max - y_min) * expansion_factor, y_max + (y_max - y_min) * expansion_factor
+        mask = (x_min < x_positions) & (x_positions < x_max) & (y_min < y_positions) & (y_positions < y_max)
+        return event_nums[mask]
+
     def cut_on_chi2(self, chi2_cut):
         chi2_x, chi2_y = self.ray_data['Chi2X'], self.ray_data['Chi2Y']
         mask = (chi2_x < chi2_cut) & (chi2_y < chi2_cut)
