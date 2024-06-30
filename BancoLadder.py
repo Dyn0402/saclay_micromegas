@@ -9,6 +9,7 @@ Created as saclay_micromegas/BancoLadder.py
 """
 
 import numpy as np
+import quaternion
 import matplotlib.pyplot as plt
 
 import uproot
@@ -21,7 +22,8 @@ class BancoLadder:
         self.name = name
         self.center = np.array([0, 0, 0])
         self.size = np.array([0, 0, 0])
-        self.orientation = np.array([0, 0, 0])  # degrees Rotation along x, y, z axes
+        # self.orientation = np.array([0, 0, 0])  # degrees Rotation along x, y, z axes
+        self.rotations = np.array([])  # [degrees, x_bit, y_bit, z_bit] Un-normalized quaterion rotations
 
         self.pitch_x = 26.88  # microns spacing between pixels in x direction
         self.pitch_y = 29.24  # microns spacing between pixels in y direction
@@ -66,16 +68,60 @@ class BancoLadder:
     def set_size(self, x, y, z):
         self.size = np.array([x, y, z])
 
-    def set_orientation(self, x=0, y=0, z=0):
-        self.orientation = np.array([x, y, z])
+    # def set_orientation(self, x=None, y=None, z=None):
+    #     if x is None:
+    #         x = self.orientation[0]
+    #     if y is None:
+    #         y = self.orientation[1]
+    #     if z is None:
+    #         z = self.orientation[2]
+    #     self.orientation = np.array([x, y, z])
+
+    def set_orientation(self, x=None, y=None, z=None):
+        rotations = []
+        if x is not None:
+            rotations.append(quaternion_from_angle_axis(x, np.array([1, 0, 0])))
+        if y is not None:
+            rotations.append(quaternion_from_angle_axis(y, np.array([0, 1, 0])))
+        if z is not None:
+            rotations.append(quaternion_from_angle_axis(z, np.array([0, 0, 1])))
+        self.rotations = np.array(rotations)
+
+    def add_rotation(self, angle, axis):
+        if isinstance(axis, str):
+            axis = np.array([1 if axis == 'x' else 0, 1 if axis == 'y' else 0, 1 if axis == 'z' else 0])
+        else:
+            axis = np.array(axis)
+        if len(self.rotations) == 0:
+            self.rotations = np.array([quaternion_from_angle_axis(angle, axis)])
+        else:
+            self.rotations = np.vstack([self.rotations, np.array(quaternion_from_angle_axis(angle, axis))])
+
+    def replace_last_rotation(self, angle, axis):
+        if isinstance(axis, str):
+            axis = np.array([1 if axis == 'x' else 0, 1 if axis == 'y' else 0, 1 if axis == 'z' else 0])
+        else:
+            axis = np.array(axis)
+        if len(self.rotations) == 0:
+            self.rotations = np.array([quaternion_from_angle_axis(angle, axis)])
+        else:
+            self.rotations[-1] = np.array(quaternion_from_angle_axis(angle, axis))
+
+    def set_rotations(self, rotations):
+        self.rotations = np.array(rotations)
 
     def set_from_config(self, det_config):
         self.name = det_config['name']
         self.set_size(det_config['det_size']['x'], det_config['det_size']['y'], det_config['det_size']['z'])
         self.set_center(det_config['det_center_coords']['x'], det_config['det_center_coords']['y'],
                         det_config['det_center_coords']['z'])
-        self.set_orientation(det_config['det_orientation']['x'], det_config['det_orientation']['y'],
-                             det_config['det_orientation']['z'])
+
+        x_rot, y_rot = det_config['det_orientation']['x'], det_config['det_orientation']['y']
+        z_rot = det_config['det_orientation']['z']
+        x_rot = None if x_rot == 0 else x_rot
+        y_rot = None if y_rot == 0 else y_rot
+        z_rot = None if z_rot == 0 else z_rot
+        self.set_orientation(x_rot, y_rot, z_rot)
 
     def set_pitch_x(self, pitch_x):
         self.pitch_x = pitch_x
@@ -101,10 +147,13 @@ class BancoLadder:
     def combine_data_noise(self):
         self.noise_pixels = np.concatenate([self.noise_pixels, self.data_noise_pixels], axis=0)
 
-    def cluster_data(self, min_pixels=2, max_pixels=100, chip=None):
-        trigger_col = self.data[:, 0]  # Get all triggers, repeated if more than one hit per trigger
+    def cluster_data(self, min_pixels=2, max_pixels=100, chip=None, event_list=None):
+        data = self.data
+        if event_list is not None:
+            data = data[np.isin(data[:, 0], event_list)]
+        trigger_col = data[:, 0]  # Get all triggers, repeated if more than one hit per trigger
         unique_trigger_rows = np.unique(trigger_col, return_index=True)[1]  # Get first row indices of unique triggers
-        event_split_data = np.split(self.data, unique_trigger_rows[1:])  # Split the data into events
+        event_split_data = np.split(data, unique_trigger_rows[1:])  # Split the data into events
         event_split_data = {event[0][0]: event[:, 1:] for event in event_split_data}  # Dict of events by trigger
 
         self.cluster_triggers, self.clusters = [], []
@@ -157,23 +206,18 @@ class BancoLadder:
 
     def convert_cluster_coords(self):
         self.cluster_centroids = self.largest_cluster_centroids_local_coords
-        # print(f'Cluster centroids from clustering: {self.cluster_centroids[:4]}')
         zs = np.full((len(self.cluster_centroids), 1), 0)  # Add z coordinate to centroids
-        # print(f'Zs: {zs[:4]}')
         self.cluster_centroids = np.hstack((self.cluster_centroids, zs))  # Combine x, y, z
-        # print(f'Cluster centroids after hstack: {self.cluster_centroids[:4]}')
 
         # Center coordinates around center of detector
         self.cluster_centroids = self.cluster_centroids - self.active_size / 2
 
         # Rotate cluster centroids to global coordinates
-        self.cluster_centroids = rotate_coordinates(self.cluster_centroids, self.orientation)
-        # print(f'Cluster centroids after rotation: {self.cluster_centroids[:4]}')
+        equivalent_quaternion = combine_quaternions(self.rotations)
+        self.cluster_centroids = rotate_coordinates(self.cluster_centroids, equivalent_quaternion)
 
         # Translate cluster centroids to global coordinates
-        # print(f'Translation: {self.center}')
         self.cluster_centroids = self.cluster_centroids + self.center
-        # print(f'Cluster centroids after translation: {self.cluster_centroids[:4]}')
 
     def get_cluster_centroids_global_coords(self):
         cluster_centoids_global_coords = []
@@ -183,7 +227,8 @@ class BancoLadder:
             zs = np.full((len(centroids), 1), 0)  # Add z coordinate to centroids
             centroids = np.hstack((centroids, zs))  # Combine x, y, z
             centroids = centroids - self.active_size / 2
-            centroids = rotate_coordinates(centroids, self.orientation)
+            equivalent_quaternion = combine_quaternions(self.rotations)
+            centroids = rotate_coordinates(centroids, equivalent_quaternion)
             centroids = centroids + self.center
             cluster_centoids_global_coords.append(centroids)
         return cluster_centoids_global_coords
@@ -199,7 +244,6 @@ class BancoLadder:
 
     def plot_cluster_centroids(self):
         fig, ax = plt.subplots()
-        print(self.cluster_centroids)
         ax.scatter(self.cluster_centroids[:, 0], self.cluster_centroids[:, 1], marker='o', alpha=0.5)
         ax.set_title('Largest Cluster Centroids')
         ax.set_xlabel('X Position (mm)')
@@ -354,27 +398,159 @@ def convert_row_col_to_xy(row, col, chip=None, n_pix_y=1024, pix_size_x=30., pix
 #     return x_rot, y_rot, z_rot
 
 
-def rotate_coordinates(coords, orientation):
+# def rotate_coordinates(coords, orientation):
+#     """
+#     Rotate list of 3 dimensional coordinates by the given 3d orientation angles.
+#     :param coords:
+#     :param orientation:
+#     :return:
+#     """
+#
+#     orientation = np.deg2rad(orientation)
+#
+#     x_rot = coords[:, 0] * np.cos(orientation[0]) - coords[:, 1] * np.sin(orientation[0])
+#     y_rot = coords[:, 0] * np.sin(orientation[0]) + coords[:, 1] * np.cos(orientation[0])
+#     z_rot = coords[:, 2]
+#
+#     x_rot = x_rot * np.cos(orientation[1]) - z_rot * np.sin(orientation[1])
+#     z_rot = x_rot * np.sin(orientation[1]) + z_rot * np.cos(orientation[1])
+#
+#     y_rot = y_rot * np.cos(orientation[2]) - z_rot * np.sin(orientation[2])
+#     z_rot = y_rot * np.sin(orientation[2]) + z_rot * np.cos(orientation[2])
+#
+#     return np.array([x_rot, y_rot, z_rot]).T
+
+
+# def rotate_coordinates(coords, angles):
+#     """
+#     Rotate 3D coordinates about the x, y, and z axes.
+#     :param coords: Array of 3D coordinates (shape: Nx3)
+#     :param angles: 3D vector representing the rotation angles for x, y, and z axes (in radians)
+#     :return: Array of rotated 3D coordinates (shape: Nx3)
+#     """
+#     x_angle, y_angle, z_angle = angles
+#
+#     # Rotation matrix for x-axis
+#     rot_x = np.array([[1, 0, 0],
+#                       [0, np.cos(x_angle), -np.sin(x_angle)],
+#                       [0, np.sin(x_angle), np.cos(x_angle)]])
+#
+#     # Rotation matrix for y-axis
+#     rot_y = np.array([[np.cos(y_angle), 0, np.sin(y_angle)],
+#                       [0, 1, 0],
+#                       [-np.sin(y_angle), 0, np.cos(y_angle)]])
+#
+#     # Rotation matrix for z-axis
+#     rot_z = np.array([[np.cos(z_angle), -np.sin(z_angle), 0],
+#                       [np.sin(z_angle), np.cos(z_angle), 0],
+#                       [0, 0, 1]])
+#
+#     # Combined rotation matrix
+#     rot_matrix = np.dot(rot_z, np.dot(rot_y, rot_x))
+#
+#     # Apply rotation matrix to each coordinate
+#     rotated_coords = np.dot(coords, rot_matrix.T)
+#
+#     return rotated_coords
+
+
+# def rotate_using_quaternions(coords, quaternion_rotation):
+#     """
+#     Rotate 3D coordinates using a quaternion.
+#     :param coords: Array of 3D coordinates (shape: Nx3)
+#     :param quaternion_rotation: Quaternion representing the rotation
+#     :return: Array of rotated 3D coordinates (shape: Nx3)
+#     """
+#     # Convert to quaternion array
+#     q_rotation = np.quaternion(*quaternion_rotation)
+#
+#     # Convert each coordinate to a quaternion, apply rotation, and convert back
+#     rotated_coords = np.array([q_rotation * np.quaternion(0, *coord) * q_rotation.conjugate() for coord in coords])
+#
+#     # Extract the vector part (x, y, z)
+#     rotated_coords = np.array([[q.x, q.y, q.z] for q in rotated_coords])
+#
+#     return rotated_coords
+
+
+def rotate_coordinates(coords, quat):
     """
-    Rotate list of 3 dimensional coordinates by the given 3d orientation angles.
-    :param coords:
-    :param orientation:
-    :return:
+    Rotate 3D coordinates using a quaternion.
+    :param coords: Array of 3D coordinates (shape: Nx3)
+    :param quat: Quaternion (w, x, y, z)
+    :return: Array of rotated 3D coordinates (shape: Nx3)
     """
+    # Convert quaternion to rotation matrix
+    rotation_matrix = quaternion_to_rotation_matrix(quat)
 
-    orientation = np.deg2rad(orientation)
+    # Apply rotation matrix to each coordinate
+    rotated_coords = np.dot(coords, rotation_matrix.T)
 
-    x_rot = coords[:, 0] * np.cos(orientation[0]) - coords[:, 1] * np.sin(orientation[0])
-    y_rot = coords[:, 0] * np.sin(orientation[0]) + coords[:, 1] * np.cos(orientation[0])
-    z_rot = coords[:, 2]
+    return rotated_coords
 
-    x_rot = x_rot * np.cos(orientation[1]) - z_rot * np.sin(orientation[1])
-    z_rot = x_rot * np.sin(orientation[1]) + z_rot * np.cos(orientation[1])
 
-    y_rot = y_rot * np.cos(orientation[2]) - z_rot * np.sin(orientation[2])
-    z_rot = y_rot * np.sin(orientation[2]) + z_rot * np.cos(orientation[2])
+def quaternion_from_angle_axis(angle, axis):
+    """
+    Create a quaternion from an angle and rotation axis.
+    :param angle: Rotation angle in degrees
+    :param axis: Rotation axis (x, y, z)
+    :return: Quaternion (w, x, y, z)
+    """
+    half_angle = np.deg2rad(angle) / 2
+    w = np.cos(half_angle)
+    x, y, z = axis * np.sin(half_angle)
+    return w, x, y, z
 
-    return np.array([x_rot, y_rot, z_rot]).T
+
+def quaternion_multiply(q1, q2):
+    """
+    Multiply two quaternions.
+    :param q1: First quaternion (w, x, y, z)
+    :param q2: Second quaternion (w, x, y, z)
+    :return: Resulting quaternion from q1 * q2 (w, x, y, z)
+    """
+    q1 = np.quaternion(*q1)
+    q2 = np.quaternion(*q2)
+    q_result = q1 * q2
+    return q_result.w, q_result.x, q_result.y, q_result.z
+
+
+def combine_quaternions(quaternion_list):
+    """
+    Combine a list of quaternions into a single equivalent quaternion.
+    :param quaternion_list: List of quaternions (each quaternion is a list [w, x, y, z])
+    :return: Equivalent quaternion from multiplying all quaternions in the list (numpy.quaternion)
+    """
+    if len(quaternion_list) == 0:
+        return np.quaternion(1, 0, 0, 0)  # Identity quaternion if the list is empty
+
+    # Convert list of lists to list of numpy.quaternion objects
+    quaternions = [np.quaternion(q[0], q[1], q[2], q[3]) for q in quaternion_list]
+
+    # Start with the first quaternion
+    combined_quaternion = quaternions[0]
+
+    # Multiply sequentially with the rest of the quaternions
+    for q in quaternions[1:]:
+        combined_quaternion *= q
+
+    return combined_quaternion
+
+
+def quaternion_to_rotation_matrix(quat):
+    """
+    Convert a quaternion into a 3x3 rotation matrix.
+    :param quat: Quaternion (w, x, y, z)
+    :return: 3x3 rotation matrix
+    """
+    if isinstance(quat, np.quaternion):
+        quat = (quat.w, quat.x, quat.y, quat.z)
+    w, x, y, z = quat
+    return np.array([
+        [1 - 2*y**2 - 2*z**2, 2*x*y - 2*w*z, 2*x*z + 2*w*y],
+        [2*x*y + 2*w*z, 1 - 2*x**2 - 2*z**2, 2*y*z - 2*w*x],
+        [2*x*z - 2*w*y, 2*y*z + 2*w*x, 1 - 2*x**2 - 2*y**2]
+    ])
 
 
 def find_cluster_test():
