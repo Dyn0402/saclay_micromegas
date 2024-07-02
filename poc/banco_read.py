@@ -192,8 +192,8 @@ def read_raw_banco():
 
 def banco_analysis():
     vector.register_awkward()
-    base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
-    # base_dir = 'F:/Saclay/banco_data/banco_stats2/'
+    # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
+    base_dir = 'F:/Saclay/banco_data/banco_stats3/'
     det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # base_dir = '/local/home/dn277127/Bureau/banco_test4/'
     # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
