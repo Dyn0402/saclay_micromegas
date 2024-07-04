@@ -13,6 +13,8 @@ import numpy as np
 import uproot
 import awkward as ak
 
+import matplotlib.pyplot as plt
+
 
 class M3RefTracking:
     def __init__(self, ray_dir, file_nums='all', variables=None, single_track=True):
@@ -88,6 +90,15 @@ class M3RefTracking:
         for var in ['X_Up', 'Y_Up', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']:
             if self.variables is None or var in self.variables:
                 self.ray_data[var] = ak.ravel(self.ray_data[var][mask])
+
+    def plot_xy(self, z, event_list=None, multi_track_events=False, one_track=True):
+        x, y, event_nums = self.get_xy_positions(z, event_list, multi_track_events, one_track)
+        fig, ax = plt.subplots()
+        ax.scatter(x, y, alpha=0.5)
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+        ax.set_title(f'xy Positions at z={z:.2f} mm')
+        fig.tight_layout()
 
 
 def get_ray_data(ray_dir, file_nums='all', variables=None):

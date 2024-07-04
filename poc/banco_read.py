@@ -193,10 +193,10 @@ def read_raw_banco():
 def banco_analysis():
     vector.register_awkward()
     # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
-    base_dir = 'F:/Saclay/banco_data/banco_stats4/'
-    det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # base_dir = '/local/home/dn277127/Bureau/banco_test4/'
-    # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = 'F:/Saclay/banco_data/banco_stats4/'
+    # det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_dir = '/local/home/dn277127/Bureau/banco_test5/'
+    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     run_json_path = f'{base_dir}run_config.json'
     run_name = get_banco_run_name(base_dir)
     run_data = get_det_data(run_json_path)
@@ -216,6 +216,8 @@ def banco_analysis():
         print(det_info)
         ladder = BancoLadder(config=det_info)
         ladder_num = int(ladder.name[-3:])
+        if ladder_num == 160:
+            continue
 
         z_orig = ladder.center[2]
         x_bnds = ladder.center[0] - ladder.size[0] / 2, ladder.center[0] + ladder.size[0] / 2
@@ -227,9 +229,13 @@ def banco_analysis():
         # print(ray_data)
         # print(len(ray_data))
         # input()
-        ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=200)
+        ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=-0.1)
         banco_traversing_triggers = ray_traversing_triggers - 1  # Rays start at 1, banco starts at 0
-
+        print(f'Number of traversing triggers: {len(ray_traversing_triggers)}')
+        print(f'Bounds: x={x_bnds}, y={y_bnds}, z={z_orig}')
+        # ray_data.plot_xy(z_orig, ray_traversing_triggers)
+        # ray_data.plot_xy(z_orig)
+        # plt.show()
 
         file_path = f'{base_dir}{run_name}{ladder_num}.root'
         noise_path = f'{base_dir}Noise_{ladder_num}.root'
@@ -316,8 +322,10 @@ def banco_analysis():
         # print(ladder.cluster_centroids[:4])
         # input()
         iterations, zs = list(np.arange(10)), []
-        ladder.add_rotation(0, [0, 0, 0])
+        # ladder.add_rotation(0, [0, 0, 0])
         z_rot_align = 0
+        good_triggers = get_close_triggers(ladder, ray_data)
+        banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=True)
         for i in iterations:
             print()
             print(f'Iteration {i}: Getting residuals for ladder {ladder_num} with '
@@ -327,7 +335,7 @@ def banco_analysis():
             # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
             # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma, r_mu, r_sig = banco_get_residuals_no_fit(ladder, ray_data)
             good_triggers = get_close_triggers(ladder, ray_data)
-            x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers)
+            x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=False)
             print(f'Ladder {ladder.name} X Residuals Mean: {x_mu} Sigma: {x_sd}')
             print(f'Ladder {ladder.name} Y Residuals Mean: {y_mu} Sigma: {y_sd}')
             # plt.show()
@@ -339,13 +347,15 @@ def banco_analysis():
             ladder.set_center(z=z_align)
             ladder.convert_cluster_coords()
 
-            x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=False, n_points=100)
-            ladder.replace_last_rotation(z_rot_align, 'z')
-            ladder.convert_cluster_coords()
+            # x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=False, n_points=100)
+            # ladder.replace_last_rotation(z_rot_align, 'z')
+            # ladder.convert_cluster_coords()
 
         # x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=True)
         # print(f'Final rotation: {ladder.rotations}')
         # plt.show()
+        banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=True)
+        plt.show()
 
         fig, ax = plt.subplots()
         ax.plot(iterations + [iterations[-1] + 1], zs + [ladder.center[2]], marker='o')
@@ -400,7 +410,7 @@ def banco_analysis():
         # ladder.convert_cluster_coords()
 
         ladder.plot_cluster_centroids()
-        # plt.show()
+        plt.show()
         ladders.append(ladder)
 
     # plt.show()
@@ -582,13 +592,28 @@ def banco_noise_analysis():
 #     return x_residuals, y_residuals
 
 
-def get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids):
+def get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids, plot=False):
     x_rays = np.array(x_rays)
     y_rays = np.array(y_rays)
     cluster_centroids = np.array(cluster_centroids)
 
     x_residuals = x_rays - cluster_centroids[:, 0]
     y_residuals = y_rays - cluster_centroids[:, 1]
+
+    if plot:
+        # Plot a 2D scatter plot of the x, y rays and x, y cluster centroids, with a line connecting the ray to the
+        # cluster centroid
+        fig, ax = plt.subplots()
+        ax.scatter(x_rays, y_rays, color='blue', label='Ray', marker='.', alpha=0.5)
+        ax.scatter(cluster_centroids[:, 0], cluster_centroids[:, 1], color='green', label='Cluster Centroid',
+                   marker='.', alpha=0.5)
+        for x_ray, y_ray, x_cent, y_cent in zip(x_rays, y_rays, cluster_centroids[:, 0], cluster_centroids[:, 1]):
+            ax.plot([x_ray, x_cent], [y_ray, y_cent], color='red', alpha=0.5)
+        ax.set_title('Ray vs Cluster Centroid Residuals')
+        ax.set_xlabel('X Position (mm)')
+        ax.set_ylabel('Y Position (mm)')
+        ax.legend()
+        fig.tight_layout()
 
     return x_residuals, y_residuals
 
@@ -1011,7 +1036,7 @@ def banco_res_z_alignment(ladder, ray_data, z_range=20., plot=True):
         ladder.set_center(z=zi)
         ladder.convert_cluster_coords()
         # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, plot=False)
-        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, common_triggers)
+        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, common_triggers, plot=plot)
         x_res_widths.append(x_sd)
         y_res_widths.append(y_sd)
         sum_res_widths.append(np.sqrt(x_sd ** 2 + y_sd ** 2))
@@ -1561,7 +1586,7 @@ def banco_get_residuals_no_fit_triggers(ladder, ray_data, ray_triggers, plot=Fal
     cluster_centroids, banco_triggers = np.array(ladder.cluster_centroids), np.array(ladder.cluster_triggers) + 1
     cluster_centroids = cluster_centroids[np.isin(banco_triggers, event_num_rays)]
 
-    x_res, y_res = get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids)
+    x_res, y_res = get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids, plot=plot)
     x_res, y_res = np.array(x_res), np.array(y_res)
     r_res = np.sqrt(x_res ** 2 + y_res ** 2)
 
