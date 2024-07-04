@@ -193,7 +193,7 @@ def read_raw_banco():
 def banco_analysis():
     vector.register_awkward()
     # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
-    base_dir = 'F:/Saclay/banco_data/banco_stats3/'
+    base_dir = 'F:/Saclay/banco_data/banco_stats4/'
     det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # base_dir = '/local/home/dn277127/Bureau/banco_test4/'
     # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
@@ -316,22 +316,31 @@ def banco_analysis():
         # print(ladder.cluster_centroids[:4])
         # input()
         iterations, zs = list(np.arange(10)), []
+        ladder.add_rotation(0, [0, 0, 0])
+        z_rot_align = 0
         for i in iterations:
             print()
             print(f'Iteration {i}: Getting residuals for ladder {ladder_num} with '
                   f'center=[{ladder.center[0]:.2f}, {ladder.center[1]:.2f}, {ladder.center[2]:.2f}] mm, rotations='
-                  f'{ladder.rotations}')
+                  f'z_rot={z_rot_align:.3f}, {ladder.rotations}')
             zs.append(ladder.center[2])
-            x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
-            print(f'Ladder {ladder.name} X Residuals Mean: {x_res_mean} Sigma: {x_res_sigma}')
-            print(f'Ladder {ladder.name} Y Residuals Mean: {y_res_mean} Sigma: {y_res_sigma}')
+            # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
+            # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma, r_mu, r_sig = banco_get_residuals_no_fit(ladder, ray_data)
+            good_triggers = get_close_triggers(ladder, ray_data)
+            x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers)
+            print(f'Ladder {ladder.name} X Residuals Mean: {x_mu} Sigma: {x_sd}')
+            print(f'Ladder {ladder.name} Y Residuals Mean: {y_mu} Sigma: {y_sd}')
             # plt.show()
-            aligned_x, aligned_y = ladder.center[0] + x_res_mean, ladder.center[1] + y_res_mean
+            aligned_x, aligned_y = ladder.center[0] + x_mu, ladder.center[1] + y_mu
             ladder.set_center(x=aligned_x, y=aligned_y)
             ladder.convert_cluster_coords()
 
             z_align = banco_res_z_alignment(ladder, ray_data, z_range=(20 / (i + 1)), plot=False)
             ladder.set_center(z=z_align)
+            ladder.convert_cluster_coords()
+
+            x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=False, n_points=100)
+            ladder.replace_last_rotation(z_rot_align, 'z')
             ladder.convert_cluster_coords()
 
         # x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=True)
@@ -346,18 +355,37 @@ def banco_analysis():
         ax.set_ylabel('Z Alignment (mm)')
         fig.tight_layout()
 
+        # good_triggers = get_close_triggers(ladder, ray_data)
+        # original_center = ladder.center
+        # print('Optimizing center...')
+        # result = minimize(minimize_translation_residuals, original_center, args=(ladder, ray_data, good_triggers),
+        #                   tol=1e-4)
+        # print("Optimization Result:")
+        # print("Success:", result.success)
+        # print("Message:", result.message)
+        # print("Number of Iterations:", result.nit)
+        # print("Optimal Value of x:", result.x)
+        # print("Function Value at Optimal x:", result.fun)
+        # ladder.set_center(x=result.x[0], y=result.x[1], z=result.x[2])
+        # x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers)
+        # aligned_x, aligned_y = ladder.center[0] + x_mu, ladder.center[1] + y_mu
+        # ladder.set_center(x=aligned_x, y=aligned_y)
+        # print(f'Original center: {original_center}')
+        # print(f'New center: {ladder.center}')
+        # plt.show()
+
         # banco_res_z_alignment(ladder, ray_data, plot=True)
         # banco_xyz_alignment(ladder, ray_data, plot=True)
         # plt.show()
 
-        x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
+        # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
         # plt.show()
 
         # banco_get_pixel_spacing(ladder, ray_data, True)
         # plt.show()
 
         x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=True)
-        ladder.add_rotation(z_rot_align, 'z')
+        # ladder.add_rotation(z_rot_align, 'z')
         # plt.show()
         # ladder.set_orientation(x_rot_align, y_rot_align, z_rot_align)
         # print(f'{ladder.name} new orientation: {ladder.orientation}')
@@ -372,13 +400,16 @@ def banco_analysis():
         # ladder.convert_cluster_coords()
 
         ladder.plot_cluster_centroids()
-        plt.show()
+        # plt.show()
         ladders.append(ladder)
 
     # plt.show()
     print()
     for ladder in ladders:
         print(f'Ladder {ladder.name} Center: {ladder.center}, Rotations: {ladder.rotations}')
+
+    print(f'Bottom Arm ladder z spacing: {ladders[1].center[2] - ladders[0].center[2]} mm')
+    print(f'Top Arm ladder z spacing: {ladders[3].center[2] - ladders[2].center[2]} mm')
 
     # Combine ladder_cluster_centroids into single dict with trigger_id as key and {ladder: centroid} as value
     all_trigger_ids = np.unique(np.concatenate([ladder.cluster_triggers for ladder in ladders]))
@@ -968,13 +999,22 @@ def banco_res_z_alignment(ladder, ray_data, z_range=20., plot=True):
     """
     original_z = ladder.center[2]
     zs = np.linspace(original_z - z_range / 2, original_z + z_range / 2, 20)
+
+    ladder.set_center(z=min(zs))
+    z_min_ray_triggers = get_close_triggers(ladder, ray_data)
+    ladder.set_center(z=max(zs))
+    z_max_ray_triggers = get_close_triggers(ladder, ray_data)
+    common_triggers = np.intersect1d(z_min_ray_triggers, z_max_ray_triggers)
+
     x_res_widths, y_res_widths, sum_res_widths = [], [], []
     for zi in zs:
         ladder.set_center(z=zi)
-        x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, plot=False)
-        x_res_widths.append(x_res_sigma)
-        y_res_widths.append(y_res_sigma)
-        sum_res_widths.append(np.sqrt(x_res_sigma ** 2 + y_res_sigma ** 2))
+        ladder.convert_cluster_coords()
+        # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, plot=False)
+        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, common_triggers)
+        x_res_widths.append(x_sd)
+        y_res_widths.append(y_sd)
+        sum_res_widths.append(np.sqrt(x_sd ** 2 + y_sd ** 2))
 
     # Fit both x, y and total residuals to a quadratic function
     # x_res_widths = np.array(x_res_widths)
@@ -1234,7 +1274,7 @@ def banco_get_pixel_spacing(ladder, ray_data, plot=True):
 #     return x_rot_min, y_rot_min, z_rot_min
 
 
-def banco_align_rotation(ladder, ray_data, plot=True):
+def banco_align_rotation(ladder, ray_data, plot=True, n_points=1000):
     """
     Align ladder by minimizing residuals between ray and cluster centroids
     :param ladder:
@@ -1244,16 +1284,32 @@ def banco_align_rotation(ladder, ray_data, plot=True):
     """
 
     original_rotations = ladder.rotations
-    x_rotations = np.linspace(-1, 1, 100)
-    y_rotations = np.linspace(-1, 1, 100)
-    z_rotations = np.linspace(-1, 1, 100)
+    x_min, x_max = -0.5, 0.5
+    y_min, y_max = -0.5, 0.5
+    z_min, z_max = -0.5, 0.5
+    x_rotations = np.linspace(x_min, x_max, n_points)
+    y_rotations = np.linspace(y_min, y_max, n_points)
+    z_rotations = np.linspace(z_min, z_max, n_points)
     ladder.add_rotation(0, [0, 0, 0])
 
-    y_res_x_rots = []
+    ladder.replace_last_rotation(x_min, 'x')
+    ladder.convert_cluster_coords()
+    x_min_rot_ray_triggers = get_close_triggers(ladder, ray_data)
+    ladder.replace_last_rotation(x_max, 'x')
+    ladder.convert_cluster_coords()
+    x_max_rot_ray_triggers = get_close_triggers(ladder, ray_data)
+    # Get the intersection of the two sets
+    x_rot_ray_triggers = np.intersect1d(x_min_rot_ray_triggers, x_max_rot_ray_triggers)
+    x_res_x_rots, y_res_x_rots, r_res_x_rots, sum_res_x_rots = [], [], [], []
     for x_rot_i in x_rotations:
         ladder.replace_last_rotation(x_rot_i, 'x')
         ladder.convert_cluster_coords()
-        y_res_x_rots.append(banco_get_residuals(ladder, ray_data, False)[3])
+        # x_mu, x_sd, y_mu, y_sd = banco_get_residuals(ladder, ray_data, False)
+        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, x_rot_ray_triggers)
+        y_res_x_rots.append(y_sd)
+        x_res_x_rots.append(x_sd)
+        r_res_x_rots.append(r_mu)
+        sum_res_x_rots.append(np.sqrt(x_sd ** 2 + y_sd ** 2))
     # filter out nans
     y_res_x_rots_fit = np.array(y_res_x_rots)
     x_orientations_fit = x_rotations[~np.isnan(y_res_x_rots_fit)]
@@ -1262,49 +1318,83 @@ def banco_align_rotation(ladder, ray_data, plot=True):
     # x_rot = x_rotations[np.argmin(y_res_x_rots)]
     x_rot_min = popt_x[-1]
 
-    x_res_y_rots = []
+    ladder.replace_last_rotation(y_min, 'y')
+    ladder.convert_cluster_coords()
+    y_min_rot_ray_triggers = get_close_triggers(ladder, ray_data)
+    ladder.replace_last_rotation(y_max, 'y')
+    ladder.convert_cluster_coords()
+    y_max_rot_ray_triggers = get_close_triggers(ladder, ray_data)
+    y_rot_ray_triggers = np.intersect1d(y_min_rot_ray_triggers, y_max_rot_ray_triggers)
+
+    x_res_y_rots, y_res_y_rots, r_res_y_rots, sum_res_y_rots = [], [], [], []
     for y_rot_i in y_rotations:
         ladder.replace_last_rotation(y_rot_i, 'y')
         ladder.convert_cluster_coords()
-        x_res_y_rots.append(banco_get_residuals(ladder, ray_data, False)[1])
+        # x_mu, x_sd, y_mu, y_sd = banco_get_residuals(ladder, ray_data, False)
+        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, y_rot_ray_triggers)
+        x_res_y_rots.append(x_sd)
+        y_res_y_rots.append(y_sd)
+        r_res_y_rots.append(r_sd)
+        sum_res_y_rots.append(np.sqrt(x_sd ** 2 + y_sd ** 2))
     # y_rot = y_rotations[np.argmin(x_res_y_rots)]
     y_rot_min = 0
 
-    x_res_z_rots, y_res_z_rots = [], []
+    z0_ray_triggers = get_close_triggers(ladder, ray_data)
+    ladder.replace_last_rotation(z_min, 'z')
+    ladder.convert_cluster_coords()
+    z_min_ray_triggers = get_close_triggers(ladder, ray_data)
+    ladder.replace_last_rotation(z_max, 'z')
+    ladder.convert_cluster_coords()
+    z_max_ray_triggers = get_close_triggers(ladder, ray_data)
+    z_ray_triggers = np.intersect1d(z_min_ray_triggers, z_max_ray_triggers)
+    z_ray_triggers = np.intersect1d(z_ray_triggers, z0_ray_triggers)
+
+    x_res_z_rots, y_res_z_rots, r_res_z_rots, sum_res_z_rots = [], [], [], []
     for z_rot_i in z_rotations:
         ladder.replace_last_rotation(z_rot_i, 'z')
         ladder.convert_cluster_coords()
-        x_mu, x_sd, y_mu, y_sd = banco_get_residuals(ladder, ray_data, False)
+        # x_mu, x_sd, y_mu, y_sd = banco_get_residuals(ladder, ray_data, False)
+        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, z_ray_triggers)
         x_res_z_rots.append(x_sd)
         y_res_z_rots.append(y_sd)
+        r_res_z_rots.append(r_sd)
+        sum_res_z_rots.append(np.sqrt(x_sd ** 2 + y_sd ** 2))
     z_rot_min = z_rotations[np.argmin(x_res_z_rots)]
 
     if plot:
         fig_xrot, ax_xrot = plt.subplots()
         x_plot_points = np.linspace(min(x_rotations), max(x_rotations), 1000)
-        ax_xrot.plot(x_rotations, y_res_x_rots, marker='o')
+        ax_xrot.plot(x_rotations, y_res_x_rots, color='green', marker='o', label='Y Residuals')
         ax_xrot.plot(x_plot_points, quadratic_shift(x_plot_points, *popt_x), color='r', alpha=0.4)
+        # ax_xrot.plot(x_rotations, x_res_x_rots, color='blue', marker='o', label='X Residuals')
+        # ax_xrot.plot(x_rotations, r_res_x_rots, color='orange', marker='o', label='R Residuals')
         # ax_xrot.axvline(original_orientation[0], color='g', linestyle='--', label='Original X Rotation')
         ax_xrot.axvline(x_rot_min, color='r', linestyle='--', label='Minimized X Rotation')
         ax_xrot.set_title(f'Y Residuals vs X Rotation {ladder.name}')
         ax_xrot.set_xlabel('X Rotation (degrees)')
         ax_xrot.set_ylabel('Y Residual Distribution Gaussian Width (mm)')
+        ax_xrot.legend()
         fig_xrot.tight_layout()
         fig_xrot.canvas.manager.set_window_title(f'Y Residuals vs X Rotation {ladder.name}')
 
         fig_yrot, ax_yrot = plt.subplots()
-        ax_yrot.plot(y_rotations, x_res_y_rots, marker='o')
+        ax_yrot.plot(y_rotations, x_res_y_rots, color='blue', marker='o', label='X Residuals')
         # ax_yrot.axvline(original_orientation[1], color='g', linestyle='--', label='Original Y Rotation')
+        # ax_yrot.plot(y_rotations, y_res_y_rots, color='green', marker='o', label='Y Residuals')
+        # ax_yrot.plot(y_rotations, r_res_y_rots, color='orange', marker='o', label='R Residuals')
         ax_yrot.axvline(y_rot_min, color='r', linestyle='--', label='Minimized Y Rotation')
         ax_yrot.set_title(f'X Residuals vs Y Rotation {ladder.name}')
         ax_yrot.set_xlabel('Y Rotation (degrees)')
         ax_yrot.set_ylabel('X Residual Distribution Gaussian Width (mm)')
+        ax_yrot.legend()
         fig_yrot.tight_layout()
         fig_yrot.canvas.manager.set_window_title(f'X Residuals vs Y Rotation {ladder.name}')
 
         fig_zrot, ax_zrot = plt.subplots()
         ax_zrot.plot(z_rotations, x_res_z_rots, color='blue', marker='o', label='X Residuals')
         ax_zrot.plot(z_rotations, y_res_z_rots, color='green', marker='o', label='Y Residuals')
+        # ax_zrot.plot(z_rotations, r_res_z_rots, color='orange', marker='o', label='R Residuals')
+        ax_zrot.plot(z_rotations, sum_res_z_rots, color='red', marker='o', label='Sum Residuals')
         # ax_zrot.axvline(original_orientation[2], color='g', linestyle='--', label='Original Z Rotation')
         ax_zrot.axvline(z_rot_min, color='r', linestyle='--', label='Minimized Z Rotation')
         ax_zrot.set_title(f'Residuals vs Z Rotation {ladder.name}')
@@ -1318,6 +1408,13 @@ def banco_align_rotation(ladder, ray_data, plot=True):
     ladder.convert_cluster_coords()
 
     return x_rot_min, y_rot_min, z_rot_min
+
+
+def minimize_translation_residuals(ladder_center, ladder, ray_data, good_triggers):
+    ladder.set_center(x=ladder_center[0], y=ladder_center[1], z=ladder_center[2])
+    ladder.convert_cluster_coords()
+    x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers)
+    return np.sqrt(x_sd ** 2 + y_sd ** 2)
 
 
 def remove_outlying_rays(x_rays, y_rays, event_num_rays, det_size, mult=2.0):
@@ -1405,16 +1502,16 @@ def banco_get_residuals(ladder, ray_data, plot=False):
         # print(f'Y_residuals unbinned gaussian fit: mu={fitted_mu_y:.2f}mm, sigma={fitted_sigma_y:.2f}mm')
         print(f'Y_residuals binned gaussian fit: mu={popt_y[1]:.2f}mm, sigma={popt_y[2]:.2f}mm')
 
-        x_plot_points = np.linspace(min(x_res_filter2), max(x_res_filter2), 1000)
-        fig_x_bar, ax_x_bar = plt.subplots()
-        ax_x_bar.bar(bin_centers_x, counts_x, width=bin_width_x, align='center')
-        # ax_x_bar.plot(x_plot_points, len(x_res) * gaussian(x_plot_points, *fit_x.x), color='r')
-        ax_x_bar.plot(x_plot_points, gaus_amp(x_plot_points, *popt_x), color='g')
-        ax_x_bar.set_title(f'X Residuals {ladder.name}')
-        ax_x_bar.set_xlabel('X Residual (mm)')
-        ax_x_bar.set_ylabel('Entries')
-        fig_x_bar.tight_layout()
-        fig_x_bar.canvas.manager.set_window_title(f'X Residuals {ladder.name}')
+        # x_plot_points = np.linspace(min(x_res_filter2), max(x_res_filter2), 1000)
+        # fig_x_bar, ax_x_bar = plt.subplots()
+        # ax_x_bar.bar(bin_centers_x, counts_x, width=bin_width_x, align='center')
+        # # ax_x_bar.plot(x_plot_points, len(x_res) * gaussian(x_plot_points, *fit_x.x), color='r')
+        # ax_x_bar.plot(x_plot_points, gaus_amp(x_plot_points, *popt_x), color='g')
+        # ax_x_bar.set_title(f'X Residuals {ladder.name}')
+        # ax_x_bar.set_xlabel('X Residual (mm)')
+        # ax_x_bar.set_ylabel('Entries')
+        # fig_x_bar.tight_layout()
+        # fig_x_bar.canvas.manager.set_window_title(f'X Residuals {ladder.name}')
 
         y_plot_points = np.linspace(min(y_res_filter2), max(y_res_filter2), 1000)
         fig_y_bar, ax_y_bar = plt.subplots()
@@ -1429,6 +1526,97 @@ def banco_get_residuals(ladder, ray_data, plot=False):
 
     # return fitted_mu_x, fitted_sigma_x, fitted_mu_y, fitted_sigma_y
     return popt_x[1], popt_x[2], popt_y[1], popt_y[2]
+
+
+def banco_get_residuals_no_fit(ladder, ray_data):
+    ray_trigger_ids = np.array(ladder.cluster_triggers) + 1  # Banco starts at 0, rays start at 1
+    # x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, ladder.center[2], ray_trigger_ids)
+    x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(ladder.center[2], ray_trigger_ids)
+    x_rays, y_rays, event_num_rays = remove_outlying_rays(x_rays, y_rays, event_num_rays, ladder.size, 1.2)
+
+    cluster_centroids, banco_triggers = np.array(ladder.cluster_centroids), np.array(ladder.cluster_triggers) + 1
+    cluster_centroids = cluster_centroids[np.isin(banco_triggers, event_num_rays)]
+
+    x_res, y_res = get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids)
+    x_res, y_res = np.array(x_res), np.array(y_res)
+
+    # Mask by n_stds
+    x_res_mean, y_res_mean = np.mean(x_res), np.mean(y_res)
+    x_res_std, y_res_std = np.std(x_res), np.std(y_res)
+    mask = (x_res > x_res_mean - 3 * x_res_std) & (x_res < x_res_mean + 3 * x_res_std) & \
+           (y_res > y_res_mean - 3 * y_res_std) & (y_res < y_res_mean + 3 * y_res_std)
+    # Mask by 10 and 90 percentiles
+    # mask = (x_res > np.percentile(x_res, 10)) & (x_res < np.percentile(x_res, 90)) & \
+    #        (y_res > np.percentile(y_res, 10)) & (y_res < np.percentile(y_res, 90))
+    x_res_filter, y_res_filter = x_res[mask], y_res[mask]
+    r_res_filter = np.sqrt(x_res_filter ** 2 + y_res_filter ** 2)
+
+    return (np.mean(x_res_filter), np.std(x_res_filter), np.mean(y_res_filter), np.std(y_res_filter),
+            np.mean(r_res_filter), np.std(r_res_filter))
+
+
+def banco_get_residuals_no_fit_triggers(ladder, ray_data, ray_triggers, plot=False):
+    x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(ladder.center[2], ray_triggers)
+
+    cluster_centroids, banco_triggers = np.array(ladder.cluster_centroids), np.array(ladder.cluster_triggers) + 1
+    cluster_centroids = cluster_centroids[np.isin(banco_triggers, event_num_rays)]
+
+    x_res, y_res = get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids)
+    x_res, y_res = np.array(x_res), np.array(y_res)
+    r_res = np.sqrt(x_res ** 2 + y_res ** 2)
+
+    if plot:
+        fig_x, ax_x = plt.subplots()
+        ax_x.hist(x_res, bins=np.linspace(min(x_res), max(x_res), 25))
+        ax_x.set_title(f'X Residuals')
+        ax_x.set_xlabel('X Residual (mm)')
+        ax_x.set_ylabel('Entries')
+        fig_x.tight_layout()
+
+        fig_y, ax_y = plt.subplots()
+        ax_y.hist(y_res, bins=np.linspace(min(y_res), max(y_res), 25))
+        ax_y.set_title(f'Y Residuals')
+        ax_y.set_xlabel('Y Residual (mm)')
+        ax_y.set_ylabel('Entries')
+        fig_y.tight_layout()
+
+        fig_r, ax_r = plt.subplots()
+        ax_r.hist(r_res, bins=np.linspace(min(r_res), max(r_res), 25))
+        ax_r.set_title(f'R Residuals')
+        ax_r.set_xlabel('R Residual (mm)')
+        ax_r.set_ylabel('Entries')
+        fig_r.tight_layout()
+
+    return np.mean(x_res), np.std(x_res), np.mean(y_res), np.std(y_res), np.mean(r_res), np.std(r_res)
+
+
+def get_close_triggers(ladder, ray_data):
+    ray_trigger_ids = np.array(ladder.cluster_triggers) + 1  # Banco starts at 0, rays start at 1
+    x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(ladder.center[2], ray_trigger_ids)
+    x_rays, y_rays, event_num_rays = remove_outlying_rays(x_rays, y_rays, event_num_rays, ladder.size, 1.2)
+
+    cluster_centroids, banco_triggers = np.array(ladder.cluster_centroids), np.array(ladder.cluster_triggers) + 1
+    cluster_centroids = cluster_centroids[np.isin(banco_triggers, event_num_rays)]
+
+    x_res, y_res = get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids)
+    x_res, y_res = np.array(x_res), np.array(y_res)
+    r_res = np.sqrt(x_res ** 2 + y_res ** 2)
+
+    # Mask r by n_stds
+    r_res_mean = np.mean(r_res)
+    mask = r_res < 2 * r_res_mean
+
+    # Mask by n_stds
+    # x_res_mean, y_res_mean = np.mean(x_res), np.mean(y_res)
+    # x_res_std, y_res_std = np.std(x_res), np.std(y_res)
+    # mask = (x_res > x_res_mean - 3 * x_res_std) & (x_res < x_res_mean + 3 * x_res_std) & \
+    #        (y_res > y_res_mean - 3 * y_res_std) & (y_res < y_res_mean + 3 * y_res_std)
+    # Mask by 10 and 90 percentiles
+    # mask = (x_res > np.percentile(x_res, 10)) & (x_res < np.percentile(x_res, 90)) & \
+    #        (y_res > np.percentile(y_res, 10)) & (y_res < np.percentile(y_res, 90))
+    good_ray_triggers = event_num_rays[mask]
+
+    return good_ray_triggers
 
 
 def get_banco_run_name(base_dir, start_string='multinoiseScan', end_string='-ladder'):
