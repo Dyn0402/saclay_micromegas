@@ -64,8 +64,8 @@ init_air_gap = [
 
 def main():
     # initial_test()
-    # configuration_optimization()
-    cosmic_muons()
+    configuration_optimization()
+    # cosmic_muons()
     print('donzo')
 
 
@@ -258,6 +258,7 @@ def cosmic_muons():
 
 
 def configuration_optimization():
+    # incident_energy = 880  # MeV
     incident_energy = 880  # MeV
     num_particles = 10000
     init_r = 200 / 10000  # cm from microns
@@ -284,27 +285,72 @@ def configuration_optimization():
         #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
         #         ]
         # },
-        # {
-        #     'name': r'2023 Test Beam 10$\mu$m Resolution',
-        #     'banco_res': 10 / 10000,  # um to cm
-        #     'scattering_objects':
-        #         [
-        #             {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
-        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-        #             {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
-        #             {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
-        #             {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
-        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-        #             {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
-        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-        #             {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
-        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-        #             {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
-        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-        #             {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
-        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-        #         ]
-        # },
+        {
+            'name': r'2023 Test Beam 10$\mu$m Resolution 150 GeV Muons',
+            'banco_res': 10 / 10000,  # um to cm
+            'incident_energy': 150e3,  # MeV
+            'scattering_objects':
+                [
+                    {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                ]
+        },
+        {
+            'name': r'2023 Test Beam 10$\mu$m Resolution 80 GeV Muons',
+            'banco_res': 10 / 10000,  # um to cm
+            'incident_energy': 80e3,  # MeV
+            'scattering_objects':
+                [
+                    {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                ]
+        },
+        {
+            'name': r'2023 Test Beam 10$\mu$m Resolution 880 MeV Electrons',
+            'banco_res': 10 / 10000,  # um to cm
+            'incident_energy': 880,  # MeV
+            'scattering_objects':
+                [
+                    {'material': 'air', 'thickness': 5, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                ]
+        },
         # {
         #     'name': r'2023 Test Beam 5$\mu$m Resolution',
         #     'banco_res': 5 / 10000,  # um to cm
@@ -503,32 +549,62 @@ def configuration_optimization():
         #         ]
         # },
 
-        {
-            'name': r'2024 Test Beam Single Arm',
-            # 'name': r'2024 Test Beam Single Arm 10 $\mu$m Tracking Resolution',
-            'banco_res': 10 / 10000,  # um to cm
-            'scattering_objects':
-                [
-                    {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
-                    {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'x0': 0.003, 'thickness': 10.6 / 10, 'type': 'banco_seperator'},  # Guess, same as test
-                    {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-                    {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
-                    {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'x0': 0.003, 'thickness': 10.6 / 10, 'type': 'banco_seperator'},  # Guess, same as test
-                    {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
-                    {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
-                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
-                ]
-        },
+        # {
+        #     'name': r'2024 Test Beam Single Arm',
+        #     # 'name': r'2024 Test Beam Single Arm 10 $\mu$m Tracking Resolution',
+        #     'banco_res': 10 / 10000,  # um to cm
+        #     'incident_energy': 880,  # MeV
+        #     'scattering_objects':
+        #         [
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'x0': 0.003, 'thickness': 10.6 / 10, 'type': 'banco_seperator'},  # Guess, same as test
+        #             {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'x0': 0.003, 'thickness': 10.6 / 10, 'type': 'banco_seperator'},  # Guess, same as test
+        #             {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #         ]
+        # },
+        #
+        # {
+        #     'name': r'2024 Test Beam Single Arm Muons',
+        #     # 'name': r'2024 Test Beam Single Arm 10 $\mu$m Tracking Resolution',
+        #     'banco_res': 10 / 10000,  # um to cm
+        #     'incident_energy': 80e3,  # MeV
+        #     'scattering_objects':
+        #         [
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'x0': 0.003, 'thickness': 10.6 / 10, 'type': 'banco_seperator'},  # Guess, same as test
+        #             {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'x0': 0.003, 'thickness': 10.6 / 10, 'type': 'banco_seperator'},  # Guess, same as test
+        #             {'x0': 0.0001, 'thickness': 5 / 10000, 'type': 'banco'},  # Guess, same as test
+        #             {'material': 'air', 'thickness': 7, 'type': 'air'},  # cm
+        #             {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+        #         ]
+        # },
+
         # {
         #     'name': r'2024 Test Beam Single Arm 5 $\mu$m Tracking Resolution',
         #     'banco_res': 5 / 10000,  # um to cm
@@ -679,7 +755,8 @@ def configuration_optimization():
         for scattering_object in configuration['scattering_objects']:
             if 'scatter' in configuration and configuration['scatter'] is False:
                 scattering_object['x0'] = 0
-            particles = scatter_object(incident_energy, scattering_object, particles)
+            energy = configuration['incident_energy'] if 'incident_energy' in configuration else incident_energy
+            particles = scatter_object(energy, scattering_object, particles)
             if scattering_object['type'] == 'banco':
                 banco_particles.append(deepcopy(particles))
             elif scattering_object['type'] == 'test_det':
