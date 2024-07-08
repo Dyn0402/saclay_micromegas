@@ -8,6 +8,8 @@ Created as saclay_micromegas/dream_functions.py
 @author: Dylan Neff, Dylan
 """
 
+from datetime import datetime
+
 import numpy as np
 from scipy.optimize import curve_fit as cf
 
@@ -28,8 +30,11 @@ def read_det_data(file_path, num_detectors=None, variable_name='amplitude', tree
     root_file.close()
 
     if num_detectors is not None:
-        if isinstance(num_detectors, list) and len(num_detectors) == 2:
-            variable_data = variable_data[:, num_detectors[0]:num_detectors[-1]]
+        # if isinstance(num_detectors, list) and len(num_detectors) == 2:
+        #     variable_data = variable_data[:, num_detectors[0]:num_detectors[-1]]
+        if isinstance(num_detectors, list):
+            channel_list = np.concatenate([np.arange(64) + 64 * (card_num - 1) for card_num in num_detectors])
+            variable_data = variable_data[:, channel_list]
         elif isinstance(num_detectors, int):
             variable_data = variable_data[:, :num_detectors]
 
@@ -95,9 +100,88 @@ def get_noise_thresholds(ped_rms, noise_sigmas=5):
     return noise_sigmas * ped_rms
 
 
+def filter_noise_events(data, ped_thresholds, return_type='data'):
+    """
+    Filter out events where all channels are below the noise threshold.
+    :param data:
+    :param ped_thresholds:
+    :param return_type:
+    :return:
+    """
+    sample_maxes = get_sample_max(data)
+    mask = np.any(sample_maxes > ped_thresholds, axis=1)
+    if return_type == 'mask':
+        return mask
+    return data[mask]
+
+
 def get_sample_max(data):
     return np.max(data, axis=-1)
 
 
 def gaussian_density(x, mu, sigma):
     return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-(x - mu) ** 2 / (2 * sigma ** 2))
+
+
+# vvv Copied from Cosmic_Bench_DAQ_Control/common_functions.py 7-5-24 vvv
+
+def get_date_from_fdf_file_name(file_name):
+    """
+    Get date from file name with format ...xxx_xxx_240212_11H42_000_01.xxx
+    :param file_name:
+    :return:
+    """
+    date_str = file_name.split('_')[-4] + ' ' + file_name.split('_')[-3]
+    date = datetime.strptime(date_str, '%y%m%d %HH%M')
+    return date
+
+
+def get_num_from_fdf_file_name(file_name, num_index=-2):
+    """
+    Get fdf style file number from file name with format ...xxx_xxx_240212_11H42_000_01.xxx
+    Updated to more robustly get first number from back.
+    :param file_name:
+    :param num_index:
+    :return:
+    """
+    file_split = remove_after_last_dot(file_name).split('_')
+    file_nums = []
+    for x in file_split:
+        try:
+            file_nums.append(int(x))
+        except ValueError:
+            pass
+    return file_nums[num_index]
+
+
+def remove_after_last_dot(input_string):
+    # Find the index of the last dot
+    last_dot_index = input_string.rfind('.')
+
+    # If there's no dot, return the original string
+    if last_dot_index == -1:
+        return input_string
+
+    # Return the substring up to the last dot (not including the dot)
+    return input_string[:last_dot_index]
+
+
+def get_run_name_from_fdf_file_name(file_name):
+    file_name_split = file_name.split('_')
+    run_name_end_index = 0
+    for i, part in enumerate(file_name_split):  # Find xxHxx in file name split
+        if len(part) == 5 and part[2] == 'H' and is_convertible_to_int(part[:2]) and is_convertible_to_int(part[3:]):
+            run_name_end_index = i
+            break
+    run_name = '_'.join(file_name_split[:run_name_end_index + 1])
+    return run_name
+
+
+def is_convertible_to_int(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+# ^^^ Copied from Cosmic_Bench_DAQ_Control/common_functions.py ^^^
