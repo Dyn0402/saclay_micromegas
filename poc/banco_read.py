@@ -19,7 +19,7 @@ import uproot
 import awkward as ak
 import vector
 
-from cosmic_det_check import get_ray_data, get_det_data, get_xy_positions
+from cosmic_det_check import get_det_data, get_xy_positions
 from BancoLadder import BancoLadder
 from M3RefTracking import M3RefTracking
 
@@ -193,15 +193,16 @@ def read_raw_banco():
 def banco_analysis():
     vector.register_awkward()
     # base_dir = 'C:/Users/Dylan/Desktop/banco_test3/'
-    # base_dir = 'F:/Saclay/banco_data/banco_stats4/'
-    # det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    base_dir = '/local/home/dn277127/Bureau/banco_test5/'
-    det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_dir = 'F:/Saclay/banco_data/banco_stats5/'
+    det_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = '/local/home/dn277127/Bureau/banco_test5/'
+    # det_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     run_json_path = f'{base_dir}run_config.json'
     run_name = get_banco_run_name(base_dir)
     run_data = get_det_data(run_json_path)
     # print(run_data)
     banco_names = [det_name for det_name in run_data['included_detectors'] if 'banco' in det_name]
+    mu = '\u03BC'
 
     # ray_data = get_ray_data(base_dir, [0, 1])
     ray_data = M3RefTracking(base_dir, single_track=True)
@@ -216,8 +217,8 @@ def banco_analysis():
         print(det_info)
         ladder = BancoLadder(config=det_info)
         ladder_num = int(ladder.name[-3:])
-        if ladder_num == 160:
-            continue
+        # if ladder_num == 160:
+        #     continue
 
         z_orig = ladder.center[2]
         x_bnds = ladder.center[0] - ladder.size[0] / 2, ladder.center[0] + ladder.size[0] / 2
@@ -229,7 +230,7 @@ def banco_analysis():
         # print(ray_data)
         # print(len(ray_data))
         # input()
-        ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=-0.1)
+        ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=0.1)
         banco_traversing_triggers = ray_traversing_triggers - 1  # Rays start at 1, banco starts at 0
         print(f'Number of traversing triggers: {len(ray_traversing_triggers)}')
         print(f'Bounds: x={x_bnds}, y={y_bnds}, z={z_orig}')
@@ -324,8 +325,8 @@ def banco_analysis():
         iterations, zs = list(np.arange(10)), []
         # ladder.add_rotation(0, [0, 0, 0])
         z_rot_align = 0
-        good_triggers = get_close_triggers(ladder, ray_data)
-        banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=True)
+        # good_triggers = get_close_triggers(ladder, ray_data)
+        # banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=True)
         for i in iterations:
             print()
             print(f'Iteration {i}: Getting residuals for ladder {ladder_num} with '
@@ -335,7 +336,8 @@ def banco_analysis():
             # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, False)
             # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma, r_mu, r_sig = banco_get_residuals_no_fit(ladder, ray_data)
             good_triggers = get_close_triggers(ladder, ray_data)
-            x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=False)
+            x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers,
+                                                                                     plot=False)
             print(f'Ladder {ladder.name} X Residuals Mean: {x_mu} Sigma: {x_sd}')
             print(f'Ladder {ladder.name} Y Residuals Mean: {y_mu} Sigma: {y_sd}')
             # plt.show()
@@ -343,7 +345,7 @@ def banco_analysis():
             ladder.set_center(x=aligned_x, y=aligned_y)
             ladder.convert_cluster_coords()
 
-            z_align = banco_res_z_alignment(ladder, ray_data, z_range=(20 / (i + 1)), plot=False)
+            z_align = banco_res_z_alignment(ladder, ray_data, z_range=(20 / (i + 1)), z_points=200, plot=False)
             ladder.set_center(z=z_align)
             ladder.convert_cluster_coords()
 
@@ -354,8 +356,9 @@ def banco_analysis():
         # x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=True)
         # print(f'Final rotation: {ladder.rotations}')
         # plt.show()
+        good_triggers = get_close_triggers(ladder, ray_data)
         banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=True)
-        plt.show()
+        # plt.show()
 
         fig, ax = plt.subplots()
         ax.plot(iterations + [iterations[-1] + 1], zs + [ladder.center[2]], marker='o')
@@ -395,7 +398,16 @@ def banco_analysis():
         # plt.show()
 
         x_rot_align, y_rot_align, z_rot_align = banco_align_rotation(ladder, ray_data, plot=True)
-        # ladder.add_rotation(z_rot_align, 'z')
+        ladder.add_rotation(z_rot_align, 'z')
+        ladder.convert_cluster_coords()
+        good_triggers = get_close_triggers(ladder, ray_data)
+        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers,
+                                                                                 plot=False)
+        print(f'Ladder {ladder.name} X Residuals Mean: {x_mu} Sigma: {x_sd}')
+        print(f'Ladder {ladder.name} Y Residuals Mean: {y_mu} Sigma: {y_sd}')
+        good_triggers = get_close_triggers(ladder, ray_data)
+        banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=True)
+        banco_align_rotation(ladder, ray_data, plot=True)
         # plt.show()
         # ladder.set_orientation(x_rot_align, y_rot_align, z_rot_align)
         # print(f'{ladder.name} new orientation: {ladder.orientation}')
@@ -410,7 +422,7 @@ def banco_analysis():
         # ladder.convert_cluster_coords()
 
         ladder.plot_cluster_centroids()
-        plt.show()
+        # plt.show()
         ladders.append(ladder)
 
     # plt.show()
@@ -428,7 +440,8 @@ def banco_analysis():
         event_ladder_clusters = {}
         for ladder in ladders:
             if trig_id in ladder.cluster_triggers:
-                event_ladder_clusters[ladder] = ladder.cluster_centroids[np.where(ladder.cluster_triggers == trig_id)[0][0]]
+                event_ladder_clusters[ladder] = ladder.cluster_centroids[
+                    np.where(ladder.cluster_triggers == trig_id)[0][0]]
         all_cluster_centroids[trig_id] = event_ladder_clusters
 
     lower_bounds = [ladder.center - ladder.size / 2 for ladder in ladders]
@@ -436,7 +449,7 @@ def banco_analysis():
     min_x, max_x = min([bound[0] for bound in lower_bounds]), max([bound[0] for bound in upper_bounds])
     min_y, max_y = min([bound[1] for bound in lower_bounds]), max([bound[1] for bound in upper_bounds])
 
-    residuals, four_ladder_events = {ladder.name: {'x': [], 'y': []} for ladder in ladders}, 0
+    residuals, four_ladder_events, four_ladder_triggers = {ladder.name: {'x': [], 'y': []} for ladder in ladders}, 0, []
     for trig_id, event_clusters in all_cluster_centroids.items():
         x, y, z = [], [], []
         for ladder, cluster in event_clusters.items():
@@ -444,20 +457,33 @@ def banco_analysis():
             y.append(cluster[1])
             z.append(cluster[2])
         if len(event_clusters) == 4:
-            four_ladder_events += 1
             # for ladder in ladders:
             #     # plot_event_banco_hits(ladder.data, trig_id, ladder.name)
             #     plot_event_banco_hits_global_coords(ladder, trig_id, x_bounds=(min_x, max_x), y_bounds=(min_y, max_y))
 
-            popt_x, pcov_x = cf(linear, x, z)
-            popt_y, pcov_y = cf(linear, y, z)
+            # popt_x, pcov_x = cf(linear, x, z)
+            # popt_y, pcov_y = cf(linear, y, z)
 
             popt_x_inv, pcov_x_inv = cf(linear, z, x)
             popt_y_inv, pcov_y_inv = cf(linear, z, y)
 
+            good_event = True
             for ladder, cluster in event_clusters.items():
-                residuals[ladder.name]['x'].append((cluster[0] - linear(ladder.center[2], *popt_x_inv)) * 1000)
-                residuals[ladder.name]['y'].append((cluster[1] - linear(ladder.center[2], *popt_y_inv)) * 1000)
+                res_x = (cluster[0] - linear(cluster[2], *popt_x_inv)) * 1000
+                res_y = (cluster[1] - linear(cluster[2], *popt_y_inv)) * 1000
+                res_r = np.sqrt(res_x ** 2 + res_y ** 2)
+                if res_r > 100:
+                    print(f'Excluding event {trig_id} Ladder {ladder.name} '
+                          f'Residuals: X: {res_x:.2f} Y: {res_y:.2f} R: {res_r:.2f}')
+                    good_event = False
+            if not good_event:
+                continue
+            four_ladder_events += 1
+            four_ladder_triggers.append(trig_id)
+
+            for ladder, cluster in event_clusters.items():
+                residuals[ladder.name]['x'].append((cluster[0] - linear(cluster[2], *popt_x_inv)) * 1000)
+                residuals[ladder.name]['y'].append((cluster[1] - linear(cluster[2], *popt_y_inv)) * 1000)
 
             # fig_x, ax_x = plt.subplots()
             # x_range = np.linspace(min(x), max(x), 100)
@@ -485,18 +511,46 @@ def banco_analysis():
         print(f'Y Residuals Mean: {np.mean(res["y"])}')
         print(f'Y Residuals Std: {np.std(res["y"])}')
         fig_x, ax_x = plt.subplots()
+        ax_x.hist(res['x'], bins=np.linspace(min(res['x']), max(res['x']), 25))
         ax_x.hist(res['x'], bins=np.linspace(np.quantile(res['x'], 0.1), np.quantile(res['x'], 0.9), 25))
         ax_x.set_title(f'X Residuals Ladder {ladder}')
         ax_x.set_xlabel(r'X Residual ($\mu m$)')
         ax_x.set_ylabel('Entries')
 
         fig_y, ax_y = plt.subplots()
+        ax_y.hist(res['y'], bins=np.linspace(min(res['y']), max(res['y']), 25))
         ax_y.hist(res['y'], bins=np.linspace(np.quantile(res['y'], 0.1), np.quantile(res['y'], 0.9), 25))
         ax_y.set_title(f'Y Residuals Ladder {ladder}')
         ax_y.set_xlabel(r'Y Residual ($\mu m$)')
         ax_y.set_ylabel('Entries')
     print(f'Number of events: {len(all_cluster_centroids)}')
     print(f'Number of events with hits on all 4 ladders {four_ladder_events}')
+
+    iterations, res_widths = np.arange(11), {ladder.name: {'x': [], 'y': [], 'r': []} for ladder in ladders}
+    for iteration in iterations:
+        print(f'Iteration {iteration}')
+        residuals = banco_ladder_fit_residuals(ladders, four_ladder_triggers, False)
+        for ladder in ladders:
+            res_widths[ladder.name]['x'].append(np.std(residuals[ladder.name]['x']))
+            res_widths[ladder.name]['y'].append(np.std(residuals[ladder.name]['y']))
+            res_widths[ladder.name]['r'].append(np.mean(residuals[ladder.name]['r']))
+            x_align = ladder.center[0] - np.mean(residuals[ladder.name]['x']) / 1000
+            y_align = ladder.center[1] - np.mean(residuals[ladder.name]['y']) / 1000
+            ladder.set_center(x=x_align, y=y_align)
+            ladder.convert_cluster_coords()
+    for ladder in ladders:
+        print(f'Ladder {ladder.name} X Residual Width: {res_widths[ladder.name]["x"][-1]:.2f} {mu}m')
+        print(f'Ladder {ladder.name} Y Residual Width: {res_widths[ladder.name]["y"][-1]:.2f} {mu}m')
+        print(f'Ladder {ladder.name} R Residual Mean: {res_widths[ladder.name]["r"][-1]:.2f} {mu}m')
+        fig, ax = plt.subplots()
+        ax.plot(iterations, res_widths[ladder.name]['x'], marker='o', label='X')
+        ax.plot(iterations, res_widths[ladder.name]['y'], marker='o', label='Y')
+        ax.plot(iterations, res_widths[ladder.name]['r'], marker='o', label='R')
+        ax.set_title(f'Ladder {ladder.name} Residual Width vs Iteration')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel(r'Residual Width ($\mu m$)')
+        ax.legend()
+        fig.tight_layout()
 
     plt.show()
 
@@ -604,12 +658,12 @@ def get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids, plot=False):
         # Plot a 2D scatter plot of the x, y rays and x, y cluster centroids, with a line connecting the ray to the
         # cluster centroid
         fig, ax = plt.subplots()
-        ax.scatter(x_rays, y_rays, color='blue', label='Ray', marker='.', alpha=0.5)
-        ax.scatter(cluster_centroids[:, 0], cluster_centroids[:, 1], color='green', label='Cluster Centroid',
-                   marker='.', alpha=0.5)
+        ax.scatter(x_rays, y_rays, color='blue', label='M3 Track', marker='.', alpha=0.5)
+        ax.scatter(cluster_centroids[:, 0], cluster_centroids[:, 1], color='green', label='Banco Hit', marker='.',
+                   alpha=0.5)
         for x_ray, y_ray, x_cent, y_cent in zip(x_rays, y_rays, cluster_centroids[:, 0], cluster_centroids[:, 1]):
             ax.plot([x_ray, x_cent], [y_ray, y_cent], color='red', alpha=0.5)
-        ax.set_title('Ray vs Cluster Centroid Residuals')
+        ax.set_title('M3 Track vs Banco Centroid Residuals')
         ax.set_xlabel('X Position (mm)')
         ax.set_ylabel('Y Position (mm)')
         ax.legend()
@@ -933,7 +987,8 @@ def banco_ref_std_z_alignment(ladder, ray_data, plot=True, z_align_range=20, z_a
 
     # Eliminate events in which ray is too far from mean
     x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, z0, ray_trigger_ids)
-    x_rays_filter, y_rays_filter, event_num_rays = remove_outlying_rays(x_rays, y_rays, event_num_rays, ladder.size, 1.2)
+    x_rays_filter, y_rays_filter, event_num_rays = remove_outlying_rays(x_rays, y_rays, event_num_rays, ladder.size,
+                                                                        1.2)
 
     if plot:
         fig, ax = plt.subplots()
@@ -1013,17 +1068,18 @@ def banco_ref_std_z_alignment(ladder, ray_data, plot=True, z_align_range=20, z_a
     return z_fit[0]
 
 
-def banco_res_z_alignment(ladder, ray_data, z_range=20., plot=True):
+def banco_res_z_alignment(ladder, ray_data, z_range=20., z_points=20, plot=True):
     """
     Align ladder by minimizing residuals between ray and cluster centroids
     :param ladder:
     :param ray_data:
     :param z_range:
+    :param z_points:
     :param plot:
     :return:
     """
     original_z = ladder.center[2]
-    zs = np.linspace(original_z - z_range / 2, original_z + z_range / 2, 20)
+    zs = np.linspace(original_z - z_range / 2, original_z + z_range / 2, z_points)
 
     ladder.set_center(z=min(zs))
     z_min_ray_triggers = get_close_triggers(ladder, ray_data)
@@ -1036,7 +1092,8 @@ def banco_res_z_alignment(ladder, ray_data, z_range=20., plot=True):
         ladder.set_center(z=zi)
         ladder.convert_cluster_coords()
         # x_res_mean, x_res_sigma, y_res_mean, y_res_sigma = banco_get_residuals(ladder, ray_data, plot=False)
-        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, common_triggers, plot=plot)
+        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = banco_get_residuals_no_fit_triggers(ladder, ray_data, common_triggers,
+                                                                                 plot=plot)
         x_res_widths.append(x_sd)
         y_res_widths.append(y_sd)
         sum_res_widths.append(np.sqrt(x_sd ** 2 + y_sd ** 2))
@@ -1553,6 +1610,149 @@ def banco_get_residuals(ladder, ray_data, plot=False):
     return popt_x[1], popt_x[2], popt_y[1], popt_y[2]
 
 
+def banco_align_ladders(ladders, triggers=None):
+    """
+    Align ladders between themselves by minimizing residuals between clusters and a linear fit between ladders
+    :param ladders:
+    :param triggers:
+    :return:
+    """
+    if triggers is None:
+        triggers = np.unique(np.concatenate([ladder.cluster_triggers for ladder in ladders]))
+
+
+def banco_ladder_fit_residuals_by_chip(ladders, triggers, plot=False):
+    """
+    Fit ladders in each trigger to a line and calculate the residuals on each ladder.
+    :param ladders:
+    :param triggers:
+    :param plot:
+    :return:
+    """
+    residuals = {ladder.name: {chip_num: {'x': [], 'y': [], 'r': []} for chip_num in range(ladder.n_chips)}
+                 for ladder in ladders}
+
+    for trigger in triggers:
+        x, y, z = [], [], []
+        for ladder in ladders:
+            cluster = ladder.get_cluster_centroid_by_trigger(trigger)
+            x.append(cluster[0])
+            y.append(cluster[1])
+            z.append(cluster[2])
+        popt_x, pcov_x = cf(linear, z, x)
+        popt_y, pcov_y = cf(linear, z, y)
+
+        for ladder in ladders:
+            cluster = ladder.get_cluster_centroid_by_trigger(trigger)
+            chip = ladder.get_largest_cluster_chip_num_by_trigger(trigger)
+            x_res = (cluster[0] - linear(cluster[2], *popt_x)) * 1000  # Convert mm to microns
+            y_res = (cluster[1] - linear(cluster[2], *popt_y)) * 1000
+            r_res = np.sqrt(x_res ** 2 + y_res ** 2)
+            residuals[ladder.name][chip]['x'].append(x_res)
+            residuals[ladder.name][chip]['y'].append(y_res)
+            residuals[ladder.name][chip]['r'].append(r_res)
+
+    if plot:
+        for ladder, res_data in residuals.items():
+            # all_res = np.concatenate([np.concatenate(res_data[chip]['r']) for chip in range(ladder.n_chips)])
+            # print(f'\nLadder {ladder}')
+            # print(f'X Residuals Mean: {np.mean(all_res["x"])}')
+            # print(f'X Residuals Std: {np.std(res["x"])}')
+            # print(f'Y Residuals Mean: {np.mean(res["y"])}')
+            # print(f'Y Residuals Std: {np.std(res["y"])}')
+            fig_x, ax_x = plt.subplots()
+            fig_y, ax_y = plt.subplots()
+            fig_r, ax_r = plt.subplots()
+
+            for chip_i, res_xyr in res_data.items():
+                if len(res_xyr['x']) < 2:
+                    continue
+                ax_x.hist(res_xyr['x'], bins=np.linspace(min(res_xyr['x']), max(res_xyr['x']), 25), alpha=0.5,
+                          label=f'Chip {chip_i}')
+                ax_y.hist(res_xyr['y'], bins=np.linspace(min(res_xyr['y']), max(res_xyr['y']), 25), alpha=0.5,
+                          label=f'Chip {chip_i}')
+                ax_r.hist(res_xyr['r'], bins=np.linspace(min(res_xyr['r']), max(res_xyr['r']), 25), alpha=0.5,
+                          label=f'Chip {chip_i}')
+            ax_x.set_title(f'X Residuals {ladder}')
+            ax_x.set_xlabel(r'X Residual ($\mu m$)')
+            ax_x.set_ylabel('Entries')
+            ax_x.legend()
+            ax_y.set_title(f'Y Residuals {ladder}')
+            ax_y.set_xlabel(r'Y Residual ($\mu m$)')
+            ax_y.set_ylabel('Entries')
+            ax_y.legend()
+            ax_r.set_title(f'R Residuals {ladder}')
+            ax_r.set_xlabel(r'R Residual ($\mu m$)')
+            ax_r.set_ylabel('Entries')
+            ax_r.legend()
+
+    return residuals
+
+
+def banco_ladder_fit_residuals(ladders, triggers, plot=False):
+    """
+    Fit ladders in each trigger to a line and calculate the residuals on each ladder.
+    :param ladders:
+    :param triggers:
+    :param plot:
+    :return:
+    """
+    residuals = {ladder.name: {'x': [], 'y': [], 'r': []} for ladder in ladders}
+
+    for trigger in triggers:
+        x, y, z = [], [], []
+        for ladder in ladders:
+            cluster = ladder.get_cluster_centroid_by_trigger(trigger)
+            x.append(cluster[0])
+            y.append(cluster[1])
+            z.append(cluster[2])
+        popt_x, pcov_x = cf(linear, z, x)
+        popt_y, pcov_y = cf(linear, z, y)
+
+        for ladder in ladders:
+            cluster = ladder.get_cluster_centroid_by_trigger(trigger)
+            x_res = (cluster[0] - linear(cluster[2], *popt_x)) * 1000  # Convert mm to microns
+            y_res = (cluster[1] - linear(cluster[2], *popt_y)) * 1000
+            r_res = np.sqrt(x_res ** 2 + y_res ** 2)
+            residuals[ladder.name]['x'].append(x_res)
+            residuals[ladder.name]['y'].append(y_res)
+            residuals[ladder.name]['r'].append(r_res)
+
+    if plot:
+        for ladder, res in residuals.items():
+            print(f'\nLadder {ladder}')
+            print(f'X Residuals Mean: {np.mean(res["x"])}')
+            print(f'X Residuals Std: {np.std(res["x"])}')
+            print(f'Y Residuals Mean: {np.mean(res["y"])}')
+            print(f'Y Residuals Std: {np.std(res["y"])}')
+            print(f'R Residuals Mean: {np.mean(res["r"])}')
+            fig_x, ax_x = plt.subplots()
+            fig_y, ax_y = plt.subplots()
+            fig_r, ax_r = plt.subplots()
+
+            ax_x.hist(res['x'], bins=np.linspace(min(res['x']), max(res['x']), 25))
+            ax_x.hist(res['x'], bins=np.linspace(np.percentile(res['x'], 10), np.percentile(res['x'], 90), 25))
+            ax_y.hist(res['y'], bins=np.linspace(min(res['y']), max(res['y']), 25))
+            ax_y.hist(res['y'], bins=np.linspace(np.percentile(res['y'], 10), np.percentile(res['y'], 90), 25))
+            ax_r.hist(res['r'], bins=np.linspace(0, max(res['r']), 25))
+            ax_r.hist(res['r'], bins=np.linspace(0, np.percentile(res['r'], 90), 25))
+
+            ax_x.set_title(f'X Residuals {ladder}')
+            ax_x.set_xlabel(r'X Residual ($\mu m$)')
+            ax_x.set_ylabel('Entries')
+            ax_x.legend()
+            ax_y.set_title(f'Y Residuals {ladder}')
+            ax_y.set_xlabel(r'Y Residual ($\mu m$)')
+            ax_y.set_ylabel('Entries')
+            ax_y.legend()
+            ax_r.set_title(f'R Residuals {ladder}')
+            ax_r.set_xlabel(r'R Residual ($\mu m$)')
+            ax_r.set_ylabel('Entries')
+            ax_r.legend()
+
+    return residuals
+
+
 def banco_get_residuals_no_fit(ladder, ray_data):
     ray_trigger_ids = np.array(ladder.cluster_triggers) + 1  # Banco starts at 0, rays start at 1
     # x_rays, y_rays, event_num_rays = get_xy_positions(ray_data, ladder.center[2], ray_trigger_ids)
@@ -1642,6 +1842,16 @@ def get_close_triggers(ladder, ray_data):
     good_ray_triggers = event_num_rays[mask]
 
     return good_ray_triggers
+
+
+# def plot_banco_m3_tracks(ladder, ray_data, triggers):
+#     """
+#     Make a 3D plot of the m3 detectors and each ladder, along with the hits and tracks
+#     :param ladder:
+#     :param ray_data:
+#     :param triggers:
+#     :return:
+#     """
 
 
 def get_banco_run_name(base_dir, start_string='multinoiseScan', end_string='-ladder'):
