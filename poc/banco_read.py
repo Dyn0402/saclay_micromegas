@@ -207,7 +207,7 @@ def banco_analysis():
     # ray_data = get_ray_data(base_dir, [0, 1])
     ray_data = M3RefTracking(base_dir, single_track=True)
 
-    ladders = []
+    ladders, z_rot_angles, n_events = [], [], []
     for banco_name in banco_names:
         det_info = [det for det in run_data['detectors'] if det['name'] == banco_name][0]
         det_type_info = get_det_data(f'{det_info_dir}{det_info["det_type"]}.json')
@@ -408,6 +408,8 @@ def banco_analysis():
         good_triggers = get_close_triggers(ladder, ray_data)
         banco_get_residuals_no_fit_triggers(ladder, ray_data, good_triggers, plot=True)
         banco_align_rotation(ladder, ray_data, plot=True)
+        z_rot_angles.append(z_rot_align)
+        n_events.append(len(good_triggers))
         # plt.show()
         # ladder.set_orientation(x_rot_align, y_rot_align, z_rot_align)
         # print(f'{ladder.name} new orientation: {ladder.orientation}')
@@ -427,8 +429,10 @@ def banco_analysis():
 
     # plt.show()
     print()
-    for ladder in ladders:
-        print(f'Ladder {ladder.name} Center: {ladder.center}, Rotations: {ladder.rotations}')
+    for i, ladder in enumerate(ladders):
+        center_string = ', '.join([f'{x:.3f}' for x in ladder.center])
+        print(f'Ladder {ladder.name} Center: {center_string}, z_rotation: {z_rot_angles[i]:.4f}, '
+              f'n_events: {n_events[i]} Rotations: {ladder.rotations}')
 
     print(f'Bottom Arm ladder z spacing: {ladders[1].center[2] - ladders[0].center[2]} mm')
     print(f'Top Arm ladder z spacing: {ladders[3].center[2] - ladders[2].center[2]} mm')
@@ -512,14 +516,14 @@ def banco_analysis():
         print(f'Y Residuals Std: {np.std(res["y"])}')
         fig_x, ax_x = plt.subplots()
         ax_x.hist(res['x'], bins=np.linspace(min(res['x']), max(res['x']), 25))
-        ax_x.hist(res['x'], bins=np.linspace(np.quantile(res['x'], 0.1), np.quantile(res['x'], 0.9), 25))
+        # ax_x.hist(res['x'], bins=np.linspace(np.quantile(res['x'], 0.1), np.quantile(res['x'], 0.9), 25))
         ax_x.set_title(f'X Residuals Ladder {ladder}')
         ax_x.set_xlabel(r'X Residual ($\mu m$)')
         ax_x.set_ylabel('Entries')
 
         fig_y, ax_y = plt.subplots()
         ax_y.hist(res['y'], bins=np.linspace(min(res['y']), max(res['y']), 25))
-        ax_y.hist(res['y'], bins=np.linspace(np.quantile(res['y'], 0.1), np.quantile(res['y'], 0.9), 25))
+        # ax_y.hist(res['y'], bins=np.linspace(np.quantile(res['y'], 0.1), np.quantile(res['y'], 0.9), 25))
         ax_y.set_title(f'Y Residuals Ladder {ladder}')
         ax_y.set_xlabel(r'Y Residual ($\mu m$)')
         ax_y.set_ylabel('Entries')
