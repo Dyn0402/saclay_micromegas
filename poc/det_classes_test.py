@@ -8,6 +8,8 @@ Created as saclay_micromegas/det_classes_test.py
 @author: Dylan Neff, Dylan
 """
 
+import matplotlib.pyplot as plt
+
 from DetectorConfigLoader import DetectorConfigLoader
 from Detector import Detector
 from DreamDetector import DreamDetector
@@ -36,7 +38,7 @@ def main():
         else:  # Dream
             det = DreamDetector(config=det_config)
             print(f'FEU Num: {det.feu_num}')
-            print(f'FEU Channels: {det.feu_channels}')
+            print(f'FEU Channels: {det.feu_connectors}')
             print(f'HV: {det.hv}')
 
         print(f'Name: {det.name}')
@@ -44,9 +46,14 @@ def main():
         print(f'Size: {det.size}')
         print(f'Rotations: {det.rotations}')
 
-        dream_data = DreamData(data_dir, det.feu_num, det.feu_channels, ped_dir)
+        dream_data = DreamData(data_dir, det.feu_num, det.feu_connectors, ped_dir)
         dream_data.read_ped_data()
+        dream_data.plot_pedestals()
+        plt.show()
         dream_data.read_data()
+        dream_data.subtract_pedestals_from_data()
+        dream_data.get_event_amplitudes()
+        print(dream_data.data_amps)
 
         print('\n')
 

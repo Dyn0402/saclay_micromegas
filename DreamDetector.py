@@ -13,6 +13,7 @@ import json
 import numpy as np
 
 from Detector import Detector
+from DreamData import DreamData
 
 
 class DreamDetector(Detector):
@@ -20,11 +21,13 @@ class DreamDetector(Detector):
         super().__init__(name=name, center=center, size=size, rotations=rotations, config=config)
         self.hv = {}
         self.feu_num = None
-        self.feu_channels = []
+        self.feu_connectors = []
 
         self.config = config
         if self.config is not None:
             self.load_from_config_dream()
+
+        self.dream_data = None
 
     def load_from_config_dream(self):
         dream_feus = self.config['dream_feus']
@@ -34,9 +37,14 @@ class DreamDetector(Detector):
         else:
             self.feu_num = feu_nums[0]
         for axis_name, slot_chan in dream_feus.items():
-            self.feu_channels.append(slot_chan[1])
+            self.feu_connectors.append(slot_chan[1])
 
         self.hv = self.config['hvs']
+
+    def load_dream_data(self, data_dir, ped_dir=None):
+        self.dream_data = DreamData(data_dir, self.feu_num, self.feu_connectors, ped_dir)
+        self.dream_data.read_ped_data()
+        self.dream_data.read_data()
 
 
 class DreamSubDetector:

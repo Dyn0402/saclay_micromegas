@@ -8,8 +8,10 @@ Created as saclay_micromegas/DetectorConfigLoader.py
 @author: Dylan Neff, Dylan
 """
 
-
+import os
 import json
+
+import pandas as pd
 
 
 class DetectorConfigLoader:
@@ -18,7 +20,8 @@ class DetectorConfigLoader:
         self.included_detectors = self.config['included_detectors']
         self.sub_run_names = [sub_run['sub_run_name'] for sub_run in self.config['sub_runs']]
         self.det_type_info_dir = det_type_info_dir
-        self.det_maps = None
+
+        self.det_map_types = ['strip', 'inter', 'asacusa']
 
     def get_det_config(self, det_name, sub_run_name=None):
         if det_name not in self.config['included_detectors']:
@@ -45,6 +48,13 @@ class DetectorConfigLoader:
         if self.det_type_info_dir is not None:
             det_type_info = load_json_file(self.det_type_info_dir + det_config['det_type'] + '.json')
             det_config.update({key: val for key, val in det_type_info.items()})
+            det_map_type = [det_type for det_type in det_config["det_type"].split('_')
+                            if det_type in self.det_map_types]
+            if len(det_map_type) != 1:
+                print(f'Error: Detector type {det_config["det_type"]} not found in det map types.')
+            else:
+                det_map = load_det_map(f'{self.det_type_info_dir}{det_map_type[0]}_map.txt')
+                det_config.update({'det_map': det_map})
 
         return det_config
 
@@ -73,7 +83,11 @@ def load_json_file(json_path):
     return json_data
 
 
-def load_det_maps(det_map_dir):
-    for file in os.listdir(det_map_dir):
-        is
+def load_det_map(det_map_path):
+    with open(det_map_path, 'r') as file:
+        lines = file.readlines()
+    column_names = lines[0].strip().split(',')
+    data = [line.strip().split(',') for line in lines[1:] if len(line) > 10]
+    det_map = pd.DataFrame(data, columns=column_names)
 
+    return det_map
