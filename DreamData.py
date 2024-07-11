@@ -32,6 +32,8 @@ class DreamData:
         self.ped_flag = '_pedthr_'
         self.data_flag = '_datrun_'
 
+        self.waveform_fit_func = 'waveform_func'
+
         self.channels_per_connector = 64
 
         self.ped_data = None
@@ -43,6 +45,8 @@ class DreamData:
 
         self.data_amps = None
         self.data_mean_times = None
+        self.data_fit_success = None
+        self.fit_params = None
 
     def read_ped_data(self):
         ped_dir = self.ped_dir if self.ped_dir is not None else self.data_dir
@@ -60,7 +64,6 @@ class DreamData:
         ped_file_path = f'{ped_dir}{ped_files[0]}'
 
         ped_data = read_det_data(ped_file_path)
-        # self.ped_data = split_det_data(ped_data, self.feu_connectors, self.channels_per_connector)
         self.ped_data = split_det_data(ped_data, self.feu_connectors, self.channels_per_connector, to_connectors=False)
 
         self.get_pedestals()
@@ -68,19 +71,10 @@ class DreamData:
 
     def get_pedestals(self):
         pedestals = get_pedestals_by_median(self.ped_data)
-        # common_noise = self.get_common_noise(self.ped_data, pedestals)
         ped_common_noise_sub = self.subtract_common_noise(self.ped_data, pedestals)
         ped_fits = get_pedestal_fits(ped_common_noise_sub)
         self.ped_means = ped_fits['mean']
         self.ped_sigmas = ped_fits['sigma']
-        # ped_connectors = split_det_data(self.ped_data, self.feu_connectors, self.channels_per_connector)
-        # ped_means, ped_sigmas = [], []
-        # for ped_connector_data, common_noise_connector in zip(ped_connectors, common_noise):
-        #     ped_fits = get_pedestal_fits(ped_connector_data, common_noise_connector)
-        #     ped_means.append(ped_fits['mean'])
-        #     ped_sigmas.append(ped_fits['sigma'])
-        # self.ped_means = np.concatenate(ped_means)
-        # self.ped_sigmas = np.concatenate(ped_sigmas)
 
     def subtract_common_noise(self, data, pedestals):
         data_connectors = split_det_data(data, self.feu_connectors, self.channels_per_connector)
@@ -89,7 +83,7 @@ class DreamData:
         for data_connector, ped_connector in zip(data_connectors, peds_connectors):
             connector_common_noise = get_common_noise(data_connector, ped_connector)
             data_sub.append(data_connector - connector_common_noise[:, np.newaxis, :])
-        return np.array(data_sub)
+        return np.concatenate(data_sub, axis=1)
 
     # def subtract_common_noise(self, data, common_noise):
     #     data_connectors = split_det_data(data, self.feu_connectors, self.channels_per_connector)
@@ -117,25 +111,110 @@ class DreamData:
             data_file_path = f'{self.data_dir}{data_file}'
             data = read_det_data(data_file_path)
             self.data.append(split_det_data(data, self.feu_connectors, self.channels_per_connector, to_connectors=False))
-            print(type(self.data[-1]))
-            print(self.data[-1].dtype)
 
         self.data = np.concatenate(self.data)
         self.data = self.subtract_common_noise(self.data, self.ped_means)
-        self.data = subtract_pedestal(self.data, self.ped_means)
-        print(self.data.shape)
+        self.subtract_pedestals_from_data()
+        print(f'Read in data shape: {self.data.shape}')
+        self.get_event_amplitudes()
 
     def subtract_pedestals_from_data(self):
         self.data = subtract_pedestal(self.data, self.ped_means)
 
     def get_event_amplitudes(self):
         start = time()
-        self.data_amps, self.data_mean_times = [], []
-        for connector_i, data_connector in enumerate(self.data):
-            fits = get_waveform_fits(self.data, self.noise_thresholds[connector_i])
-            self.data_amps.append(fits['amplitude'])
-            self.data_mean_times.append(fits['mean'])
+        fits = get_waveform_fits(self.data, self.noise_thresholds, self.waveform_fit_func)
+        self.data_amps = fits['amplitude']
+        self.data_mean_times = fits['mean']
+        self.data_fit_success = fits['success'] != 0
+        self.fit_params = fits
         print(f'Fitting time: {time() - start} s')
+
+    def plot_event_amplitudes(self, channel=None):
+        amps = np.ravel(self.data_amps) if channel is None else self.data_amps[:, channel]
+        amps = amps[~np.isnan(amps)]
+        fig, ax = plt.subplots()
+        ax.hist(amps, bins=100)
+        ax.set_title('Event Amplitudes')
+        ax.set_xlabel('Amplitude')
+        ax.set_ylabel('Counts')
+        fig.tight_layout()
+
+    def plot_event_mean_times(self, channel=None):
+        mean_times = np.ravel(self.data_mean_times) if channel is None else self.data_mean_times[:, channel]
+        mean_times = mean_times[~np.isnan(mean_times)]
+        fig, ax = plt.subplots()
+        ax.hist(mean_times, bins=100)
+        ax.set_title('Event Mean Times')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Counts')
+        fig.tight_layout()
+
+    def plot_fit_param(self, param, channel=None):
+        param_data = self.fit_params[param][self.data_fit_success]
+        param_data = np.ravel(param_data) if channel is None else param_data[:, channel]
+        fig, ax = plt.subplots()
+        ax.hist(param_data, bins=100)
+        ax.set_title(f'Fit Parameter: {param}')
+        ax.set_xlabel(param)
+        ax.set_ylabel('Counts')
+        fig.tight_layout()
+
+    def plot_event_fit_success(self):
+        fig, ax = plt.subplots()
+        # Count the number of channels/events where amplitude is zero
+        amps, successes = np.ravel(self.data_amps), np.ravel(self.data_fit_success)
+        amp_zero_counts = np.sum(np.isnan(amps))
+        # Count the number of channels/events where success is false and amplitude is not zero
+        # print(successes, np.sum(successes))
+        # print(successes == 0, np.sum(successes == 0))
+        # print(~successes, np.sum(~successes))
+        # print(~np.isnan(amps), np.sum(~np.isnan(amps)))
+        # print(np.isnan(amps), np.sum(np.isnan(amps)))
+        # print(~successes & ~np.isnan(amps), np.sum(~successes & ~np.isnan(amps)))
+        success_false_counts = np.sum(~successes & ~np.isnan(amps))
+        # Count the number of channels/events where success is true
+        success_true_counts = np.sum(successes)
+        # Plot a bar chart of these three counts
+        labels = ['Amplitude Zero', 'Fit Failed', 'Fit Success']
+        counts = [amp_zero_counts, success_false_counts, success_true_counts]
+        ax.bar(labels, counts)
+        ax.set_yscale('log')
+        ax.set_title('Event Fit Success')
+        ax.set_ylabel('Counts')
+        fig.tight_layout()
+
+    def plot_fits(self, params_ranges, n_max=5, channel=None):
+        """
+        Plot fits where params are within ranges.
+        :param params_ranges: Dictionary of param names and ranges
+        :param n_max:
+        :param channel:
+        :return:
+        """
+        data, success, fit_params = self.data, self.data_fit_success, self.fit_params
+        if channel is not None:
+            data, success = data[:, channel], success[:, channel]
+            params = {key: val[:, channel] for key, val in fit_params.items()}
+        else:
+            success = np.ravel(success)
+            params = {key: np.ravel(val) for key, val in fit_params.items()}
+            # Reshape data to combine first two axes
+            data = np.reshape(data, (data.shape[0] * data.shape[1], data.shape[2]))
+        selection_mask = success
+        for param, param_range in params_ranges.items():
+            selection_mask = selection_mask & (param_range[0] < params[param]) & (params[param] < param_range[1])
+        selection_data = data[selection_mask]
+        print(f'Found {np.sum(selection_mask)} event channels with fit params in ranges.')
+        n_events = min(n_max, len(selection_data))
+        selection_data, selection_fit_params = selection_data[:n_events], {key: val[selection_mask][:n_events] for key, val in params.items()}
+        for event in selection_data:
+            fig, ax = plt.subplots()
+            hot_fit_params = fit_waveform_func(event)
+            fit_x = np.linspace(0, len(event), 1000)
+            ax.plot(event, marker='o')
+            ax.plot(fit_x, waveform_func_reparam(fit_x, *hot_fit_params[:4]), color='red')
+
 
     def plot_pedestals(self):
         fig_mean, ax_mean = plt.subplots()
@@ -151,6 +230,10 @@ class DreamData:
         ax_sig.set_xlabel('Channel')
         ax_sig.set_ylabel('Sigma')
         fig_sig.tight_layout()
+
+    def plot_pedestal_fit(self, channel):
+        ped_data = self.ped_data[channel]
+        fit_pedestals(ped_data, plot=True)
 
 
 def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):
@@ -224,7 +307,7 @@ def get_pedestal_fits(ped_data, common_noise=None):
     return ped_fits
 
 
-def fit_pedestals(strip_samples):
+def fit_pedestals(strip_samples, plot=False):
     bin_edges = np.arange(-0.5, 4097.5, 1)
     mean = np.mean(strip_samples)
     sd = np.std(strip_samples)
@@ -232,6 +315,18 @@ def fit_pedestals(strip_samples):
     bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
     popt, pcov = cf(gaussian_density, bin_centers, hist, p0=[mean, sd])
     perr = np.sqrt(np.diag(pcov))
+    if plot:
+        fig, ax = plt.subplots()
+        ax.bar(bin_centers, hist, width=1, align='center')
+        ax.plot(bin_centers, gaussian_density(bin_centers, *popt), 'r-')
+        fit_label = f'mu={popt[0]:.2f}±{perr[0]:.2f}\nsigma={popt[1]:.2f}±{perr[1]:.2f}'
+        ax.annotate(fit_label, (0.9, 0.9), xycoords='axes fraction', ha='right', va='top',
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+        ax.set_title('Pedestal Fit')
+        ax.set_xlabel('ADC')
+        ax.set_ylabel('Density')
+        fig.tight_layout()
     return *popt, *perr
 
 
@@ -265,23 +360,55 @@ def get_sample_max(data):
     return np.max(data, axis=-1)
 
 
-def get_waveform_fits(data, noise_thresholds=None):
+def get_waveform_fits(data, noise_thresholds=None, func='gaus'):
     if noise_thresholds is not None:
-        data = filter_noise_events(data, noise_thresholds)
-    fits = np.apply_along_axis(fit_waveform, -1, data)
-    fits = np.transpose(fits)
-    fits = dict(zip(['amplitude', 'mean', 'sigma', 'amplitude_err', 'mean_err', 'sigma_err'], fits))
+        sample_maxes = get_sample_max(data)
+        # If sample max below noise threshold, set to zero
+        noise_mask = sample_maxes > noise_thresholds[np.newaxis, :]
+        data = np.where(noise_mask[:, :, np.newaxis], data, 0)
+    if func == 'gaus':
+        fits = np.apply_along_axis(fit_waveform_gaus, -1, data)
+        param_names = ['amplitude', 'mean', 'sigma', 'amplitude_err', 'mean_err', 'sigma_err', 'success']
+    elif func == 'waveform_func':
+        fits = np.apply_along_axis(fit_waveform_func, -1, data)
+        param_names = ['amplitude', 'mean', 'time_shift', 'q', 'amplitude_err', 'mean_err', 'time_shift_err', 'q_err',
+                       'success']
+    else:
+        print('Error: Fit function not recognized.')
+        return None
+    fits = fits.transpose((2, 0, 1))
+    fits = dict(zip(param_names, fits))
     return fits
 
 
-def fit_waveform(waveform):
-    print(waveform)
+def fit_waveform_gaus(waveform):
     amplitude = np.max(waveform)
+    if amplitude == 0:
+        return 0, 0, 0, 0, 0, 0, False
     mean = np.argmax(waveform)
     sd = len(waveform) / 5
-    popt, pcov = cf(gaussian, np.arange(len(waveform)), waveform, p0=[amplitude, mean, sd])
-    perr = np.sqrt(np.diag(pcov))
-    return *popt, *perr
+    try:
+        popt, pcov = cf(gaussian, np.arange(len(waveform)), waveform, p0=[amplitude, mean, sd])
+        perr = np.sqrt(np.diag(pcov))
+        return *popt, *perr, True
+    except RuntimeError:
+        return amplitude, mean, sd, 0, 0, 0, False
+
+
+def fit_waveform_func(waveform):
+    amplitude = np.max(waveform)
+    if amplitude == 0:
+        # return 0, 0, 0, 0, 0, 0, 0, 0, False
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, False
+    mean = np.argmax(waveform)
+    p0 = [amplitude, mean, 3, 2. / 3]
+    p_bounds = [[0, 0.001, -len(waveform), 0], [20000, len(waveform) * 4, len(waveform), 4]]
+    try:
+        popt, pcov = cf(waveform_func_reparam, np.arange(len(waveform)), waveform, p0=p0, bounds=p_bounds)
+        perr = np.sqrt(np.diag(pcov))
+        return *popt, *perr, True
+    except (RuntimeError, ValueError):
+        return amplitude, mean, 0, np.nan, np.nan, np.nan, np.nan, np.nan, False
 
 
 def gaussian_density(x, mu, sigma):
@@ -290,6 +417,34 @@ def gaussian_density(x, mu, sigma):
 
 def gaussian(x, a, mu, sigma):
     return a * np.exp(-(x - mu) ** 2 / (2 * sigma ** 2))
+
+
+def waveform_func(t, a, w, q):
+    if np.isscalar(t):
+        # Handle scalar input
+        if t <= 0:
+            return 0
+        term1 = np.sqrt((2 * q - 1) / (2 * q + 1)) * np.sin(w * t / 2 * np.sqrt(4 - 1 / q**2))
+        term2 = -np.cos(w * t / 2 * np.sqrt(4 - 1 / q**2))
+        return a * (np.exp(-w * t) + np.exp(-w * t / (2 * q)) * (term1 + term2))
+    else:
+        # Handle numpy array input
+        result = np.zeros_like(t)
+        positive_t_mask = t > 0
+        term1 = np.sqrt((2 * q - 1) / (2 * q + 1)) * np.sin(w * t[positive_t_mask] / 2 * np.sqrt(4 - 1 / q**2))
+        term2 = -np.cos(w * t[positive_t_mask] / 2 * np.sqrt(4 - 1 / q**2))
+        result[positive_t_mask] = a * (np.exp(-w * t[positive_t_mask]) + np.exp(-w * t[positive_t_mask] / (2 * q)) * (term1 + term2))
+        return result
+
+
+def waveform_func_reparam(t, a, t_max, t_shift, q):
+    t = t - t_shift
+    t_max = t_max - t_shift
+    w = 2 / t_max
+    func = waveform_func(t, 1, w, q)
+    func_max = waveform_func(t_max, 1, w, q)
+    return a * func / func_max
+
 
 
 def get_good_files(file_list, flags=None, feu_num=None, file_ext=None):
