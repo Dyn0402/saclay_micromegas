@@ -18,7 +18,7 @@ def main():
     t = np.linspace(0, 32, 1000)
     t_maxes = [5, 10, 15, 20, 25]
     # q = 2. / 3
-    q = 0.51
+    q = 1
     a = 1
     t_shift = 2
     fig, ax = plt.subplots()

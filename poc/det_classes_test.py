@@ -17,21 +17,28 @@ from DreamData import DreamData
 
 
 def main():
-    # run_dir = 'F:/Saclay/cosmic_data/hv_scan_7-6-24/'
-    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    run_dir = '/local/home/dn277127/Bureau/cosmic_data/hv_scan_7-6-24/'
-    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # run_dir = 'F:/Saclay/cosmic_data/new_strip_check_7-12-24/'
+    run_dir = 'F:/Saclay/cosmic_data/sg1_hv_scan_7-14-24/'
+    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # run_dir = '/local/home/dn277127/Bureau/cosmic_data/hv_scan_7-6-24/'
+    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # sub_run_name = 'hv1'
+    # sub_run_name = 'new_detector_short'
+    sub_run_name = 'drift_600_resist_460'
     run_json_path = f'{run_dir}run_config.json'
-    data_dir = f'{run_dir}/hv1/filtered_root/'
-    ped_dir = f'{run_dir}/hv1/decoded_root/'
+    data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
+    ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
 
     det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
     for detctor_name in det_config_loader.included_detectors:
-        if detctor_name != 'urw_inter':
+        # det_single = 'asacusa_strip_1'
+        det_single = 'strip_grid_1'
+        # det_single = None
+        if det_single is not None and detctor_name != det_single:
             continue
 
         print(detctor_name)
-        det_config = det_config_loader.get_det_config(detctor_name)
+        det_config = det_config_loader.get_det_config(detctor_name, sub_run_name=sub_run_name)
         # print(det_config)
         if det_config['det_type'] == 'm3':
             continue
@@ -61,10 +68,18 @@ def main():
         dream_data.plot_event_fit_success()
         dream_data.plot_fit_param('time_shift')
         dream_data.plot_fit_param('q')
+        param_ranges = {'time_shift': [2, 8], 'mean': [0, 10], 'amplitude': [0, 5000]}
+        dream_data.plot_fit_param('amplitude', param_ranges)
+        param_ranges = {'amplitude': [100, 5000]}
+        dream_data.plot_fit_param('mean', param_ranges)
         param_ranges = {'time_shift': [2, 8], 'q': [0.55, 0.7], 'amplitude': [500, 1000], 'mean': [5, 10]}
         dream_data.plot_fits(param_ranges)
         param_ranges = {'time_shift': [2, 8], 'q': [0.55, 0.7], 'amplitude': [10, 50], 'mean': [5, 10]}
         dream_data.plot_fits(param_ranges)
+        param_ranges = {'time_shift': [2, 8], 'amplitude': [100, 1000], 'mean': [1, 15]}
+        dream_data.plot_fits(param_ranges)
+        # param_ranges = {'mean': [40, 60]}
+        # dream_data.plot_fits(param_ranges, n_max=10)
         plt.show()
         print(dream_data.data_amps)
 

@@ -77,8 +77,9 @@ class DreamData:
         self.ped_sigmas = ped_fits['sigma']
 
     def subtract_common_noise(self, data, pedestals):
-        data_connectors = split_det_data(data, self.feu_connectors, self.channels_per_connector)
-        peds_connectors = split_det_data(pedestals, self.feu_connectors, self.channels_per_connector)
+        feu_connectors = np.array(self.feu_connectors) - min(self.feu_connectors) + 1  # Ensure connectors start at 1
+        data_connectors = split_det_data(data, feu_connectors, self.channels_per_connector)
+        peds_connectors = split_det_data(pedestals, feu_connectors, self.channels_per_connector)
         data_sub = []
         for data_connector, ped_connector in zip(data_connectors, peds_connectors):
             connector_common_noise = get_common_noise(data_connector, ped_connector)
@@ -150,11 +151,12 @@ class DreamData:
         ax.set_ylabel('Counts')
         fig.tight_layout()
 
-    def plot_fit_param(self, param, channel=None):
-        param_data = self.fit_params[param][self.data_fit_success]
-        param_data = np.ravel(param_data) if channel is None else param_data[:, channel]
+    def plot_fit_param(self, param, params_ranges=None, channel=None):
+        selection_data = self.get_selected_data(params_ranges, channel)
+        # param_data = self.fit_params[param][self.data_fit_success]
+        # param_data = np.ravel(param_data) if channel is None else param_data[:, channel]
         fig, ax = plt.subplots()
-        ax.hist(param_data, bins=100)
+        ax.hist(selection_data, bins=100)
         ax.set_title(f'Fit Parameter: {param}')
         ax.set_xlabel(param)
         ax.set_ylabel('Counts')
@@ -192,6 +194,47 @@ class DreamData:
         :param channel:
         :return:
         """
+        # data, success, fit_params = self.data, self.data_fit_success, self.fit_params
+        # if channel is not None:
+        #     data, success = data[:, channel], success[:, channel]
+        #     params = {key: val[:, channel] for key, val in fit_params.items()}
+        # else:
+        #     success = np.ravel(success)
+        #     params = {key: np.ravel(val) for key, val in fit_params.items()}
+        #     # Reshape data to combine first two axes
+        #     data = np.reshape(data, (data.shape[0] * data.shape[1], data.shape[2]))
+        # selection_mask = success
+        # for param, param_range in params_ranges.items():
+        #     selection_mask = selection_mask & (param_range[0] < params[param]) & (params[param] < param_range[1])
+        # selection_data = data[selection_mask]
+        selection_data = self.get_selected_data(params_ranges, channel)
+        print(f'Found {len(selection_data)} event channels with fit params in ranges.')
+        n_events = min(n_max, len(selection_data))
+        selection_data = selection_data[:n_events]
+        for event in selection_data:
+            fig, ax = plt.subplots()
+            hot_fit_params = fit_waveform_func(event)
+            func_pars = hot_fit_params[:4]
+            func_errs = hot_fit_params[4:-1]
+            # amplitude = np.max(event)
+            max_index = np.argmax(event)
+            end_index = np.where(event[max_index:] < 0)[0][0] + max_index
+            # start_index = np.where(event[:max_index] < amplitude * 0.1)[0][-1]
+            fit_x = np.linspace(0, end_index, 1000)
+            ax.plot(event, marker='o')
+            ax.plot(fit_x, waveform_func_reparam(fit_x, *func_pars), color='red')
+            fit_string = f'Amplitude: {func_pars[0]:.2f}±{func_errs[0]:.2f}\n' \
+                            f'Mean: {func_pars[1]:.2f}±{func_errs[1]:.2f}\n' \
+                            f'Time Shift: {func_pars[2]:.2f}±{func_errs[2]:.2f}\n' \
+                            f'Q: {func_pars[3]:.2f}±{func_errs[3]:.2f}'
+            ax.annotate(fit_string, (0.9, 0.9), xycoords='axes fraction', ha='right', va='top',
+                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    def get_selected_data(self, params_ranges=None, channel=None):
+        """
+        Get data that fits within specified parameter ranges.
+        :return:
+        """
         data, success, fit_params = self.data, self.data_fit_success, self.fit_params
         if channel is not None:
             data, success = data[:, channel], success[:, channel]
@@ -202,19 +245,12 @@ class DreamData:
             # Reshape data to combine first two axes
             data = np.reshape(data, (data.shape[0] * data.shape[1], data.shape[2]))
         selection_mask = success
-        for param, param_range in params_ranges.items():
-            selection_mask = selection_mask & (param_range[0] < params[param]) & (params[param] < param_range[1])
+        if params_ranges is not None:
+            for param, param_range in params_ranges.items():
+                selection_mask = selection_mask & (param_range[0] < params[param]) & (params[param] < param_range[1])
         selection_data = data[selection_mask]
-        print(f'Found {np.sum(selection_mask)} event channels with fit params in ranges.')
-        n_events = min(n_max, len(selection_data))
-        selection_data, selection_fit_params = selection_data[:n_events], {key: val[selection_mask][:n_events] for key, val in params.items()}
-        for event in selection_data:
-            fig, ax = plt.subplots()
-            hot_fit_params = fit_waveform_func(event)
-            fit_x = np.linspace(0, len(event), 1000)
-            ax.plot(event, marker='o')
-            ax.plot(fit_x, waveform_func_reparam(fit_x, *hot_fit_params[:4]), color='red')
 
+        return selection_data
 
     def plot_pedestals(self):
         fig_mean, ax_mean = plt.subplots()
@@ -402,12 +438,17 @@ def fit_waveform_func(waveform):
         return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, False
     mean = np.argmax(waveform)
     p0 = [amplitude, mean, 3, 2. / 3]
-    p_bounds = [[0, 0.001, -len(waveform), 0], [20000, len(waveform) * 4, len(waveform), 4]]
+    p_bounds = [[0, 0.001, -len(waveform), 0], [20000, len(waveform) * 4, len(waveform), 2]]
     try:
+        # Find first point after max that is below 0 and last point before max less than 10% of max. Only fit this range
+        max_index = np.argmax(waveform)
+        end_index = np.where(waveform[max_index:] < 0)[0][0] + max_index
+        # start_index = np.where(waveform[:max_index] < amplitude * 0.1)[0][-1]
+        waveform = waveform[:end_index]
         popt, pcov = cf(waveform_func_reparam, np.arange(len(waveform)), waveform, p0=p0, bounds=p_bounds)
         perr = np.sqrt(np.diag(pcov))
         return *popt, *perr, True
-    except (RuntimeError, ValueError):
+    except (RuntimeError, ValueError, IndexError):
         return amplitude, mean, 0, np.nan, np.nan, np.nan, np.nan, np.nan, False
 
 
