@@ -33,8 +33,10 @@ class DreamData:
         self.data_flag = '_datrun_'
 
         self.waveform_fit_func = 'waveform_func'
+        # self.waveform_fit_func = 'max_sample'
 
         self.channels_per_connector = 64
+        self.starting_connector = min(self.feu_connectors)
 
         self.ped_data = None
         self.data = None
@@ -44,9 +46,11 @@ class DreamData:
         self.noise_thresholds = None
 
         self.data_amps = None
-        self.data_mean_times = None
+        self.data_time_of_max = None
         self.data_fit_success = None
         self.fit_params = None
+
+        self.hits = None
 
     def read_ped_data(self):
         ped_dir = self.ped_dir if self.ped_dir is not None else self.data_dir
@@ -64,7 +68,7 @@ class DreamData:
         ped_file_path = f'{ped_dir}{ped_files[0]}'
 
         ped_data = read_det_data(ped_file_path)
-        self.ped_data = split_det_data(ped_data, self.feu_connectors, self.channels_per_connector, to_connectors=False)
+        self.ped_data = self.split_det_data(ped_data, self.feu_connectors, to_connectors=False)
 
         self.get_pedestals()
         self.get_noise_thresholds()
@@ -77,22 +81,14 @@ class DreamData:
         self.ped_sigmas = ped_fits['sigma']
 
     def subtract_common_noise(self, data, pedestals):
-        feu_connectors = np.array(self.feu_connectors) - min(self.feu_connectors) + 1  # Ensure connectors start at 1
-        data_connectors = split_det_data(data, feu_connectors, self.channels_per_connector)
-        peds_connectors = split_det_data(pedestals, feu_connectors, self.channels_per_connector)
+        # feu_connectors = np.array(self.feu_connectors) - min(self.feu_connectors) + 1  # Ensure connectors start at 1
+        data_connectors = self.split_det_data(data, self.feu_connectors, to_connectors=True)
+        peds_connectors = self.split_det_data(pedestals, self.feu_connectors, to_connectors=True)
         data_sub = []
         for data_connector, ped_connector in zip(data_connectors, peds_connectors):
             connector_common_noise = get_common_noise(data_connector, ped_connector)
             data_sub.append(data_connector - connector_common_noise[:, np.newaxis, :])
         return np.concatenate(data_sub, axis=1)
-
-    # def subtract_common_noise(self, data, common_noise):
-    #     data_connectors = split_det_data(data, self.feu_connectors, self.channels_per_connector)
-    #     data_sub = []
-    #     for data_connector, common_noise_connector in zip(data_connectors, common_noise):
-    #         data_connector = data_connector - common_noise_connector[:, np.newaxis, :]
-    #         data_sub.append(data_connector)
-    #     return np.concatenate(data_sub, axis=1)
 
     def get_noise_thresholds(self, noise_sigmas=5):
         self.noise_thresholds = get_noise_thresholds(self.ped_sigmas, noise_sigmas)
@@ -111,13 +107,14 @@ class DreamData:
         for data_file in data_files:
             data_file_path = f'{self.data_dir}{data_file}'
             data = read_det_data(data_file_path)
-            self.data.append(split_det_data(data, self.feu_connectors, self.channels_per_connector, to_connectors=False))
+            self.data.append(self.split_det_data(data, self.feu_connectors, to_connectors=False))
 
         self.data = np.concatenate(self.data)
         self.data = self.subtract_common_noise(self.data, self.ped_means)
         self.subtract_pedestals_from_data()
         print(f'Read in data shape: {self.data.shape}')
         self.get_event_amplitudes()
+        self.get_hits()
 
     def subtract_pedestals_from_data(self):
         self.data = subtract_pedestal(self.data, self.ped_means)
@@ -126,10 +123,68 @@ class DreamData:
         start = time()
         fits = get_waveform_fits(self.data, self.noise_thresholds, self.waveform_fit_func)
         self.data_amps = fits['amplitude']
-        self.data_mean_times = fits['mean']
+        self.data_time_of_max = fits['time_max']
         self.data_fit_success = fits['success'] != 0
         self.fit_params = fits
         print(f'Fitting time: {time() - start} s')
+
+    def get_hits(self, amp_min=0, time_max_range=None):
+        """
+        Get hits for each channel in each event.
+        Currently, most of the work is handled by get_event_amplitudes, which masks noise.
+        Here simply get channels in each event with amplitude above amp_min and with
+        time_max within time_max_range.
+        :param amp_min: Minimum amplitude for hit.
+        :param time_max_range: Tuple of min and max time of max values.
+        """
+        self.hits = self.data_amps > amp_min
+        if time_max_range is not None:
+            good_time_max = (time_max_range[0] < self.data_time_of_max) & (self.data_time_of_max < time_max_range[1])
+            self.hits = self.hits & good_time_max
+
+    def get_channels_amps(self, connector, channels):
+        """
+        Get amplitudes for specified channels on connector in each event.
+        :param connector: Connector number.
+        :param channels: List or array of channels.
+        :return: Amplitudes for specified channels in each event.
+        """
+        channels = np.array(channels)
+        channel_amps = self.split_det_data(self.data_amps, [connector], to_connectors=False)[:, channels]
+        return channel_amps
+
+    def get_channels_hits(self, connector, channels):
+        """
+        Get hits for specified channels on connector in each event.
+        :param connector: Connector number.
+        :param channels: List or array of channels.
+        :return: Hits for specified channels in each event.
+        """
+        channels = np.array(channels)
+        channel_hits = self.split_det_data(self.hits, [connector], to_connectors=False)[:, channels]
+        return channel_hits
+
+    def split_det_data(self, det_data, feu_connectors, to_connectors=False):
+        channel_list = np.concatenate([np.arange(self.channels_per_connector) +
+                                       self.channels_per_connector * (connector_num - self.starting_connector)
+                                       for connector_num in feu_connectors])
+        if det_data.ndim == 1:
+            det_data = det_data[channel_list]
+            if to_connectors:
+                det_data = np.array(np.split(det_data, len(feu_connectors)))
+        elif det_data.ndim == 2:
+            det_data = det_data[:, channel_list]
+            if to_connectors:
+                det_data = np.array(np.split(det_data, len(feu_connectors), axis=1))
+        elif det_data.ndim == 3:
+            det_data = det_data[:, channel_list]
+            if to_connectors:
+                det_data = np.array(np.split(det_data, len(feu_connectors), axis=1))
+        else:
+            print('Error: Data shape not recognized.')
+            return None
+
+        return det_data
 
     def plot_event_amplitudes(self, channel=None):
         amps = np.ravel(self.data_amps) if channel is None else self.data_amps[:, channel]
@@ -141,18 +196,18 @@ class DreamData:
         ax.set_ylabel('Counts')
         fig.tight_layout()
 
-    def plot_event_mean_times(self, channel=None):
-        mean_times = np.ravel(self.data_mean_times) if channel is None else self.data_mean_times[:, channel]
-        mean_times = mean_times[~np.isnan(mean_times)]
+    def plot_event_time_maxes(self, channel=None):
+        time_maxes = np.ravel(self.data_time_of_max) if channel is None else self.data_time_of_max[:, channel]
+        time_maxes = time_maxes[~np.isnan(time_maxes)]
         fig, ax = plt.subplots()
-        ax.hist(mean_times, bins=100)
+        ax.hist(time_maxes, bins=100)
         ax.set_title('Event Mean Times')
         ax.set_xlabel('Time')
         ax.set_ylabel('Counts')
         fig.tight_layout()
 
     def plot_fit_param(self, param, params_ranges=None, channel=None):
-        selection_data = self.get_selected_data(params_ranges, channel)
+        selection_data = self.get_selected_fit_data(param, params_ranges, channel)
         # param_data = self.fit_params[param][self.data_fit_success]
         # param_data = np.ravel(param_data) if channel is None else param_data[:, channel]
         fig, ax = plt.subplots()
@@ -252,6 +307,26 @@ class DreamData:
 
         return selection_data
 
+    def get_selected_fit_data(self, param, params_ranges=None, channel=None):
+        """
+        Get data that fits within specified parameter ranges.
+        :return:
+        """
+        success, fit_params = self.data_fit_success, self.fit_params
+        if channel is not None:
+            success = success[:, channel]
+            params = {key: val[:, channel] for key, val in fit_params.items()}
+        else:
+            success = np.ravel(success)
+            params = {key: np.ravel(val) for key, val in fit_params.items()}
+        selection_mask = success
+        if params_ranges is not None:
+            for par, param_range in params_ranges.items():
+                selection_mask = selection_mask & (param_range[0] < params[par]) & (params[par] < param_range[1])
+        selection_data = params[param][selection_mask]
+
+        return selection_data
+
     def plot_pedestals(self):
         fig_mean, ax_mean = plt.subplots()
         ax_mean.plot(self.ped_means)
@@ -286,24 +361,6 @@ def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):
     root_file.close()
 
     return variable_data
-
-
-def split_det_data(det_data, feu_connectors, channels_per_connector, to_connectors=True):
-    channel_list = np.concatenate([np.arange(channels_per_connector) + channels_per_connector * (connector_num - 1)
-                                   for connector_num in feu_connectors])
-    if det_data.ndim == 1:
-        det_data = det_data[channel_list]
-        if to_connectors:
-            det_data = np.array(np.split(det_data, len(feu_connectors)))
-    elif det_data.ndim == 3:
-        det_data = det_data[:, channel_list]
-        if to_connectors:
-            det_data = np.array(np.split(det_data, len(feu_connectors), axis=1))
-    else:
-        print('Error: Data shape not recognized.')
-        return None
-
-    return det_data
 
 
 # Pedestal and Noise Functions
@@ -404,11 +461,14 @@ def get_waveform_fits(data, noise_thresholds=None, func='gaus'):
         data = np.where(noise_mask[:, :, np.newaxis], data, 0)
     if func == 'gaus':
         fits = np.apply_along_axis(fit_waveform_gaus, -1, data)
-        param_names = ['amplitude', 'mean', 'sigma', 'amplitude_err', 'mean_err', 'sigma_err', 'success']
+        param_names = ['amplitude', 'time_max', 'sigma', 'amplitude_err', 'time_max_err', 'sigma_err', 'success']
     elif func == 'waveform_func':
         fits = np.apply_along_axis(fit_waveform_func, -1, data)
-        param_names = ['amplitude', 'mean', 'time_shift', 'q', 'amplitude_err', 'mean_err', 'time_shift_err', 'q_err',
+        param_names = ['amplitude', 'time_max', 'time_shift', 'q', 'amplitude_err', 'time_max_err', 'time_shift_err', 'q_err',
                        'success']
+    elif func == 'max_sample':
+        fits = np.apply_along_axis(get_waveform_max_sample, -1, data)
+        param_names = ['amplitude', 'time_max', 'success']
     else:
         print('Error: Fit function not recognized.')
         return None
@@ -450,6 +510,12 @@ def fit_waveform_func(waveform):
         return *popt, *perr, True
     except (RuntimeError, ValueError, IndexError):
         return amplitude, mean, 0, np.nan, np.nan, np.nan, np.nan, np.nan, False
+
+
+def get_waveform_max_sample(waveform):
+    amplitude = np.max(waveform)
+    time_max = np.argmax(waveform)
+    return amplitude, time_max, 1
 
 
 def gaussian_density(x, mu, sigma):
