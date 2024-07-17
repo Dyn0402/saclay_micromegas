@@ -9,9 +9,12 @@ Created as saclay_micromegas/DreamSubDetector
 """
 
 
+import numpy as np
+
 class DreamSubDetector:
     def __init__(self):
         self.x_pos, self.y_pos = None, None
+        self.x_chans, self.y_chans = None, None
         self.x_amps, self.y_amps = None, None
         self.x_hits, self.y_hits = None, None
         self.x_clusters, self.y_clusters = None, None
@@ -21,21 +24,22 @@ class DreamSubDetector:
         self.x_connector, self.y_connector = None, None
         self.resist = None
 
-    def set_x(self, pos, amps, hits, pitch, interpitch, connector):
+    def set_x(self, pos, amps, hits, pitch, interpitch, connector, clusters=None, chans=None):
         self.x_pos = pos
         self.x_amps = amps
         self.x_hits = hits
         self.x_pitch = pitch
         self.x_interpitch = interpitch
         self.x_connector = connector
+        self.x_clusters = clusters
+        self.x_chans = chans
 
-    def set_y(self, pos, amps, hits, pitch, interpitch, connector):
+    def set_y(self, pos, amps, hits, pitch, interpitch, connector, clusters=None, chans=None):
         self.y_pos = pos
         self.y_amps = amps
         self.y_hits = hits
         self.y_pitch = pitch
         self.y_interpitch = interpitch
         self.y_connector = connector
-
-    def get_clusters(self):
-        print(f'x_hits: {self.x_hits.shape}')
+        self.y_clusters = clusters
+        self.y_chans = chans

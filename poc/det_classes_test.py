@@ -18,10 +18,10 @@ from DreamData import DreamData
 
 def main():
     # run_dir = 'F:/Saclay/cosmic_data/new_strip_check_7-12-24/'
-    # run_dir = 'F:/Saclay/cosmic_data/sg1_hv_scan_7-14-24/'
-    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    run_dir = '/local/home/dn277127/Bureau/cosmic_data/ig1_test1/'
-    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    run_dir = 'F:/Saclay/cosmic_data/ig1_test1/'
+    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # run_dir = '/local/home/dn277127/Bureau/cosmic_data/ig1_test1/'
+    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # sub_run_name = 'hv1'
     # sub_run_name = 'new_detector_short'
     # sub_run_name = 'drift_600_resist_460'

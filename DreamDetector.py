@@ -31,6 +31,8 @@ class DreamDetector(Detector):
             self.load_from_config_dream()
 
         self.dream_data = None
+        self.x_groups = None
+        self.y_groups = None
         self.sub_detectors = None
 
     def load_from_config_dream(self):
@@ -53,29 +55,44 @@ class DreamDetector(Detector):
         self.dream_data.read_ped_data()
         self.dream_data.read_data()
 
+    def make_sub_groups(self):
+        x_group_dfs = self.det_map[self.det_map['axis'] == 'y']  # y-going strips give x position
+        self.x_groups = []
+        for x_index, x_group in x_group_dfs.iterrows():
+            x_connector, x_channels = x_group['connector'], x_group['channels']
+            x_amps = self.dream_data.get_channels_amps(x_connector, x_channels)
+            x_hits = self.dream_data.get_channels_hits(x_connector, x_channels)
+            x_clusters = find_clusters_all_events(x_hits)
+            self.x_groups.append({'df': x_group, 'amps': x_amps, 'hits': x_hits, 'clusters': x_clusters})
+
+        y_group_dfs = self.det_map[self.det_map['axis'] == 'x']  # x-going strips give y position
+        self.y_groups = []
+        for y_index, y_group in y_group_dfs.iterrows():
+            y_connector, y_channels = y_group['connector'], y_group['channels']
+            y_amps = self.dream_data.get_channels_amps(y_connector, y_channels)
+            y_hits = self.dream_data.get_channels_hits(y_connector, y_channels)
+            y_clusters = find_clusters_all_events(y_hits)
+            self.y_groups.append({'df': y_group, 'amps': y_amps, 'hits': y_hits, 'clusters': y_clusters})
+
     def make_sub_detectors(self):
-        x_groups_df = self.det_map[self.det_map['axis'] == 'y']  # y-going strips give x position
-        y_groups_df = self.det_map[self.det_map['axis'] == 'x']  # x-going strips give y position
+        self.make_sub_groups()
         self.sub_detectors = []
-        for x_index, x_group in x_groups_df.iterrows():
-            x_group = x_group.to_dict()
-            for y_index, y_group in y_groups_df.iterrows():
-                y_group = y_group.to_dict()
-                x_connector, y_connector = x_group['connector'], y_group['connector']
-                x_channels, y_channels = x_group['channels'], y_group['channels']
-                x_pos, y_pos = x_group['xs_gerber'], y_group['ys_gerber']
-                x_pitch, y_pitch = x_group['pitch(mm)'], y_group['pitch(mm)']
-                x_interpitch, y_interpitch = x_group['interpitch(mm)'], y_group['interpitch(mm)']
-                x_amps = self.dream_data.get_channels_amps(x_connector, x_channels)
-                y_amps = self.dream_data.get_channels_amps(y_connector, y_channels)
-                x_hits = self.dream_data.get_channels_hits(x_connector, x_channels)
-                y_hits = self.dream_data.get_channels_hits(y_connector, y_channels)
+        for x_group in self.x_groups:
+            x_group_df = x_group['df'].to_dict()
+            for y_index, y_group in self.y_groups:
+                y_group_df = y_group['df'].to_dict()
+                x_connector, y_connector = x_group_df['connector'], y_group_df['connector']
+                x_channels, y_channels = x_group_df['channels'], y_group_df['channels']
+                x_pos, y_pos = x_group_df['xs_gerber'], y_group_df['ys_gerber']
+                x_pitch, y_pitch = x_group_df['pitch(mm)'], y_group_df['pitch(mm)']
+                x_interpitch, y_interpitch = x_group_df['interpitch(mm)'], y_group_df['interpitch(mm)']
 
                 sub_det = DreamSubDetector()
-                sub_det.set_x(x_pos, x_amps, x_hits, x_pitch, x_interpitch, x_connector)
-                sub_det.set_y(y_pos, y_amps, y_hits, y_pitch, y_interpitch, y_connector)
+                sub_det.set_x(x_pos, x_group['amps'], x_group['hits'], x_pitch, x_interpitch, x_connector,
+                              x_group['clusters'], x_channels)
+                sub_det.set_y(y_pos, y_group['amps'], y_group['hits'], y_pitch, y_interpitch, y_connector,
+                              y_group['clusters'], y_channels)
                 self.sub_detectors.append(sub_det)
-                sub_det.get_clusters()
 
 
 def split_neighbors(df):
@@ -125,3 +142,43 @@ def split_neighbors(df):
     columns = ['axis', 'pitch(mm)', 'interpitch(mm)', 'connector', 'channels', 'xs_gerber', 'ys_gerber']
     result_df = pd.DataFrame(result_data, columns=columns)
     return result_df
+
+
+def find_clusters_all_events(hit_data):
+    """
+    Find the clusters for all events in a hit_data array.
+    :param hit_data: Array of hit data with shape (n_events, n_channels).
+    :return: List of clusters for each event.
+    """
+    clusters = []
+    for event in hit_data:
+        clusters.append(find_true_clusters(event))
+    return clusters
+
+
+def find_true_clusters(bool_array):
+    # Ensure the input is a numpy array
+    bool_array = np.asarray(bool_array)
+
+    # Find the indices where the value is True
+    true_indices = np.where(bool_array)[0]
+
+    if len(true_indices) == 0:
+        return []
+
+    # Identify the breaks in the sequence of true_indices
+    breaks = np.where(np.diff(true_indices) > 1)[0]
+
+    # Initialize the list of clusters
+    clusters = []
+
+    # Append the first segment of indices
+    start = 0
+    for end in breaks:
+        clusters.append(true_indices[start:end + 1])
+        start = end + 1
+
+    # Append the last segment of indices
+    clusters.append(true_indices[start:])
+
+    return clusters
