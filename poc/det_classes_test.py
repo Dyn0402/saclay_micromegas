@@ -8,6 +8,7 @@ Created as saclay_micromegas/det_classes_test.py
 @author: Dylan Neff, Dylan
 """
 
+import numpy as np
 import matplotlib.pyplot as plt
 
 from DetectorConfigLoader import DetectorConfigLoader
@@ -34,6 +35,7 @@ def main():
     for detctor_name in det_config_loader.included_detectors:
         # det_single = 'asacusa_strip_1'
         det_single = 'strip_grid_1'
+        # det_single = 'urw_inter'
         # det_single = None
         if det_single is not None and detctor_name != det_single:
             continue
@@ -53,6 +55,15 @@ def main():
             det.load_dream_data(data_dir, ped_dir)
             print(f'Hits shape: {det.dream_data.hits.shape}')
             det.make_sub_detectors()
+            event_nums = det.plot_xy_amp_sum_vs_event_num(500)
+            det.plot_amplitude_sum_vs_event_num()
+            for event_num in event_nums:
+                det.plot_event_1d(event_num)
+                det.plot_event_2d(event_num)
+                plt.show()
+            for event_i, event in enumerate(det.dream_data.data_amps):
+                print(f'Event #{event_i}: {np.sum(event)}')
+
             input('Press Enter to continue...')
 
         print(f'Name: {det.name}')

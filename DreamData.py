@@ -32,8 +32,8 @@ class DreamData:
         self.ped_flag = '_pedthr_'
         self.data_flag = '_datrun_'
 
-        self.waveform_fit_func = 'waveform_func'
-        # self.waveform_fit_func = 'max_sample'
+        # self.waveform_fit_func = 'waveform_func'
+        self.waveform_fit_func = 'max_sample'
 
         self.channels_per_connector = 64
         self.starting_connector = min(self.feu_connectors)
