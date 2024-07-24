@@ -72,9 +72,10 @@ class DreamDetector(Detector):
             xlarge_clusts = get_largest_clusters_all_events(x_clusters, x_cluster_triggers, x_cluster_centroids, x_amps)
             x_largest_clusters, x_largest_cluster_centroids = xlarge_clusts
             self.x_groups.append({'df': x_group, 'amps': x_amps, 'hits': x_hits, 'clusters': x_clusters,
-                                  'cluster_triggers': x_cluster_triggers, 'cluster_centroids': x_cluster_centroids,
+                                  'cluster_triggers': np.array(x_cluster_triggers),
+                                  'cluster_centroids': x_cluster_centroids,
                                   'largest_clusters': x_largest_clusters,
-                                  'largest_cluster_centroids': x_largest_cluster_centroids})
+                                  'largest_cluster_centroids': np.array(x_largest_cluster_centroids)})
 
         for x_group in self.x_groups:
             print(x_group['hits'].shape)
@@ -95,9 +96,10 @@ class DreamDetector(Detector):
             ylarge_clusts = get_largest_clusters_all_events(y_clusters, y_cluster_triggers, y_cluster_centroids, y_amps)
             y_largest_clusters, y_largest_cluster_centroids = ylarge_clusts
             self.y_groups.append({'df': y_group, 'amps': y_amps, 'hits': y_hits, 'clusters': y_clusters,
-                                  'cluster_triggers': y_cluster_triggers, 'cluster_centroids': y_cluster_centroids,
+                                  'cluster_triggers': np.array(y_cluster_triggers),
+                                  'cluster_centroids': y_cluster_centroids,
                                   'largest_clusters': y_largest_clusters,
-                                  'largest_cluster_centroids': y_largest_cluster_centroids})
+                                  'largest_cluster_centroids': np.array(y_largest_cluster_centroids)})
 
         self.y_hits = np.hstack([y_group['hits'] for y_group in self.y_groups])
 
@@ -116,14 +118,15 @@ class DreamDetector(Detector):
                 if trigger not in trigger_data:
                     trigger_data[trigger] = {'x': {}}
 
-
-
     def make_sub_detectors(self):
         self.make_sub_groups()
         self.sub_detectors = []
         for x_group in self.x_groups:
             x_group_df = x_group['df'].to_dict()
             for y_group in self.y_groups:
+                if 'asacusa' in self.config['det_type']:  # Hack to only group same connectors.
+                    if x_group_df['connector'] != y_group['df']['connector']:  # Find better way in map file.
+                        continue
                 y_group_df = y_group['df'].to_dict()
                 x_connector, y_connector = x_group_df['connector'], y_group_df['connector']
                 x_channels, y_channels = x_group_df['channels'], y_group_df['channels']
@@ -133,11 +136,11 @@ class DreamDetector(Detector):
 
                 sub_det = DreamSubDetector()
                 sub_det.set_x(x_pos, x_group['amps'], x_group['hits'], x_pitch, x_interpitch, x_connector,
-                              x_group['clusters'], x_group['cluster_centroids'], x_group['largest_clusters'],
-                              x_group['largest_cluster_centroids'], x_channels)
+                              x_group['cluster_triggers'], x_group['clusters'], x_group['cluster_centroids'],
+                              x_group['largest_clusters'], x_group['largest_cluster_centroids'], x_channels)
                 sub_det.set_y(y_pos, y_group['amps'], y_group['hits'], y_pitch, y_interpitch, y_connector,
-                              y_group['clusters'], y_group['cluster_centroids'], y_group['largest_clusters'],
-                              y_group['largest_cluster_centroids'], y_channels)
+                              y_group['cluster_triggers'], y_group['clusters'], y_group['cluster_centroids'],
+                              y_group['largest_clusters'], y_group['largest_cluster_centroids'], y_channels)
                 self.sub_detectors.append(sub_det)
 
     def plot_event_1d(self, event_id):

@@ -9,9 +9,12 @@ Created as saclay_micromegas/DreamData.py
 """
 
 import os
+import concurrent.futures
+from tqdm import tqdm
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit as cf
 from datetime import datetime
 from time import time
@@ -41,6 +44,7 @@ class DreamData:
 
         self.ped_data = None
         self.data = None
+        self.event_nums = None
 
         self.ped_means = None
         self.ped_sigmas = None
@@ -104,17 +108,35 @@ class DreamData:
             print('Error: No data files found.')
             return None
 
-        self.data = []
-        for data_file in data_files:
+        def read_file(data_file):
             data_file_path = f'{self.data_dir}{data_file}'
             data = read_det_data(data_file_path)
-            self.data.append(self.split_det_data(data, self.feu_connectors, to_connectors=False))
+            data_event_nums = read_det_data(data_file_path, tree_name='nt', variable_name='eventId')
+            data = self.subtract_common_noise(data, self.ped_means)
+            data = subtract_pedestal(data, self.ped_means)
+            return self.split_det_data(data, self.feu_connectors, to_connectors=False), data_event_nums
 
+        print(f'Reading in data...')
+        self.data, self.event_nums = [], []
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for data_i, event_nums in tqdm(executor.map(read_file, data_files), total=len(data_files)):
+                self.data.append(data_i)
+                self.event_nums.extend(event_nums)
         self.data = np.concatenate(self.data)
-        self.data = self.subtract_common_noise(self.data, self.ped_means)
-        self.subtract_pedestals_from_data()
+
+        # self.data = []
+        # for data_file in data_files:
+        #     data_file_path = f'{self.data_dir}{data_file}'
+        #     data = read_det_data(data_file_path)
+        #     self.data.append(self.split_det_data(data, self.feu_connectors, to_connectors=False))
+
+        # self.data = np.concatenate(self.data)
+        # self.data = self.subtract_common_noise(self.data, self.ped_means)
+        # self.subtract_pedestals_from_data()
         print(f'Read in data shape: {self.data.shape}')
+        print(f'Getting amplitudes...')
         self.get_event_amplitudes()
+        print(f'Getting hits...')
         self.get_hits()
 
     def subtract_pedestals_from_data(self):
@@ -122,11 +144,29 @@ class DreamData:
 
     def get_event_amplitudes(self):
         start = time()
-        fits = get_waveform_fits(self.data, self.noise_thresholds, self.waveform_fit_func)
-        self.data_amps = fits['amplitude']
-        self.data_time_of_max = fits['time_max']
-        self.data_fit_success = fits['success'] != 0
-        self.fit_params = fits
+
+        num_chunks = max(os.cpu_count() - 1, 1)
+        data_chunks = np.array_split(self.data, num_chunks, axis=0)
+
+        def process_chunk(chunk):
+            return get_waveform_fits(chunk, self.noise_thresholds, self.waveform_fit_func)
+
+        fits_list = []
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for fits in tqdm(executor.map(process_chunk, data_chunks), total=num_chunks):
+                fits_list.append(fits)
+
+        self.fit_params = {key: np.concatenate([fits[key] for fits in fits_list], axis=0) for key in
+                           fits_list[0].keys()}
+        self.data_amps = self.fit_params['amplitude']
+        self.data_time_of_max = self.fit_params['time_max']
+        self.data_fit_success = self.fit_params['success'] != 0
+
+        # fits = get_waveform_fits(self.data, self.noise_thresholds, self.waveform_fit_func)
+        # self.data_amps = fits['amplitude']
+        # self.data_time_of_max = fits['time_max']
+        # self.data_fit_success = fits['success'] != 0
+        # self.fit_params = fits
         print(f'Fitting time: {time() - start} s')
 
     def get_hits(self, amp_min=0, time_max_range=None):
@@ -280,9 +320,9 @@ class DreamData:
             ax.plot(event, marker='o')
             ax.plot(fit_x, waveform_func_reparam(fit_x, *func_pars), color='red')
             fit_string = f'Amplitude: {func_pars[0]:.2f}±{func_errs[0]:.2f}\n' \
-                            f'Mean: {func_pars[1]:.2f}±{func_errs[1]:.2f}\n' \
-                            f'Time Shift: {func_pars[2]:.2f}±{func_errs[2]:.2f}\n' \
-                            f'Q: {func_pars[3]:.2f}±{func_errs[3]:.2f}'
+                         f'Mean: {func_pars[1]:.2f}±{func_errs[1]:.2f}\n' \
+                         f'Time Shift: {func_pars[2]:.2f}±{func_errs[2]:.2f}\n' \
+                         f'Q: {func_pars[3]:.2f}±{func_errs[3]:.2f}'
             ax.annotate(fit_string, (0.9, 0.9), xycoords='axes fraction', ha='right', va='top',
                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
@@ -342,6 +382,46 @@ class DreamData:
         ax.set_title('Max Amplitude / Amplitude Sum')
         ax.set_xlabel('Event')
         ax.set_ylabel('Max Amplitude / Amplitude Sum')
+        fig.tight_layout()
+
+    def plot_hits_vs_strip(self):
+        """
+        Plot number of hits vs strip, separated by connector.
+        :return:
+        """
+        hits = np.sum(self.hits, axis=0)
+        # Separate hits into groups of self.channels_per_connector
+        hits = np.array(np.split(hits, len(hits) // self.channels_per_connector))
+        fig, ax = plt.subplots()
+        for i, hit_group in enumerate(hits):
+            strip_nums = np.arange(len(hit_group)) + i * self.channels_per_connector
+            ax.plot(strip_nums, hit_group, label=f'Connector {i + self.starting_connector}')
+        ax.set_title('Hits vs Strip')
+        ax.set_xlabel('Strip')
+        ax.set_ylabel('Hits')
+        ax.set_ylim(0, None)
+        ax.legend()
+        fig.tight_layout()
+
+    def plot_amplitudes_vs_strip(self):
+        """
+        Plot 2D histogram of amplitude (y-axis) vs strip (x-axis), separated by connector. For each strip, make a 1D
+        histogram of amplitudes. Bins of 0 counts are removed. Then plot these histograms for each strip on the x-axis.
+        :return:
+        """
+        bins = np.arange(1, 4101, 20)
+        amps = np.ravel(self.data_amps)
+        strip_nums = np.tile(np.arange(self.data_amps.shape[1]), (self.data_amps.shape[0], 1))
+        strip_nums = np.ravel(strip_nums)
+        fig, ax = plt.subplots(figsize=(10, 5))
+        h = ax.hist2d(strip_nums, amps, bins=[np.arange(-0.5, self.data_amps.shape[1] + 0.5, 1), bins],
+                      cmin=1, cmap='jet', norm=LogNorm())
+        ax.set_title('Amplitudes vs Strip')
+        ax.set_xlabel('Strip')
+        ax.set_ylabel('Amplitude')
+        cbar = fig.colorbar(h[3], ax=ax)
+        cbar.set_label('Counts')
+
         fig.tight_layout()
 
     def get_selected_data(self, params_ranges=None, channel=None):
@@ -523,10 +603,15 @@ def get_waveform_fits(data, noise_thresholds=None, func='gaus'):
         param_names = ['amplitude', 'time_max', 'sigma', 'amplitude_err', 'time_max_err', 'sigma_err', 'success']
     elif func == 'waveform_func':
         fits = np.apply_along_axis(fit_waveform_func, -1, data)
-        param_names = ['amplitude', 'time_max', 'time_shift', 'q', 'amplitude_err', 'time_max_err', 'time_shift_err', 'q_err',
+        param_names = ['amplitude', 'time_max', 'time_shift', 'q', 'amplitude_err', 'time_max_err', 'time_shift_err',
+                       'q_err',
                        'success']
     elif func == 'max_sample':
-        fits = np.apply_along_axis(get_waveform_max_sample, -1, data)
+        # fits = np.apply_along_axis(get_waveform_max_sample, -1, data)
+        amplitude = np.max(data, axis=-1)
+        time_max = np.argmax(data, axis=-1)
+        success = np.ones((data.shape[0], data.shape[1]))
+        fits = np.stack([amplitude, time_max, success], axis=-1)
         param_names = ['amplitude', 'time_max', 'success']
     else:
         print('Error: Fit function not recognized.')
@@ -590,16 +675,17 @@ def waveform_func(t, a, w, q):
         # Handle scalar input
         if t <= 0:
             return 0
-        term1 = np.sqrt((2 * q - 1) / (2 * q + 1)) * np.sin(w * t / 2 * np.sqrt(4 - 1 / q**2))
-        term2 = -np.cos(w * t / 2 * np.sqrt(4 - 1 / q**2))
+        term1 = np.sqrt((2 * q - 1) / (2 * q + 1)) * np.sin(w * t / 2 * np.sqrt(4 - 1 / q ** 2))
+        term2 = -np.cos(w * t / 2 * np.sqrt(4 - 1 / q ** 2))
         return a * (np.exp(-w * t) + np.exp(-w * t / (2 * q)) * (term1 + term2))
     else:
         # Handle numpy array input
         result = np.zeros_like(t)
         positive_t_mask = t > 0
-        term1 = np.sqrt((2 * q - 1) / (2 * q + 1)) * np.sin(w * t[positive_t_mask] / 2 * np.sqrt(4 - 1 / q**2))
-        term2 = -np.cos(w * t[positive_t_mask] / 2 * np.sqrt(4 - 1 / q**2))
-        result[positive_t_mask] = a * (np.exp(-w * t[positive_t_mask]) + np.exp(-w * t[positive_t_mask] / (2 * q)) * (term1 + term2))
+        term1 = np.sqrt((2 * q - 1) / (2 * q + 1)) * np.sin(w * t[positive_t_mask] / 2 * np.sqrt(4 - 1 / q ** 2))
+        term2 = -np.cos(w * t[positive_t_mask] / 2 * np.sqrt(4 - 1 / q ** 2))
+        result[positive_t_mask] = a * (
+                    np.exp(-w * t[positive_t_mask]) + np.exp(-w * t[positive_t_mask] / (2 * q)) * (term1 + term2))
         return result
 
 
@@ -610,7 +696,6 @@ def waveform_func_reparam(t, a, t_max, t_shift, q):
     func = waveform_func(t, 1, w, q)
     func_max = waveform_func(t_max, 1, w, q)
     return a * func / func_max
-
 
 
 def get_good_files(file_list, flags=None, feu_num=None, file_ext=None):

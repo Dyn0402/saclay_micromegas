@@ -50,6 +50,8 @@ class DetectorConfigLoader:
             det_config.update({key: val for key, val in det_type_info.items()})
             det_map_type = [det_type for det_type in det_config["det_type"].split('_')
                             if det_type in self.det_map_types]
+            if len(det_map_type) == 2:  # Hack to accommodate 'strip' grid -- eg asacusa_strip
+                det_map_type = [det_map_type[0]]
             if len(det_map_type) != 1:
                 print(f'Error: Detector type {det_config["det_type"]} not found in det map types.')
             else:
