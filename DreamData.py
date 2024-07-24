@@ -34,6 +34,7 @@ class DreamData:
 
         # self.waveform_fit_func = 'waveform_func'
         self.waveform_fit_func = 'max_sample'
+        self.noise_thresh_sigmas = 4
 
         self.channels_per_connector = 64
         self.starting_connector = min(self.feu_connectors)
@@ -71,7 +72,7 @@ class DreamData:
         self.ped_data = self.split_det_data(ped_data, self.feu_connectors, to_connectors=False)
 
         self.get_pedestals()
-        self.get_noise_thresholds()
+        self.get_noise_thresholds(noise_sigmas=self.noise_thresh_sigmas)
 
     def get_pedestals(self):
         pedestals = get_pedestals_by_median(self.ped_data)
@@ -284,6 +285,64 @@ class DreamData:
                             f'Q: {func_pars[3]:.2f}±{func_errs[3]:.2f}'
             ax.annotate(fit_string, (0.9, 0.9), xycoords='axes fraction', ha='right', va='top',
                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    def plot_noise_metric(self):
+        """
+        Plot metric for noise in data.
+        :return:
+        """
+        event_amp_sums = np.sum(self.data_amps, axis=1)
+        fig, ax = plt.subplots()
+        ax.plot(event_amp_sums)
+        ax.set_title('Event Amplitude Sums')
+        ax.set_xlabel('Event')
+        ax.set_ylabel('Amplitude Sum')
+        fig.tight_layout()
+
+        fig, ax = plt.subplots()
+        ax.hist(event_amp_sums, bins=100)
+        ax.set_title('Event Amplitude Sums')
+        ax.set_xlabel('Amplitude Sum')
+        ax.set_ylabel('Events')
+        fig.tight_layout()
+
+        event_hits = np.sum(self.hits, axis=1)
+        fig, ax = plt.subplots()
+        ax.scatter(event_hits, event_amp_sums, alpha=0.5)
+        ax.set_title('Event Amplitude Sums vs Hits')
+        ax.set_xlabel('Hits')
+        ax.set_ylabel('Amplitude Sum')
+        fig.tight_layout()
+
+        event_max_amps = np.max(self.data_amps, axis=1)
+        fig, ax = plt.subplots()
+        ax.scatter(event_max_amps, event_amp_sums, alpha=0.5)
+        ax.set_title('Event Amplitude Sums vs Max Amplitudes')
+        ax.set_xlabel('Max Amplitude')
+        ax.set_ylabel('Amplitude Sum')
+        fig.tight_layout()
+
+        fig, ax = plt.subplots()
+        ax.scatter(event_hits, event_max_amps, alpha=0.5)
+        ax.set_title('Event Max Amplitudes vs Hits')
+        ax.set_xlabel('Hits')
+        ax.set_ylabel('Max Amplitude')
+        fig.tight_layout()
+
+        max_amp_div_sum = event_max_amps / event_amp_sums
+        fig, ax = plt.subplots()
+        ax.hist(max_amp_div_sum, bins=100)
+        ax.set_title('Max Amplitude / Amplitude Sum')
+        ax.set_xlabel('Max Amplitude / Amplitude Sum')
+        ax.set_ylabel('Events')
+        fig.tight_layout()
+
+        fig, ax = plt.subplots()
+        ax.scatter(range(len(max_amp_div_sum)), max_amp_div_sum, alpha=0.5)
+        ax.set_title('Max Amplitude / Amplitude Sum')
+        ax.set_xlabel('Event')
+        ax.set_ylabel('Max Amplitude / Amplitude Sum')
+        fig.tight_layout()
 
     def get_selected_data(self, params_ranges=None, channel=None):
         """

@@ -30,9 +30,14 @@ class DreamDetector(Detector):
             self.load_from_config_dream()
 
         self.dream_data = None
-        self.x_groups = None
-        self.y_groups = None
+        self.x_groups, self.y_groups = None, None
         self.sub_detectors = None
+
+        self.x_hits, self.y_hits = None, None
+        self.x_clusters, self.y_clusters = None, None
+        self.x_cluster_centroids, self.y_cluster_centroids = None, None
+        self.x_largest_clusters, self.y_largest_clusters = None, None
+        self.x_largest_cluster_centroids, self.y_largest_cluster_centroids = None, None
 
     def load_from_config_dream(self):
         dream_feus = self.config['dream_feus']
@@ -71,6 +76,13 @@ class DreamDetector(Detector):
                                   'largest_clusters': x_largest_clusters,
                                   'largest_cluster_centroids': x_largest_cluster_centroids})
 
+        for x_group in self.x_groups:
+            print(x_group['hits'].shape)
+        self.x_hits = np.hstack([x_group['hits'] for x_group in self.x_groups])
+        print(self.x_hits.shape)
+        print('Hits event 1')
+        print(self.x_hits[1])
+
         y_group_dfs = self.det_map[self.det_map['axis'] == 'x']  # x-going strips give y position
         self.y_groups = []
         for y_index, y_group in y_group_dfs.iterrows():
@@ -86,6 +98,25 @@ class DreamDetector(Detector):
                                   'cluster_triggers': y_cluster_triggers, 'cluster_centroids': y_cluster_centroids,
                                   'largest_clusters': y_largest_clusters,
                                   'largest_cluster_centroids': y_largest_cluster_centroids})
+
+        self.y_hits = np.hstack([y_group['hits'] for y_group in self.y_groups])
+
+
+        all_cluster_triggers = [x_group['cluster_triggers'] for x_group in self.x_groups] + \
+                               [y_group['cluster_triggers'] for y_group in self.y_groups]
+        print(all_cluster_triggers)
+        print(np.concatenate(all_cluster_triggers))
+        print(np.concatenate(all_cluster_triggers).shape)
+        all_cluster_triggers = np.unique(np.concatenate(all_cluster_triggers))
+        print(all_cluster_triggers)
+        trigger_data = {}
+        for x_group in self.x_groups:
+            triggers = x_group['cluster_triggers']
+            for trigger in triggers:
+                if trigger not in trigger_data:
+                    trigger_data[trigger] = {'x': {}}
+
+
 
     def make_sub_detectors(self):
         self.make_sub_groups()
@@ -128,14 +159,16 @@ class DreamDetector(Detector):
             x_group_df = x_group['df']
             x_pos = x_group_df['xs_gerber']
             x_amps = x_group['amps'][event_id]
-            axs[0].plot(x_pos, x_amps, label=f'Pitch: {x_group_df["pitch(mm)"]}, Interpitch: {x_group_df["interpitch(mm)"]}')
+            axs[0].plot(x_pos, x_amps,
+                        label=f'Pitch: {x_group_df["pitch(mm)"]}, Interpitch: {x_group_df["interpitch(mm)"]}')
         axs[0].legend()
 
         for y_group in self.y_groups:
             y_group_df = y_group['df']
             y_pos = y_group_df['ys_gerber']
             y_amps = y_group['amps'][event_id]
-            axs[1].plot(y_pos, y_amps, label=f'Pitch: {y_group_df["pitch(mm)"]}, Interpitch: {y_group_df["interpitch(mm)"]}')
+            axs[1].plot(y_pos, y_amps,
+                        label=f'Pitch: {y_group_df["pitch(mm)"]}, Interpitch: {y_group_df["interpitch(mm)"]}')
         axs[1].legend()
         fig.tight_layout()
 
@@ -182,6 +215,12 @@ class DreamDetector(Detector):
         fig.colorbar(scatter, ax=ax, label='Amplitude')
         fig.tight_layout()
 
+    def plot_centroids_2d(self):
+        """
+        Plot the centroids of the largest clusters in each event.
+        :return:
+        """
+
     def plot_amplitude_sum_vs_event_num(self, print_threshold=None):
         """
         Plot the sum of the amplitudes in each event from dream_data.
@@ -202,9 +241,11 @@ class DreamDetector(Detector):
                 if event_sum > print_threshold:
                     print(f'Event {i}: {event_sum}')
 
-    def plot_xy_amp_sum_vs_event_num(self, print_threshold=None):
+    def plot_xy_amp_sum_vs_event_num(self, print_threshold=None, hit_threshold=None):
         """
         Plot the sum of the amplitudes in each event from x and y groups.
+        :param print_threshold: Threshold for printing events with sum greater than threshold.
+        :param hit_threshold: Threshold for printing events with more than hit_threshold hits.
         :return:
         """
         fig, ax = plt.subplots()
@@ -228,9 +269,35 @@ class DreamDetector(Detector):
             event_nums = []
             for i, (x_amp_sum, y_amp_sum) in enumerate(zip(x_amp_sums, y_amp_sums)):
                 if x_amp_sum > print_threshold and y_amp_sum > print_threshold:
-                    print(f'Event {i}: x: {x_amp_sum}, y: {y_amp_sum}')
-                    event_nums.append(i)
+                    if hit_threshold is not None:
+                        if np.sum(self.x_hits[i]) < hit_threshold and np.sum(self.y_hits[i]) < hit_threshold:
+                            print(f'Event {i}: x: {x_amp_sum}, y: {y_amp_sum}')
+                            event_nums.append(i)
+                    else:
+                        print(f'Event {i}: x: {x_amp_sum}, y: {y_amp_sum}')
+                        event_nums.append(i)
             return event_nums
+
+    def plot_num_hit_xy_hist(self):
+        """
+        Plot a histogram of the number of hits per event in the x and y directions.
+        :return:
+        """
+        fig, axs = plt.subplots(2, 1, figsize=(8, 10))
+        fig.suptitle(f'{self.name} Number of Hits per Event')
+        axs[0].set_title('X Hits')
+        axs[0].set_xlabel('Number of Hits')
+        axs[0].set_ylabel('Frequency')
+        axs[1].set_title('Y Hits')
+        axs[1].set_xlabel('Number of Hits')
+        axs[1].set_ylabel('Frequency')
+
+        x_hit_nums = np.sum([np.sum(x_group['hits'], axis=1) for x_group in self.x_groups], axis=0)
+        y_hit_nums = np.sum([np.sum(y_group['hits'], axis=1) for y_group in self.y_groups], axis=0)
+
+        axs[0].hist(x_hit_nums, bins=range(0, 125, 1))
+        axs[1].hist(y_hit_nums, bins=range(0, 125, 1))
+        fig.tight_layout()
 
 
 def split_neighbors(df, starting_connector=0):

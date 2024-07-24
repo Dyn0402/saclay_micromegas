@@ -11,6 +11,7 @@ Created as saclay_micromegas/det_classes_test.py
 import numpy as np
 import matplotlib.pyplot as plt
 
+from M3RefTracking import M3RefTracking
 from DetectorConfigLoader import DetectorConfigLoader
 from Detector import Detector
 from DreamDetector import DreamDetector
@@ -18,25 +19,34 @@ from DreamData import DreamData
 
 
 def main():
-    # run_dir = 'F:/Saclay/cosmic_data/new_strip_check_7-12-24/'
-    run_dir = 'F:/Saclay/cosmic_data/ig1_test1/'
-    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # run_dir = '/local/home/dn277127/Bureau/cosmic_data/ig1_test1/'
-    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = 'F:/Saclay/cosmic_data/'
+    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # run_name = 'new_strip_check_7-12-24'
+    # run_name = 'ig1_test1'
+    run_name = 'ig1_sg1_stats4'
+    run_dir = f'{base_dir}{run_name}/'
     # sub_run_name = 'hv1'
     # sub_run_name = 'new_detector_short'
     # sub_run_name = 'drift_600_resist_460'
     sub_run_name = 'quick_test'
+
+    # det_single = 'asacusa_strip_1'
+    # det_single = 'strip_grid_1'
+    det_single = 'inter_grid_1'
+    # det_single = 'urw_inter'
+    # det_single = None
+
     run_json_path = f'{run_dir}run_config.json'
     data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
     ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
+    m3_dir = f'{run_dir}{sub_run_name}/m3_tracking_root/'
+
+    ray_data = M3RefTracking(m3_dir, single_track=True)
 
     det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
     for detctor_name in det_config_loader.included_detectors:
-        # det_single = 'asacusa_strip_1'
-        det_single = 'strip_grid_1'
-        # det_single = 'urw_inter'
-        # det_single = None
         if det_single is not None and detctor_name != det_single:
             continue
 
@@ -54,9 +64,13 @@ def main():
             print(f'HV: {det.hv}')
             det.load_dream_data(data_dir, ped_dir)
             print(f'Hits shape: {det.dream_data.hits.shape}')
+            det.dream_data.plot_noise_metric()
+            det.dream_data.plot_pedestals()
+            plt.show()
             det.make_sub_detectors()
-            event_nums = det.plot_xy_amp_sum_vs_event_num(500)
+            event_nums = det.plot_xy_amp_sum_vs_event_num(500, 15)
             det.plot_amplitude_sum_vs_event_num()
+            det.plot_num_hit_xy_hist()
             for event_num in event_nums:
                 det.plot_event_1d(event_num)
                 det.plot_event_2d(event_num)
