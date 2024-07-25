@@ -121,8 +121,9 @@ class DreamData:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             for data_i, event_nums in tqdm(executor.map(read_file, data_files), total=len(data_files)):
                 self.data.append(data_i)
-                self.event_nums.extend(event_nums)
+                self.event_nums.append(event_nums)
         self.data = np.concatenate(self.data)
+        self.event_nums = np.concatenate(self.event_nums)
 
         # self.data = []
         # for data_file in data_files:

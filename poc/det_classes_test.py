@@ -19,10 +19,10 @@ from DreamData import DreamData
 
 
 def main():
-    base_dir = 'F:/Saclay/cosmic_data/'
-    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = 'F:/Saclay/cosmic_data/'
+    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # run_name = 'new_strip_check_7-12-24'
     run_name = 'ig1_test1'
     # run_name = 'banco_flipped_7-8-24'
@@ -80,26 +80,32 @@ def main():
             det.plot_num_hit_xy_hist()
             print(f'Det data: {len(det.dream_data.data)}')
             print(f'Ray data: {len(ray_data.ray_data)}')
+            det.plot_centroids_2d()
             plt.show()
 
-            zs = np.linspace(det.center[2], det.center[2] + 200, 100)
+            x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
+            det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
+
+            # zs = np.linspace(det.center[2], det.center[2] + 200, 100)
+            zs = [det.center[2]]
             x_residuals, y_residuals = [], []
             for z in zs:
                 det.set_center(z=z)
-                x_res_i, y_res_i = [], []
-                for sub_det_i, sub_det in enumerate(det.sub_detectors):
-                    event_nums_i, centroids_i = sub_det.get_event_centroids()
-                    event_nums_i = list(np.array(event_nums_i) - 0)
-                    x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], event_nums_i)
-                    centroids_i_matched = []
-                    for event_num in event_nums_i:
-                        if event_num in event_num_rays:
-                            centroids_i_matched.append(centroids_i[list(event_nums_i).index(event_num)])
-                    centroids_i_matched = np.array(centroids_i_matched)
-                    x_res_i.extend(centroids_i_matched[:, 0] - x_rays)
-                    y_res_i.extend(centroids_i_matched[:, 1] - y_rays)
-                    # plot_xy_residuals_2d(x_rays, y_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1])
-                x_res_i_std, y_res_i_std = np.std(x_res_i), np.std(y_res_i)
+                # x_res_i, y_res_i = [], []
+                # for sub_det_i, sub_det in enumerate(det.sub_detectors):
+                #     event_nums_i, centroids_i = sub_det.get_event_centroids()
+                #     event_nums_i = list(np.array(event_nums_i) - 0)
+                #     x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], event_nums_i)
+                #     centroids_i_matched = []
+                #     for event_num in event_nums_i:
+                #         if event_num in event_num_rays:
+                #             centroids_i_matched.append(centroids_i[list(event_nums_i).index(event_num)])
+                #     centroids_i_matched = np.array(centroids_i_matched)
+                #     x_res_i.extend(centroids_i_matched[:, 0] - x_rays)
+                #     y_res_i.extend(centroids_i_matched[:, 1] - y_rays)
+                #     plot_xy_residuals_2d(x_rays, y_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1])
+                # x_res_i_std, y_res_i_std = np.std(x_res_i), np.std(y_res_i)
+                x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data, plot=True)
                 x_residuals.append(x_res_i_std)
                 y_residuals.append(y_res_i_std)
             fig, ax = plt.subplots()
@@ -157,6 +163,27 @@ def main():
         print('\n')
 
     print('donzo')
+
+
+def get_residuals(det, ray_data, plot=False):
+    x_res_i, y_res_i = [], []
+    for sub_det_i, sub_det in enumerate(det.sub_detectors):
+        event_nums_i, centroids_i = sub_det.get_event_centroids()
+        event_nums_i = list(np.array(event_nums_i) - 0)
+        x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], event_nums_i)
+        centroids_i_matched = []
+        for event_num in event_nums_i:
+            if event_num in event_num_rays:
+                centroids_i_matched.append(centroids_i[list(event_nums_i).index(event_num)])
+        centroids_i_matched = np.array(centroids_i_matched)
+        x_res_i.extend(centroids_i_matched[:, 0] - x_rays)
+        y_res_i.extend(centroids_i_matched[:, 1] - y_rays)
+        if plot:
+            plot_xy_residuals_2d(x_rays, y_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1])
+    x_res_i_mean, y_res_i_mean = np.mean(x_res_i), np.mean(y_res_i)
+    x_res_i_std, y_res_i_std = np.std(x_res_i), np.std(y_res_i)
+
+    return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
 
 
 def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
