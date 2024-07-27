@@ -35,8 +35,8 @@ def main():
     # sub_run_name = 'quick_test'
     sub_run_name = 'max_hv_long'
 
-    det_single = 'asacusa_strip_1'
-    # det_single = 'asacusa_strip_2'
+    # det_single = 'asacusa_strip_1'
+    det_single = 'asacusa_strip_2'
     # det_single = 'strip_grid_1'
     # det_single = 'inter_grid_1'
     # det_single = 'urw_inter'
@@ -150,7 +150,7 @@ def main():
             get_residuals(det, ray_data, plot=True)
 
             x_subs_mean, y_subs_mean, x_subs_std, y_subs_std = get_residuals(det, ray_data, plot=False, sub_reses=True)
-            pitches, resolutions = [], []
+            pitches, resolutions, res_xs, res_ys = [], [], [], []
             for i, (x_mean, y_mean, x_std, y_std) in enumerate(zip(x_subs_mean, y_subs_mean, x_subs_std, y_subs_std)):
                 x_mean, y_mean = int(x_mean * 1000), int(y_mean * 1000)
                 x_std, y_std = int(x_std * 1000), int(y_std * 1000)
@@ -158,10 +158,12 @@ def main():
                 print(f'Sub-Detector {i} (pitch: {pitch}) '
                       f'x_mean: {x_mean}μm, y_mean: {y_mean}μm, x_std: {x_std}μm, y_std: {y_std}μm')
                 pitches.append(pitch)
+                res_xs.append(x_std)
+                res_ys.append(y_std)
                 resolutions.append(np.sqrt(x_std ** 2 + y_std ** 2))
             # Sort by pitch
-            pitches, resolutions = zip(*sorted(zip(pitches, resolutions)))
-            print(pitches, resolutions)
+            pitches, resolutions, res_xs, res_ys = zip(*sorted(zip(pitches, resolutions, res_xs, res_ys)))
+            print(pitches, resolutions, res_xs, res_ys)
             print(det.name)
             fig, ax = plt.subplots()
             ax.plot(pitches, resolutions, marker='o', zorder=10)
