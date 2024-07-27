@@ -54,14 +54,15 @@ class DreamDetector(Detector):
 
         self.hv = self.config['hvs']
 
-    def load_dream_data(self, data_dir, ped_dir=None):
+    def load_dream_data(self, data_dir, ped_dir=None, noise_threshold_sigmas=None):
         self.dream_data = DreamData(data_dir, self.feu_num, self.feu_connectors, ped_dir)
+        if noise_threshold_sigmas is not None:
+            self.dream_data.noise_thresh_sigmas = noise_threshold_sigmas
         self.dream_data.read_ped_data()
         self.dream_data.read_data()
 
     def make_sub_groups(self):
         x_group_dfs = self.det_map[self.det_map['axis'] == 'y']  # y-going strips give x position
-        self.x_largest_cluster_centroids = []
         self.x_groups = []
         for x_index, x_group in x_group_dfs.iterrows():
             x_connector, x_channels = x_group['connector'], x_group['channels']
@@ -78,18 +79,15 @@ class DreamDetector(Detector):
                                   'cluster_centroids': x_cluster_centroids,
                                   'largest_clusters': x_largest_clusters,
                                   'largest_cluster_centroids': np.array(x_largest_cluster_centroids)})
-            self.x_largest_cluster_centroids.extend(x_largest_cluster_centroids)
 
-        for x_group in self.x_groups:
-            print(x_group['hits'].shape)
+        # for x_group in self.x_groups:
+        #     print(x_group['hits'].shape)
         self.x_hits = np.hstack([x_group['hits'] for x_group in self.x_groups])
-        print(self.x_hits.shape)
-        print('Hits event 1')
-        print(self.x_hits[1])
-        self.x_largest_cluster_centroids = np.array(self.x_largest_cluster_centroids)
+        # print(self.x_hits.shape)
+        # print('Hits event 1')
+        # print(self.x_hits[1])
 
         y_group_dfs = self.det_map[self.det_map['axis'] == 'x']  # x-going strips give y position
-        self.y_largest_cluster_centroids = []
         self.y_groups = []
         for y_index, y_group in y_group_dfs.iterrows():
             y_connector, y_channels = y_group['connector'], y_group['channels']
@@ -106,17 +104,16 @@ class DreamDetector(Detector):
                                   'cluster_centroids': y_cluster_centroids,
                                   'largest_clusters': y_largest_clusters,
                                   'largest_cluster_centroids': np.array(y_largest_cluster_centroids)})
-            self.y_largest_cluster_centroids = np.array(self.y_largest_cluster_centroids)
 
         self.y_hits = np.hstack([y_group['hits'] for y_group in self.y_groups])
 
         all_cluster_triggers = [x_group['cluster_triggers'] for x_group in self.x_groups] + \
                                [y_group['cluster_triggers'] for y_group in self.y_groups]
-        print(all_cluster_triggers)
-        print(np.concatenate(all_cluster_triggers))
-        print(np.concatenate(all_cluster_triggers).shape)
+        # print(all_cluster_triggers)
+        # print(np.concatenate(all_cluster_triggers))
+        # print(np.concatenate(all_cluster_triggers).shape)
         all_cluster_triggers = np.unique(np.concatenate(all_cluster_triggers))
-        print(all_cluster_triggers)
+        # print(all_cluster_triggers)
         trigger_data = {}
         for x_group in self.x_groups:
             triggers = x_group['cluster_triggers']
@@ -148,6 +145,20 @@ class DreamDetector(Detector):
                               y_group['cluster_triggers'], y_group['clusters'], y_group['cluster_centroids'],
                               y_group['largest_clusters'], y_group['largest_cluster_centroids'], y_channels)
                 self.sub_detectors.append(sub_det)
+
+    def get_sub_centroids_coords(self):
+        sub_centroids, sub_triggers = [], []
+        for sub_det in self.sub_detectors:
+            triggers, centroids = sub_det.get_event_centroids()
+            if len(centroids) == 0:
+                continue
+            zs = np.full((len(centroids), 1), 0)  # Add z coordinate to centroids
+            centroids = np.hstack((centroids, zs))  # Combine x, y, z
+            centroids = self.convert_coords_to_global(centroids)
+            sub_centroids.append(centroids)
+            sub_triggers.append(triggers)
+
+        return sub_centroids, sub_triggers
 
     def plot_event_1d(self, event_id):
         """
@@ -226,15 +237,20 @@ class DreamDetector(Detector):
 
     def plot_centroids_2d(self):
         """
-        Plot the centroids of the largest clusters in each subdetector.
+        Plot the centroids of the largest clusters in each sub-detector.
         :return:
         """
+        all_centroids = []
+        subs_centroids, subs_triggers = self.get_sub_centroids_coords()
+        for sub_centroids, sub_triggers in zip(subs_centroids, subs_triggers):
+            all_centroids.extend(list(sub_centroids))
+        x_centroids, y_centroids, z_centroids = zip(*all_centroids)
         fig, ax = plt.subplots()
         ax.set_title(f'{self.name} Largest Cluster Centroids')
         ax.set_xlabel('X (mm)')
         ax.set_ylabel('Y (mm)')
         ax.set_aspect('equal')
-        ax.scatter(self.x_largest_cluster_centroids, self.y_largest_cluster_centroids, alpha=0.5)
+        ax.scatter(x_centroids, y_centroids, alpha=0.5)
         fig.tight_layout()
 
     def plot_amplitude_sum_vs_event_num(self, print_threshold=None):
@@ -257,7 +273,7 @@ class DreamDetector(Detector):
                 if event_sum > print_threshold:
                     print(f'Event {i}: {event_sum}')
 
-    def plot_xy_amp_sum_vs_event_num(self, print_threshold=None, hit_threshold=None):
+    def plot_xy_amp_sum_vs_event_num(self, return_events=False, threshold=None, print=False, hit_threshold=None):
         """
         Plot the sum of the amplitudes in each event from x and y groups.
         :param print_threshold: Threshold for printing events with sum greater than threshold.
@@ -278,21 +294,24 @@ class DreamDetector(Detector):
         ax.legend()
         fig.tight_layout()
 
-        if print_threshold is not None:
-            print(f'Events with sum greater than {print_threshold}:')
+        if (return_events or print) and threshold is not None:
+            if print:
+                print(f'Events with sum greater than {threshold}:')
             x_amp_sums = np.sum([np.sum(x_group['amps'], axis=1) for x_group in self.x_groups], axis=0)
             y_amp_sums = np.sum([np.sum(y_group['amps'], axis=1) for y_group in self.y_groups], axis=0)
             event_nums = []
             for i, (x_amp_sum, y_amp_sum) in enumerate(zip(x_amp_sums, y_amp_sums)):
-                if x_amp_sum > print_threshold and y_amp_sum > print_threshold:
+                if x_amp_sum > threshold and y_amp_sum > threshold:
                     if hit_threshold is not None:
                         if np.sum(self.x_hits[i]) < hit_threshold and np.sum(self.y_hits[i]) < hit_threshold:
-                            print(f'Event {i}: x: {x_amp_sum}, y: {y_amp_sum}')
+                            if print:
+                                print(f'Event {i}: x: {x_amp_sum}, y: {y_amp_sum}')
                             event_nums.append(i)
                     else:
                         print(f'Event {i}: x: {x_amp_sum}, y: {y_amp_sum}')
                         event_nums.append(i)
-            return event_nums
+            if return_events:
+                return event_nums
 
     def plot_num_hit_xy_hist(self):
         """

@@ -73,7 +73,7 @@ class DreamData:
         ped_file_path = f'{ped_dir}{ped_files[0]}'
 
         ped_data = read_det_data(ped_file_path)
-        self.ped_data = self.split_det_data(ped_data, self.feu_connectors, to_connectors=False)
+        self.ped_data = self.split_det_data(ped_data, self.feu_connectors, starting_connector=1, to_connectors=False)
 
         self.get_pedestals()
         self.get_noise_thresholds(noise_sigmas=self.noise_thresh_sigmas)
@@ -112,9 +112,10 @@ class DreamData:
             data_file_path = f'{self.data_dir}{data_file}'
             data = read_det_data(data_file_path)
             data_event_nums = read_det_data(data_file_path, tree_name='nt', variable_name='eventId')
+            data = self.split_det_data(data, self.feu_connectors, starting_connector=1, to_connectors=False)
             data = self.subtract_common_noise(data, self.ped_means)
             data = subtract_pedestal(data, self.ped_means)
-            return self.split_det_data(data, self.feu_connectors, to_connectors=False), data_event_nums
+            return data, data_event_nums
 
         print(f'Reading in data...')
         self.data, self.event_nums = [], []
@@ -206,9 +207,11 @@ class DreamData:
         channel_hits = self.split_det_data(self.hits, [connector], to_connectors=False)[:, channels]
         return channel_hits
 
-    def split_det_data(self, det_data, feu_connectors, to_connectors=False):
+    def split_det_data(self, det_data, feu_connectors, to_connectors=False, starting_connector=None):
+        if starting_connector is None:
+            starting_connector = self.starting_connector
         channel_list = np.concatenate([np.arange(self.channels_per_connector) +
-                                       self.channels_per_connector * (connector_num - self.starting_connector)
+                                       self.channels_per_connector * (connector_num - starting_connector)
                                        for connector_num in feu_connectors])
         if det_data.ndim == 1:
             det_data = det_data[channel_list]
