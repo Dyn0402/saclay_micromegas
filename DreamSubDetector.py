@@ -8,7 +8,6 @@ Created as saclay_micromegas/DreamSubDetector
 @author: Dylan Neff, dn277127
 """
 
-
 import numpy as np
 
 
@@ -65,20 +64,21 @@ class DreamSubDetector:
         Have AI optimize this, currently slow.
         :return:
         """
+        # Get list of x triggers in which the trigger appears exactly once in self.x_cluster_triggers
+        non_degenerate_x_triggers = {trigger: index for index, trigger in enumerate(self.x_cluster_triggers)
+                                     if np.count_nonzero(self.x_cluster_triggers == trigger) == 1}
+        non_degenerate_y_triggers = {trigger: index for index, trigger in enumerate(self.y_cluster_triggers)
+                                     if np.count_nonzero(self.y_cluster_triggers == trigger) == 1}
+
         triggers, centroids = [], []
-        for x_event_index, x_trigger in enumerate(self.x_cluster_triggers):
-            # Check if x_trigger in y_cluster_triggers and if so get index
-            y_event_index = np.where(np.array(self.y_cluster_triggers) == x_trigger)[0]
-            if len(y_event_index) == 0:
+
+        for x_trigger, x_event_index in non_degenerate_x_triggers.items():
+            if x_trigger not in non_degenerate_y_triggers:
                 continue
-            elif len(y_event_index) > 1:
-                print(f'Error: Multiple y triggers for x trigger {x_trigger}')
-                continue
-            y_event_index = y_event_index[0]
+            y_event_index = non_degenerate_y_triggers[x_trigger]
             x_centroid = self.x_largest_cluster_centroids[x_event_index]
             y_centroid = self.y_largest_cluster_centroids[y_event_index]
 
             triggers.append(x_trigger)
             centroids.append(np.array([x_centroid, y_centroid]))
         return np.array(triggers), np.array(centroids)
-

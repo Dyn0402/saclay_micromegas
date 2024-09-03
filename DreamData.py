@@ -98,11 +98,12 @@ class DreamData:
     def get_noise_thresholds(self, noise_sigmas=5):
         self.noise_thresholds = get_noise_thresholds(self.ped_sigmas, noise_sigmas)
 
-    def read_data(self):
+    def read_data(self, file_nums=None, chunk_size=100):
         if self.data_dir is None:
             print('Error: No data directory specified.')
             return None
-        data_files = get_good_files(os.listdir(self.data_dir), [self.data_flag, self.array_flag], self.feu_num, '.root')
+        data_files = get_good_files(os.listdir(self.data_dir), [self.data_flag, self.array_flag], self.feu_num, '.root',
+                                    file_nums)
 
         if len(data_files) == 0:
             print('Error: No data files found.')
@@ -117,28 +118,31 @@ class DreamData:
             data = subtract_pedestal(data, self.ped_means)
             return data, data_event_nums
 
-        print(f'Reading in data...')
-        self.data, self.event_nums = [], []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            for data_i, event_nums in tqdm(executor.map(read_file, data_files), total=len(data_files)):
-                self.data.append(data_i)
-                self.event_nums.append(event_nums)
-        self.data = np.concatenate(self.data)
+        print('Reading in data...')
+
+        for chunk_idx in range(0, len(data_files), chunk_size):
+            chunk_files = data_files[chunk_idx:chunk_idx + chunk_size]
+
+            self.data = []
+            if self.event_nums is None:
+                self.event_nums = []
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                for data_i, event_nums in tqdm(executor.map(read_file, chunk_files), total=len(chunk_files)):
+                    self.data.append(data_i)
+                    self.event_nums.append(event_nums)
+
+            self.data = np.concatenate(self.data)
+
+            print(f'Read in data shape: {self.data.shape}')
+            print('Getting amplitudes...')
+            self.get_event_amplitudes()
+
+            # Clear self.data to free up memory
+            self.data = None
+            print(f'Processed chunk {chunk_idx // chunk_size + 1}/{(len(data_files) + chunk_size - 1) // chunk_size}')
+
         self.event_nums = np.concatenate(self.event_nums)
-
-        # self.data = []
-        # for data_file in data_files:
-        #     data_file_path = f'{self.data_dir}{data_file}'
-        #     data = read_det_data(data_file_path)
-        #     self.data.append(self.split_det_data(data, self.feu_connectors, to_connectors=False))
-
-        # self.data = np.concatenate(self.data)
-        # self.data = self.subtract_common_noise(self.data, self.ped_means)
-        # self.subtract_pedestals_from_data()
-        print(f'Read in data shape: {self.data.shape}')
-        print(f'Getting amplitudes...')
-        self.get_event_amplitudes()
-        print(f'Getting hits...')
+        print('Getting hits...')
         self.get_hits()
 
     def subtract_pedestals_from_data(self):
@@ -158,11 +162,18 @@ class DreamData:
             for fits in tqdm(executor.map(process_chunk, data_chunks), total=num_chunks):
                 fits_list.append(fits)
 
-        self.fit_params = {key: np.concatenate([fits[key] for fits in fits_list], axis=0) for key in
-                           fits_list[0].keys()}
-        self.data_amps = self.fit_params['amplitude']
-        self.data_time_of_max = self.fit_params['time_max']
-        self.data_fit_success = self.fit_params['success'] != 0
+        fit_params = {key: np.concatenate([fits[key] for fits in fits_list], axis=0) for key in fits_list[0].keys()}
+        if self.data_amps is None:
+            self.fit_params = fit_params
+            self.data_amps = fit_params['amplitude']
+            self.data_time_of_max = fit_params['time_max']
+            self.data_fit_success = fit_params['success'] != 0
+        else:
+            for key in fit_params.keys():
+                self.fit_params[key] = np.concatenate([self.fit_params[key], fit_params[key]], axis=0)
+            self.data_amps = np.concatenate([self.data_amps, fit_params['amplitude']], axis=0)
+            self.data_time_of_max = np.concatenate([self.data_time_of_max, fit_params['time_max']], axis=0)
+            self.data_fit_success = np.concatenate([self.data_fit_success, fit_params['success'] != 0], axis=0)
 
         # fits = get_waveform_fits(self.data, self.noise_thresholds, self.waveform_fit_func)
         # self.data_amps = fits['amplitude']
@@ -702,10 +713,13 @@ def waveform_func_reparam(t, a, t_max, t_shift, q):
     return a * func / func_max
 
 
-def get_good_files(file_list, flags=None, feu_num=None, file_ext=None):
+def get_good_files(file_list, flags=None, feu_num=None, file_ext=None, file_nums=None):
     good_files = []
+    file_nums = None if file_nums == 'all' else file_nums
     for file in file_list:
         if file_ext is not None and not file.endswith(file_ext):
+            continue
+        if file_nums is not None and get_num_from_fdf_file_name(file, -2) not in file_nums:
             continue
         if flags is not None:
             continue_flag = False

@@ -13,6 +13,15 @@ import matplotlib.pyplot as plt
 
 
 def main():
+    plot_hardcoded()
+    print('donzo')
+
+
+def plot_from_file():
+    file_path_asa1 = 'F:'
+
+
+def plot_hardcoded():
     pitches = [0.8, 1, 1.5, 2]
     asa1_res = [672.4886616144543, 711.5567440478658, 848.7590942075378, 1079.048655066119]
     asa2_res = [625.3079241461761, 738.3549282018777, 850.6991242501664, 1029.417310909429]
@@ -41,7 +50,6 @@ def main():
     fig2.tight_layout()
 
     plt.show()
-    print('donzo')
 
 
 if __name__ == '__main__':

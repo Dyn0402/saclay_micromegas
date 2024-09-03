@@ -286,7 +286,7 @@ def configuration_optimization():
         #         ]
         # },
         {
-            'name': r'2023 Test Beam 10$\mu$m Resolution 150 GeV Muons',
+            'name': r'2023 Test Beam Config 10$\mu$m Resolution 150 GeV Muons',
             'banco_res': 10 / 10000,  # um to cm
             'incident_energy': 150e3,  # MeV
             'scattering_objects':
@@ -308,7 +308,7 @@ def configuration_optimization():
                 ]
         },
         {
-            'name': r'2023 Test Beam 10$\mu$m Resolution 80 GeV Muons',
+            'name': r'2023 Test Beam Config 10$\mu$m Resolution 80 GeV Muons',
             'banco_res': 10 / 10000,  # um to cm
             'incident_energy': 80e3,  # MeV
             'scattering_objects':
@@ -330,7 +330,7 @@ def configuration_optimization():
                 ]
         },
         {
-            'name': r'2023 Test Beam 10$\mu$m Resolution 10 GeV Muons',
+            'name': r'2023 Test Beam Config 10$\mu$m Resolution 10 GeV Muons',
             'banco_res': 10 / 10000,  # um to cm
             'incident_energy': 10e3,  # MeV
             'scattering_objects':
@@ -352,7 +352,7 @@ def configuration_optimization():
                 ]
         },
         {
-            'name': r'2023 Test Beam 10$\mu$m Resolution 5 GeV Muons',
+            'name': r'2023 Test Beam Config 10$\mu$m Resolution 5 GeV Muons',
             'banco_res': 10 / 10000,  # um to cm
             'incident_energy': 5e3,  # MeV
             'scattering_objects':
@@ -374,7 +374,7 @@ def configuration_optimization():
                 ]
         },
         {
-            'name': r'2023 Test Beam 10$\mu$m Resolution 1 GeV Muons',
+            'name': r'2023 Test Beam Config 10$\mu$m Resolution 1 GeV Muons',
             'banco_res': 10 / 10000,  # um to cm
             'incident_energy': 1e3,  # MeV
             'scattering_objects':
@@ -396,7 +396,7 @@ def configuration_optimization():
                 ]
         },
         {
-            'name': r'2023 Test Beam 10$\mu$m Resolution 880 MeV Electrons',
+            'name': r'2023 Test Beam Config 10$\mu$m Resolution 880 MeV Electrons',
             'banco_res': 10 / 10000,  # um to cm
             'incident_energy': 880,  # MeV
             'scattering_objects':

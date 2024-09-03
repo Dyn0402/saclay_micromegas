@@ -10,10 +10,13 @@ Created as saclay_micromegas/M3RefTracking.py
 
 import os
 import numpy as np
+import matplotlib.pyplot as plt
+import concurrent.futures
+from tqdm import tqdm
+
 import uproot
 import awkward as ak
 
-import matplotlib.pyplot as plt
 
 
 class M3RefTracking:
@@ -104,26 +107,32 @@ class M3RefTracking:
 def get_ray_data(ray_dir, file_nums='all', variables=None):
     if variables is None:
         variables = ['evn', 'evttime', 'rayN', 'Z_Up', 'X_Up', 'Y_Up', 'Z_Down', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']
-    data = None
-    for file_name in os.listdir(ray_dir):
+
+    def read_file(file_name):
         if not file_name.endswith('_rays.root'):
-            continue
+            return None
 
         if isinstance(file_nums, list):
             file_num = int(file_name.split('_')[-2])
             if file_num not in file_nums:
-                continue
+                return None
 
         with uproot.open(f'{ray_dir}{file_name}') as file:
             tree_name = f"{file.keys()[0].split(';')[0]};{max([int(key.split(';')[-1]) for key in file.keys()])}"
             tree = file[tree_name]  # Get tree with max ;# at end
             new_data = tree.arrays(variables, library='ak')
-            if data is None:
-                data = new_data
-            else:
-                data = ak.concatenate((data, new_data), axis=0)
-                # for var in variables:
-                #     data[var] = ak.concatenate((data[var], new_data[var]), axis=0)
+            return new_data
+
+    # List of ROOT files in the directory
+    root_files = os.listdir(ray_dir)
+
+    data = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:  # Use ThreadPoolExecutor for parallel file processing
+        # Use tqdm for a progress bar and map the read_file function across all root_files
+        for new_data in tqdm(executor.map(read_file, root_files), total=len(root_files)):
+            if new_data is not None:
+                data.append(new_data)
+    data = ak.concatenate(data, axis=0)
 
     return data
 

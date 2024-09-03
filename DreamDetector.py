@@ -11,6 +11,7 @@ Created as saclay_micromegas/DreamDetector.py
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from collections import Counter
 
 from Detector import Detector
 from DreamData import DreamData
@@ -58,12 +59,12 @@ class DreamDetector(Detector):
 
         self.hv = self.config['hvs']
 
-    def load_dream_data(self, data_dir, ped_dir=None, noise_threshold_sigmas=None):
+    def load_dream_data(self, data_dir, ped_dir=None, noise_threshold_sigmas=None, file_nums=None, chunk_size=100):
         self.dream_data = DreamData(data_dir, self.feu_num, self.feu_connectors, ped_dir)
         if noise_threshold_sigmas is not None:
             self.dream_data.noise_thresh_sigmas = noise_threshold_sigmas
         self.dream_data.read_ped_data()
-        self.dream_data.read_data()
+        self.dream_data.read_data(file_nums, chunk_size=chunk_size)
 
     def make_sub_groups(self):
         x_group_dfs = self.det_map[self.det_map['axis'] == 'y']  # y-going strips give x position
@@ -155,6 +156,8 @@ class DreamDetector(Detector):
             self.local_sub_centroids, self.sub_centroids, self.sub_triggers = [], [], []
             for sub_det in self.sub_detectors:
                 triggers, centroids = sub_det.get_event_centroids()
+                if triggers.shape[0] != centroids.shape[0]:
+                    print(f'Error: Triggers and centroids have different shapes: {triggers.shape}, {centroids.shape}')
                 if len(centroids) == 0:
                     continue
                 zs = np.full((len(centroids), 1), 0)  # Add z coordinate to centroids
@@ -260,6 +263,80 @@ class DreamDetector(Detector):
         ax.set_ylabel('Y (mm)')
         ax.set_aspect('equal')
         ax.scatter(x_centroids, y_centroids, alpha=0.5)
+        fig.tight_layout()
+
+    def plot_centroids_2d_heatmap(self):
+        """
+        Plot the centroids of the largest clusters in each sub-detector as a 2D heatmap.
+        :return:
+        """
+        all_centroids = []
+        subs_centroids, subs_triggers = self.get_sub_centroids_coords()
+        for sub_centroids, sub_triggers in zip(subs_centroids, subs_triggers):
+            all_centroids.extend(list(sub_centroids))
+
+        x_centroids, y_centroids, z_centroids = zip(*all_centroids)
+
+        # Define the binning for the 2D histogram
+        bins = 100  # You can adjust the number of bins to your needs
+
+        # Create the 2D histogram
+        heatmap, xedges, yedges = np.histogram2d(x_centroids, y_centroids, bins=bins)
+
+        # Plot the heatmap
+        fig, ax = plt.subplots()
+        ax.set_title(f'{self.name} Largest Cluster Centroids')
+        ax.set_xlabel('X (mm)')
+        ax.set_ylabel('Y (mm)')
+        ax.set_aspect('equal')
+
+        # The origin parameter is set to 'lower' so that the origin of the plot is at the bottom left
+        cax = ax.imshow(heatmap.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], origin='lower', cmap='hot',
+                        interpolation='nearest')
+
+        # Add a colorbar to indicate the density scale
+        fig.colorbar(cax, ax=ax, label='Density')
+
+        fig.tight_layout()
+
+    def plot_centroids_2d_scatter_heat(self):
+        """
+        Plot the centroids of the largest clusters in each sub-detector.
+        :return:
+        """
+        all_centroids = []
+        subs_centroids, subs_triggers = self.get_sub_centroids_coords()
+        for sub_centroids, sub_triggers in zip(subs_centroids, subs_triggers):
+            all_centroids.extend(list(sub_centroids))
+
+        # Extract x and y coordinates
+        x_centroids, y_centroids, _ = zip(*all_centroids)
+
+        # Count occurrences of each unique x-y pair
+        xy_pairs = list(zip(x_centroids, y_centroids))
+        pair_counts = Counter(xy_pairs)
+
+        # Get unique pairs and their counts
+        unique_pairs, counts = zip(*pair_counts.items())
+        unique_x, unique_y = zip(*unique_pairs)
+
+        # Apply log scaling to the counts for coloring
+        log_counts = np.log(np.array(counts) + 1)  # Adding 1 to avoid log(0)
+
+        # Create the plot
+        fig, ax = plt.subplots()
+        ax.set_title(f'{self.name} Largest Cluster Centroids')
+        ax.set_xlabel('X (mm)')
+        ax.set_ylabel('Y (mm)')
+        ax.set_aspect('equal')
+
+        # Scatter plot with color based on log-scaled counts
+        scatter = ax.scatter(unique_x, unique_y, c=log_counts, cmap='viridis', alpha=0.5)
+
+        # Add a colorbar to show the log-scaled counts
+        colorbar = fig.colorbar(scatter, ax=ax)
+        colorbar.set_label('Log(Count + 1)')
+
         fig.tight_layout()
 
     def plot_amplitude_sum_vs_event_num(self, print_threshold=None):

@@ -7,6 +7,7 @@ Created as saclay_micromegas/det_classes_test.py
 
 @author: Dylan Neff, Dylan
 """
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,36 +21,50 @@ from DreamData import DreamData
 
 
 def main():
-    # base_dir = 'F:/Saclay/cosmic_data/'
-    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_dir = 'F:/Saclay/cosmic_data/'
+    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-3-24/'
+    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # run_name = 'new_strip_check_7-12-24'
-    run_name = 'ig1_test1'
+    # run_name = 'ig1_test1'
     # run_name = 'banco_flipped_7-8-24'
     # run_name = 'ig1_sg1_stats4'
+    run_name = 'sg1_stats_7-26-24'
     run_dir = f'{base_dir}{run_name}/'
     # sub_run_name = 'hv1'
     # sub_run_name = 'new_detector_short'
     # sub_run_name = 'drift_600_resist_460'
-    sub_run_name = 'quick_test'
+    # sub_run_name = 'quick_test'
     # sub_run_name = 'max_hv_long'
+    sub_run_name = 'max_hv_long_1'
 
-    # det_single = 'asacusa_strip_1'
-    det_single = 'asacusa_strip_2'
+    det_single = 'asacusa_strip_1'
+    # det_single = 'asacusa_strip_2'
     # det_single = 'strip_grid_1'
     # det_single = 'inter_grid_1'
     # det_single = 'urw_inter'
+    # det_single = 'urw_strip'
     # det_single = None
+
+    # file_nums = 'all'
+    file_nums = list(range(0, 645))
+    # file_nums = list(range(100, 110))
 
     run_json_path = f'{run_dir}run_config.json'
     data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
     ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
     m3_dir = f'{run_dir}{sub_run_name}/m3_tracking_root/'
+    out_dir = f'{out_dir}{det_single}/'
+    try:
+        os.mkdir(out_dir)
+    except FileExistsError:
+        pass
 
     z_align_range = [5, 5]  # mm range to search for optimal z position
 
-    ray_data = M3RefTracking(m3_dir, single_track=True)
+    print(f'Getting ray data...')
+    ray_data = M3RefTracking(m3_dir, single_track=True, file_nums=file_nums)
 
     det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
     for detctor_name in det_config_loader.included_detectors:
@@ -70,7 +85,7 @@ def main():
             print(f'FEU Num: {det.feu_num}')
             print(f'FEU Channels: {det.feu_connectors}')
             print(f'HV: {det.hv}')
-            det.load_dream_data(data_dir, ped_dir, 10)
+            det.load_dream_data(data_dir, ped_dir, 10, file_nums, 100)
             print(f'Hits shape: {det.dream_data.hits.shape}')
             # det.dream_data.plot_noise_metric()
             det.dream_data.plot_pedestals()
@@ -84,12 +99,14 @@ def main():
             event_nums = det.plot_xy_amp_sum_vs_event_num(True, 500, False, 15)
             det.plot_amplitude_sum_vs_event_num()
             det.plot_num_hit_xy_hist()
-            print(f'Det data: {len(det.dream_data.data)}')
+            print(f'Det data: {len(det.dream_data.data_amps)}')
             print(f'Ray data: {len(ray_data.ray_data)}')
             det.plot_centroids_2d()
             plot_ray_hits_2d(det, ray_data)
             det.add_rotation(90, 'z')
             det.plot_centroids_2d()
+            det.plot_centroids_2d_heatmap()
+            det.plot_centroids_2d_scatter_heat()
             plot_ray_hits_2d(det, ray_data)
             # plt.show()
 
@@ -112,6 +129,11 @@ def main():
             # Sort by pitch
             pitches, resolutions, res_xs, res_ys = zip(*sorted(zip(pitches, resolutions, res_xs, res_ys)))
             print(pitches, resolutions, res_xs, res_ys)
+            # Write to file in out_dir
+            with open(f'{out_dir}{det.name}_res_vs_pitch.txt', 'w') as file:
+                file.write(f'Pitch (mm)\tResolution (um)\tX Res (um)\tY Res (um)\n')
+                for pitch, res, res_x, res_y in zip(pitches, resolutions, res_xs, res_ys):
+                    file.write(f'{pitch}\t{res}\t{res_x}\t{res_y}\n')
             print(det.name)
             fig, ax = plt.subplots()
             ax.plot(pitches, resolutions, marker='o', zorder=10)
@@ -120,7 +142,13 @@ def main():
             ax.grid()
             fig.tight_layout()
 
-            plt.show()
+            all_figures = [plt.figure(num) for num in plt.get_fignums()]
+            for fig_i, fig in enumerate(all_figures):
+                fig_name = fig.axes[0].get_title() + f'_{fig_i}'
+                fig.savefig(f'{out_dir}{fig_name}.png')
+
+            # plt.show()
+            input('Finished, press Enter to continue...')
 
             for event_num in event_nums:
                 det.plot_event_1d(event_num)
@@ -173,7 +201,7 @@ def align_dream(det, ray_data, z_range):
     x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
     det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
 
-    zs = np.linspace(det.center[2] - z_range[0], det.center[2] + z_range[1], 100)
+    zs = np.linspace(det.center[2] - z_range[0], det.center[2] + z_range[1], 30)
     # zs = [det.center[2]]
     x_residuals, y_residuals = [], []
     z_og = det.center[2]
@@ -198,7 +226,7 @@ def align_dream(det, ray_data, z_range):
 
     det.set_center(z=z_min)
 
-    z_rots = np.linspace(-1, 1, 100)
+    z_rots = np.linspace(-1, 1, 30)
     x_residuals, y_residuals = [], []
     det.add_rotation(0, 'z')
     for z_rot in z_rots:
