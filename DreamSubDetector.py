@@ -60,6 +60,11 @@ class DreamSubDetector:
         self.y_chans = chans
 
     def get_event_centroids(self):
+        """
+        Get x and y centroids for events in which there are clusters in both x and y.
+        Have AI optimize this, currently slow.
+        :return:
+        """
         triggers, centroids = [], []
         for x_event_index, x_trigger in enumerate(self.x_cluster_triggers):
             # Check if x_trigger in y_cluster_triggers and if so get index

@@ -39,6 +39,10 @@ class DreamDetector(Detector):
         self.x_largest_clusters, self.y_largest_clusters = None, None
         self.x_largest_cluster_centroids, self.y_largest_cluster_centroids = None, None
 
+        self.local_sub_centroids = None
+        self.sub_centroids = None
+        self.sub_triggers = None
+
     def load_from_config_dream(self):
         dream_feus = self.config['dream_feus']
         feu_nums = list(set([chan[0] for chan in dream_feus.values()]))
@@ -146,19 +150,24 @@ class DreamDetector(Detector):
                               y_group['largest_clusters'], y_group['largest_cluster_centroids'], y_channels)
                 self.sub_detectors.append(sub_det)
 
-    def get_sub_centroids_coords(self):
-        sub_centroids, sub_triggers = [], []
-        for sub_det in self.sub_detectors:
-            triggers, centroids = sub_det.get_event_centroids()
-            if len(centroids) == 0:
-                continue
-            zs = np.full((len(centroids), 1), 0)  # Add z coordinate to centroids
-            centroids = np.hstack((centroids, zs))  # Combine x, y, z
-            centroids = self.convert_coords_to_global(centroids)
-            sub_centroids.append(centroids)
-            sub_triggers.append(triggers)
+    def get_sub_centroids_coords(self, recalculate=True):
+        if recalculate:
+            self.local_sub_centroids, self.sub_centroids, self.sub_triggers = [], [], []
+            for sub_det in self.sub_detectors:
+                triggers, centroids = sub_det.get_event_centroids()
+                if len(centroids) == 0:
+                    continue
+                zs = np.full((len(centroids), 1), 0)  # Add z coordinate to centroids
+                centroids = np.hstack((centroids, zs))  # Combine x, y, z
+                self.local_sub_centroids = centroids
+                centroids = self.convert_coords_to_global(centroids)
+                self.sub_centroids.append(centroids)
+                self.sub_triggers.append(triggers)
+        else:
+            for sub_det_i in range(len(self.local_sub_centroids)):
+                self.sub_centroids[sub_det_i] = self.convert_coords_to_global(self.local_sub_centroids)
 
-        return sub_centroids, sub_triggers
+        return self.sub_centroids, self.sub_triggers
 
     def plot_event_1d(self, event_id):
         """

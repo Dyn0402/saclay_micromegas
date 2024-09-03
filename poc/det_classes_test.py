@@ -20,20 +20,20 @@ from DreamData import DreamData
 
 
 def main():
-    base_dir = 'F:/Saclay/cosmic_data/'
-    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = 'F:/Saclay/cosmic_data/'
+    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # run_name = 'new_strip_check_7-12-24'
-    # run_name = 'ig1_test1'
-    run_name = 'banco_flipped_7-8-24'
+    run_name = 'ig1_test1'
+    # run_name = 'banco_flipped_7-8-24'
     # run_name = 'ig1_sg1_stats4'
     run_dir = f'{base_dir}{run_name}/'
     # sub_run_name = 'hv1'
     # sub_run_name = 'new_detector_short'
     # sub_run_name = 'drift_600_resist_460'
-    # sub_run_name = 'quick_test'
-    sub_run_name = 'max_hv_long'
+    sub_run_name = 'quick_test'
+    # sub_run_name = 'max_hv_long'
 
     # det_single = 'asacusa_strip_1'
     det_single = 'asacusa_strip_2'
@@ -47,7 +47,7 @@ def main():
     ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
     m3_dir = f'{run_dir}{sub_run_name}/m3_tracking_root/'
 
-    z_range_low, z_range_high = 5, 5  # mm range to search for optimal z position
+    z_align_range = [5, 5]  # mm range to search for optimal z position
 
     ray_data = M3RefTracking(m3_dir, single_track=True)
 
@@ -93,60 +93,8 @@ def main():
             plot_ray_hits_2d(det, ray_data)
             # plt.show()
 
-            x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
-            det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
+            align_dream(det, ray_data, z_align_range)
 
-            zs = np.linspace(det.center[2] - z_range_low, det.center[2] + z_range_high, 100)
-            # zs = [det.center[2]]
-            x_residuals, y_residuals = [], []
-            z_og = det.center[2]
-            for z in zs:
-                print(f'z: {z}')
-                det.set_center(z=z)
-                x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data, plot=False)
-                x_residuals.append(x_res_i_std)
-                y_residuals.append(y_res_i_std)
-            min_res = np.min(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))
-            z_min = zs[np.argmin(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))]
-            fig, ax = plt.subplots()
-            ax.plot(zs, x_residuals, label='X Residuals')
-            ax.plot(zs, y_residuals, label='Y Residuals')
-            ax.scatter(z_min, min_res, color='red', marker='x', label='Min xy Residual')
-            ax.axvline(z_og, color='green', linestyle='--', alpha=0.5, label='Original')
-            ax.set_xlabel('z (mm)')
-            ax.set_ylabel('Residual (mm)')
-            ax.legend()
-            ax.grid()
-            fig.tight_layout()
-
-            det.set_center(z=z_min)
-
-            z_rots = np.linspace(-1, 1, 100)
-            x_residuals, y_residuals = [], []
-            det.add_rotation(0, 'z')
-            for z_rot in z_rots:
-                print(f'z_rot: {z_rot}')
-                det.replace_last_rotation(z_rot, 'z')
-                x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
-                x_residuals.append(x_res_i_std)
-                y_residuals.append(y_res_i_std)
-            min_rot_res = np.min(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))
-            z_rot_min = z_rots[np.argmin(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))]
-            fig, ax = plt.subplots()
-            ax.plot(z_rots, x_residuals, label='X Residuals')
-            ax.plot(z_rots, y_residuals, label='Y Residuals')
-            ax.scatter(z_rot_min, min_rot_res, color='red', marker='x', label='Min xy Residual')
-            ax.axvline(0, color='green', linestyle='--', alpha=0.5, label='Original')
-            ax.set_xlabel('z_rot (deg)')
-            ax.set_ylabel('Residual (mm)')
-            ax.grid()
-            ax.legend()
-            fig.tight_layout()
-
-            det.replace_last_rotation(z_rot_min, 'z')
-
-            x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
-            det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
             get_residuals(det, ray_data, plot=True)
 
             x_subs_mean, y_subs_mean, x_subs_std, y_subs_std = get_residuals(det, ray_data, plot=False, sub_reses=True)
@@ -221,7 +169,100 @@ def main():
     print('donzo')
 
 
+def align_dream(det, ray_data, z_range):
+    x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
+    det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
+
+    zs = np.linspace(det.center[2] - z_range[0], det.center[2] + z_range[1], 100)
+    # zs = [det.center[2]]
+    x_residuals, y_residuals = [], []
+    z_og = det.center[2]
+    for z in zs:
+        print(f'z: {z}')
+        det.set_center(z=z)
+        x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data, plot=False)
+        x_residuals.append(x_res_i_std)
+        y_residuals.append(y_res_i_std)
+    min_res = np.min(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))
+    z_min = zs[np.argmin(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))]
+    fig, ax = plt.subplots()
+    ax.plot(zs, x_residuals, label='X Residuals')
+    ax.plot(zs, y_residuals, label='Y Residuals')
+    ax.scatter(z_min, min_res, color='red', marker='x', label='Min xy Residual')
+    ax.axvline(z_og, color='green', linestyle='--', alpha=0.5, label='Original')
+    ax.set_xlabel('z (mm)')
+    ax.set_ylabel('Residual (mm)')
+    ax.legend()
+    ax.grid()
+    fig.tight_layout()
+
+    det.set_center(z=z_min)
+
+    z_rots = np.linspace(-1, 1, 100)
+    x_residuals, y_residuals = [], []
+    det.add_rotation(0, 'z')
+    for z_rot in z_rots:
+        print(f'z_rot: {z_rot}')
+        det.replace_last_rotation(z_rot, 'z')
+        x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
+        x_residuals.append(x_res_i_std)
+        y_residuals.append(y_res_i_std)
+    min_rot_res = np.min(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))
+    z_rot_min = z_rots[np.argmin(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))]
+    fig, ax = plt.subplots()
+    ax.plot(z_rots, x_residuals, label='X Residuals')
+    ax.plot(z_rots, y_residuals, label='Y Residuals')
+    ax.scatter(z_rot_min, min_rot_res, color='red', marker='x', label='Min xy Residual')
+    ax.axvline(0, color='green', linestyle='--', alpha=0.5, label='Original')
+    ax.set_xlabel('z_rot (deg)')
+    ax.set_ylabel('Residual (mm)')
+    ax.grid()
+    ax.legend()
+    fig.tight_layout()
+
+    det.replace_last_rotation(z_rot_min, 'z')
+
+    x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
+    det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
+
+
 def get_residuals(det, ray_data, sub_reses=False, plot=False):
+    x_res, y_res, = [], []
+    x_subs_mean, x_subs_std, y_subs_mean, y_subs_std = [], [], [], []
+    subs_centroids, subs_triggers = det.get_sub_centroids_coords()
+    for sub_centroids, sub_triggers in zip(subs_centroids, subs_triggers):
+        x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
+
+        # Find indices of sub_triggers in event_num_rays
+        matched_indices = np.in1d(np.array(sub_triggers), np.array(event_num_rays)).nonzero()[0]
+
+        centroids_i_matched = sub_centroids[matched_indices]
+
+        x_res_i = centroids_i_matched[:, 0] - x_rays
+        y_res_i = centroids_i_matched[:, 1] - y_rays
+
+        x_res.extend(x_res_i)
+        y_res.extend(y_res_i)
+
+        x_popt_i, y_popt_i = fit_residuals(x_res_i, y_res_i)
+        x_subs_mean.append(x_popt_i[1])
+        y_subs_mean.append(y_popt_i[1])
+        x_subs_std.append(x_popt_i[2])
+        y_subs_std.append(y_popt_i[2])
+
+        if plot:
+            plot_xy_residuals_2d(x_rays, y_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1])
+
+    if sub_reses:
+        return x_subs_mean, y_subs_mean, x_subs_std, y_subs_std
+
+    x_popt, y_popt = fit_residuals(x_res, y_res)
+    x_res_i_mean, y_res_i_mean = x_popt[1], y_popt[1]
+    x_res_i_std, y_res_i_std = x_popt[2], y_popt[2]
+    return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
+
+
+def get_residuals_align(det, ray_data, triggers, sub_reses=False, plot=False):
     x_res, y_res, = [], []
     x_subs_mean, x_subs_std, y_subs_mean, y_subs_std = [], [], [], []
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
