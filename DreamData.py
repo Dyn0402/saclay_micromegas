@@ -399,9 +399,10 @@ class DreamData:
         ax.set_ylabel('Max Amplitude / Amplitude Sum')
         fig.tight_layout()
 
-    def plot_hits_vs_strip(self):
+    def plot_hits_vs_strip(self, print_dead_strips=False):
         """
         Plot number of hits vs strip, separated by connector.
+        :param print_dead_strips: Print strips with no hits.
         :return:
         """
         hits = np.sum(self.hits, axis=0)
@@ -417,6 +418,14 @@ class DreamData:
         ax.set_ylim(0, None)
         ax.legend()
         fig.tight_layout()
+
+        if print_dead_strips:
+            percent_max = 2.  # percent of max to call a strip dead
+            max_hits = max((max(hit_group) for hit_group in hits))
+            for i, hit_group in enumerate(hits):
+                strip_nums = np.arange(len(hit_group)) + i * self.channels_per_connector
+                dead_strips = strip_nums[hit_group < max_hits * percent_max / 100]
+                print(f'Connector {i + self.starting_connector} Dead Strips: {dead_strips}')
 
     def plot_amplitudes_vs_strip(self):
         """

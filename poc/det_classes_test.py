@@ -21,11 +21,12 @@ from DreamData import DreamData
 
 
 def main():
-    base_dir = 'F:/Saclay/cosmic_data/'
-    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-3-24/'
-    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # base_dir = 'F:/Saclay/cosmic_data/'
+    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-3-24/'
+    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/'
     # run_name = 'new_strip_check_7-12-24'
     # run_name = 'ig1_test1'
     # run_name = 'banco_flipped_7-8-24'
@@ -39,17 +40,19 @@ def main():
     # sub_run_name = 'max_hv_long'
     sub_run_name = 'max_hv_long_1'
 
-    det_single = 'asacusa_strip_1'
+    # det_single = 'asacusa_strip_1'
     # det_single = 'asacusa_strip_2'
     # det_single = 'strip_grid_1'
     # det_single = 'inter_grid_1'
-    # det_single = 'urw_inter'
+    det_single = 'urw_inter'
     # det_single = 'urw_strip'
     # det_single = None
 
     # file_nums = 'all'
-    file_nums = list(range(0, 645))
-    # file_nums = list(range(100, 110))
+    # file_nums = list(range(0, 645))
+    file_nums = list(range(100, 210))
+
+    chunk_size = 5  # Number of files to process at once
 
     run_json_path = f'{run_dir}run_config.json'
     data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
@@ -85,12 +88,13 @@ def main():
             print(f'FEU Num: {det.feu_num}')
             print(f'FEU Channels: {det.feu_connectors}')
             print(f'HV: {det.hv}')
-            det.load_dream_data(data_dir, ped_dir, 10, file_nums, 100)
+            det.load_dream_data(data_dir, ped_dir, 10, file_nums, chunk_size)
             print(f'Hits shape: {det.dream_data.hits.shape}')
             # det.dream_data.plot_noise_metric()
             det.dream_data.plot_pedestals()
-            det.dream_data.plot_hits_vs_strip()
+            det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
             det.dream_data.plot_amplitudes_vs_strip()
+            plt.show()
             param_ranges = {'amplitude': [10, 5000]}
             det.dream_data.plot_fit_param('amplitude', param_ranges)
             det.dream_data.plot_fit_param('time_max')
@@ -108,7 +112,7 @@ def main():
             det.plot_centroids_2d_heatmap()
             det.plot_centroids_2d_scatter_heat()
             plot_ray_hits_2d(det, ray_data)
-            # plt.show()
+            plt.show()
 
             align_dream(det, ray_data, z_align_range)
 
@@ -147,7 +151,7 @@ def main():
                 fig_name = fig.axes[0].get_title() + f'_{fig_i}'
                 fig.savefig(f'{out_dir}{fig_name}.png')
 
-            # plt.show()
+            plt.show()
             input('Finished, press Enter to continue...')
 
             for event_num in event_nums:
