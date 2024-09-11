@@ -21,12 +21,12 @@ from DreamData import DreamData
 
 
 def main():
-    # base_dir = 'F:/Saclay/cosmic_data/'
-    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-3-24/'
-    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/'
+    base_dir = 'F:/Saclay/cosmic_data/'
+    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-10-24/'
+    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/'
     # run_name = 'new_strip_check_7-12-24'
     # run_name = 'ig1_test1'
     # run_name = 'banco_flipped_7-8-24'
@@ -44,15 +44,15 @@ def main():
     # det_single = 'asacusa_strip_2'
     # det_single = 'strip_grid_1'
     # det_single = 'inter_grid_1'
-    det_single = 'urw_inter'
-    # det_single = 'urw_strip'
+    # det_single = 'urw_inter'
+    det_single = 'urw_strip'
     # det_single = None
 
     # file_nums = 'all'
     # file_nums = list(range(0, 645))
     file_nums = list(range(100, 210))
 
-    chunk_size = 5  # Number of files to process at once
+    chunk_size = 100  # Number of files to process at once
 
     run_json_path = f'{run_dir}run_config.json'
     data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
@@ -94,7 +94,7 @@ def main():
             det.dream_data.plot_pedestals()
             det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
             det.dream_data.plot_amplitudes_vs_strip()
-            plt.show()
+            # plt.show()
             param_ranges = {'amplitude': [10, 5000]}
             det.dream_data.plot_fit_param('amplitude', param_ranges)
             det.dream_data.plot_fit_param('time_max')
@@ -112,35 +112,37 @@ def main():
             det.plot_centroids_2d_heatmap()
             det.plot_centroids_2d_scatter_heat()
             plot_ray_hits_2d(det, ray_data)
-            plt.show()
+            # plt.show()
 
             align_dream(det, ray_data, z_align_range)
 
             get_residuals(det, ray_data, plot=True)
 
             x_subs_mean, y_subs_mean, x_subs_std, y_subs_std = get_residuals(det, ray_data, plot=False, sub_reses=True)
-            pitches, resolutions, res_xs, res_ys = [], [], [], []
+            pitches_x, pitches_y, resolutions, res_xs, res_ys = [], [], [], [], []
             for i, (x_mean, y_mean, x_std, y_std) in enumerate(zip(x_subs_mean, y_subs_mean, x_subs_std, y_subs_std)):
                 x_mean, y_mean = int(x_mean * 1000), int(y_mean * 1000)
                 x_std, y_std = int(x_std * 1000), int(y_std * 1000)
-                pitch = det.sub_detectors[i].x_pitch
-                print(f'Sub-Detector {i} (pitch: {pitch}) '
+                pitch_x = det.sub_detectors[i].x_pitch
+                pitch_y = det.sub_detectors[i].y_pitch
+                print(f'Sub-Detector {i} (pitch_x: {pitch_x}, pitch_y: {pitch_y}) '
                       f'x_mean: {x_mean}μm, y_mean: {y_mean}μm, x_std: {x_std}μm, y_std: {y_std}μm')
-                pitches.append(pitch)
+                pitches_x.append(pitch_x)
+                pitches_y.append(pitch_y)
                 res_xs.append(x_std)
                 res_ys.append(y_std)
                 resolutions.append(np.sqrt(x_std ** 2 + y_std ** 2))
-            # Sort by pitch
-            pitches, resolutions, res_xs, res_ys = zip(*sorted(zip(pitches, resolutions, res_xs, res_ys)))
-            print(pitches, resolutions, res_xs, res_ys)
+            # Sort by pitch_x
+            pitches_x, pitches_y, resolutions, res_xs, res_ys = zip(*sorted(zip(pitches_x, pitches_y, resolutions, res_xs, res_ys)))
+            print(pitches_x, pitches_y, resolutions, res_xs, res_ys)
             # Write to file in out_dir
             with open(f'{out_dir}{det.name}_res_vs_pitch.txt', 'w') as file:
                 file.write(f'Pitch (mm)\tResolution (um)\tX Res (um)\tY Res (um)\n')
-                for pitch, res, res_x, res_y in zip(pitches, resolutions, res_xs, res_ys):
-                    file.write(f'{pitch}\t{res}\t{res_x}\t{res_y}\n')
+                for pitch_x, pitch_y, res, res_x, res_y in zip(pitches_x, pitches_y, resolutions, res_xs, res_ys):
+                    file.write(f'{pitch_x}\t{pitch_y}\t{res}\t{res_x}\t{res_y}\n')
             print(det.name)
             fig, ax = plt.subplots()
-            ax.plot(pitches, resolutions, marker='o', zorder=10)
+            ax.plot(pitches_x, resolutions, marker='o', zorder=10)
             ax.set_xlabel('Pitch (mm)')
             ax.set_ylabel('Resolution (μm)')
             ax.grid()

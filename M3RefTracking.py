@@ -18,7 +18,6 @@ import uproot
 import awkward as ak
 
 
-
 class M3RefTracking:
     def __init__(self, ray_dir, file_nums='all', variables=None, single_track=True):
         self.ray_dir = ray_dir
