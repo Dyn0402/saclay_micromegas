@@ -26,7 +26,7 @@ def main():
     out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-10-24/'
     # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
     # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/'
+    # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/9-11-24/'
     # run_name = 'new_strip_check_7-12-24'
     # run_name = 'ig1_test1'
     # run_name = 'banco_flipped_7-8-24'
@@ -401,6 +401,7 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
     ax.bar(x_bins, x_counts, width=x_bin_edges[1] - x_bin_edges[0], color='blue', alpha=0.5)
     x_plot_xs = np.linspace(x_bin_edges[0], x_bin_edges[-1], 1000)
     ax.plot(x_plot_xs, gaus(x_plot_xs, *x_popt), color='red', linestyle='-', label='X Fit')
+    ax.set_xlim(x_popt[1] - 5 * x_popt[2], x_popt[1] + 5 * x_popt[2])
     ax.set_xlabel('X Residual (mm)')
     ax.set_ylabel('Events')
     fig.tight_layout()
@@ -414,6 +415,7 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
     ax.bar(y_bins, y_counts, width=y_bin_edges[1] - y_bin_edges[0], color='green', alpha=0.5)
     y_plot_xs = np.linspace(y_bin_edges[0], y_bin_edges[-1], 1000)
     ax.plot(y_plot_xs, gaus(y_plot_xs, *y_popt), color='red', linestyle='-', label='Y Fit')
+    ax.set_xlim(y_popt[1] - 5 * y_popt[2], y_popt[1] + 5 * y_popt[2])
     ax.set_xlabel('Y Residual (mm)')
     ax.set_ylabel('Events')
     fig.tight_layout()
