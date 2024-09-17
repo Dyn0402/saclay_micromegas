@@ -43,6 +43,8 @@ class DreamDetector(Detector):
         self.local_sub_centroids = None
         self.sub_centroids = None
         self.sub_triggers = None
+        self.sub_det_corners_local = None
+        self.sub_det_corners_global = None
 
     def load_from_config_dream(self):
         dream_feus = self.config['dream_feus']
@@ -74,15 +76,19 @@ class DreamDetector(Detector):
             x_amps = self.dream_data.get_channels_amps(x_connector, x_channels)
             x_hits = self.dream_data.get_channels_hits(x_connector, x_channels)
             x_clusters, x_cluster_indices = find_clusters_all_events(x_hits)
+            x_cluster_sizes = get_cluster_sizes(x_clusters)
             x_cluster_triggers = self.dream_data.event_nums[x_cluster_indices]
             x_cluster_centroids = get_cluster_centroids_all_events(x_clusters, x_cluster_indices,
                                                                    x_group['xs_gerber'], x_amps)
             xlarge_clusts = get_largest_clusters_all_events(x_clusters, x_cluster_indices, x_cluster_centroids, x_amps)
             x_largest_clusters, x_largest_cluster_centroids = xlarge_clusts
+            x_largest_cluster_sizes = get_cluster_sizes(x_largest_clusters)
             self.x_groups.append({'df': x_group, 'amps': x_amps, 'hits': x_hits, 'clusters': x_clusters,
+                                  'cluster_sizes': x_cluster_sizes,
                                   'cluster_triggers': np.array(x_cluster_triggers),
                                   'cluster_centroids': x_cluster_centroids,
                                   'largest_clusters': x_largest_clusters,
+                                  'largest_cluster_sizes': x_largest_cluster_sizes,
                                   'largest_cluster_centroids': np.array(x_largest_cluster_centroids)})
 
         # for x_group in self.x_groups:
@@ -99,15 +105,19 @@ class DreamDetector(Detector):
             y_amps = self.dream_data.get_channels_amps(y_connector, y_channels)
             y_hits = self.dream_data.get_channels_hits(y_connector, y_channels)
             y_clusters, y_cluster_indices = find_clusters_all_events(y_hits)
+            y_cluster_sizes = get_cluster_sizes(y_clusters)
             y_cluster_triggers = self.dream_data.event_nums[y_cluster_indices]
             y_cluster_centroids = get_cluster_centroids_all_events(y_clusters, y_cluster_indices,
                                                                    y_group['ys_gerber'], y_amps)
             ylarge_clusts = get_largest_clusters_all_events(y_clusters, y_cluster_indices, y_cluster_centroids, y_amps)
             y_largest_clusters, y_largest_cluster_centroids = ylarge_clusts
+            y_largest_cluster_sizes = get_cluster_sizes(y_largest_clusters)
             self.y_groups.append({'df': y_group, 'amps': y_amps, 'hits': y_hits, 'clusters': y_clusters,
+                                  'cluster_sizes': y_cluster_sizes,
                                   'cluster_triggers': np.array(y_cluster_triggers),
                                   'cluster_centroids': y_cluster_centroids,
                                   'largest_clusters': y_largest_clusters,
+                                  'largest_cluster_sizes': y_largest_cluster_sizes,
                                   'largest_cluster_centroids': np.array(y_largest_cluster_centroids)})
 
         self.y_hits = np.hstack([y_group['hits'] for y_group in self.y_groups])
@@ -142,13 +152,15 @@ class DreamDetector(Detector):
                 x_pitch, y_pitch = x_group_df['pitch(mm)'], y_group_df['pitch(mm)']
                 x_interpitch, y_interpitch = x_group_df['interpitch(mm)'], y_group_df['interpitch(mm)']
 
-                sub_det = DreamSubDetector()
+                sub_det = DreamSubDetector(sub_index=len(self.sub_detectors))
                 sub_det.set_x(x_pos, x_group['amps'], x_group['hits'], x_pitch, x_interpitch, x_connector,
-                              x_group['cluster_triggers'], x_group['clusters'], x_group['cluster_centroids'],
-                              x_group['largest_clusters'], x_group['largest_cluster_centroids'], x_channels)
+                              x_group['cluster_triggers'], x_group['clusters'], x_group['cluster_sizes'],
+                              x_group['cluster_centroids'], x_group['largest_clusters'],
+                              x_group['largest_cluster_sizes'], x_group['largest_cluster_centroids'], x_channels)
                 sub_det.set_y(y_pos, y_group['amps'], y_group['hits'], y_pitch, y_interpitch, y_connector,
-                              y_group['cluster_triggers'], y_group['clusters'], y_group['cluster_centroids'],
-                              y_group['largest_clusters'], y_group['largest_cluster_centroids'], y_channels)
+                              y_group['cluster_triggers'], y_group['clusters'], y_group['cluster_sizes'],
+                              y_group['cluster_centroids'], y_group['largest_clusters'],
+                              y_group['largest_cluster_sizes'], y_group['largest_cluster_centroids'], y_channels)
                 self.sub_detectors.append(sub_det)
 
     def get_sub_centroids_coords(self, recalculate=True):
@@ -171,6 +183,34 @@ class DreamDetector(Detector):
                 self.sub_centroids[sub_det_i] = self.convert_coords_to_global(self.local_sub_centroids)
 
         return self.sub_centroids, self.sub_triggers
+
+    def get_sub_det_corners(self):
+        self.sub_det_corners_local, self.sub_det_corners_global = [], []
+        for sub_det in self.sub_detectors:
+            x_min, x_max = np.min(sub_det.x_pos), np.max(sub_det.x_pos)
+            y_min, y_max = np.min(sub_det.y_pos), np.max(sub_det.y_pos)
+            corners = np.array([[x_min, y_min, 0], [x_min, y_max, 0], [x_max, y_min, 0], [x_max, y_max, 0]])
+            self.sub_det_corners_local.append(corners)
+            corners_global = self.convert_coords_to_global(corners)
+            self.sub_det_corners_global.append(corners_global)
+
+    def in_sub_det(self, sub_det_i, x, y, z, tolerance=0):
+        """
+        Check if a point is within a sub-detector x-y area using the sub-detector corners. Add tolerance to bounds.
+        Assume sub detector is rectangular in local coordinates, rotate x,y from global to local.
+        :param sub_det_i: Index of sub-detector to check.
+        :param x: X coordinate to check.
+        :param y: Y coordinate to check.
+        :param tolerance: Tolerance to add to the sub-detector bounds.
+        :return:
+        """
+        self.get_sub_det_corners()
+        coords = np.array([x, y, z])
+        local_coords = self.convert_global_coords_to_local(coords)
+        corners = self.sub_det_corners_local[sub_det_i]
+        x_min, x_max = np.min(corners[:, 0]) - tolerance, np.max(corners[:, 0]) + tolerance
+        y_min, y_max = np.min(corners[:, 1]) - tolerance, np.max(corners[:, 1]) + tolerance
+        return x_min < local_coords[0] < x_max and y_min < local_coords[1] < y_max
 
     def plot_event_1d(self, event_id):
         """
@@ -245,6 +285,35 @@ class DreamDetector(Detector):
 
         scatter = ax.scatter(x_pos_plot, y_pos_plot, c=amp_sums_plot, cmap='jet', s=10)
         fig.colorbar(scatter, ax=ax, label='Amplitude')
+        fig.tight_layout()
+
+    def plot_hits_1d(self):
+        """
+        Plot all hits for each strip, split by subdetector and x-y axes
+        :return:
+        """
+        fig, axs = plt.subplots(2, 1, figsize=(8, 10))
+        fig.suptitle(f'{self.name} Hits')
+        axs[0].set_title('X Hits')
+        axs[0].set_xlabel('Strip')
+        axs[0].set_ylabel('Hits')
+        axs[1].set_title('Y Hits')
+        axs[1].set_xlabel('Strip')
+        axs[1].set_ylabel('Hits')
+
+        for x_group in self.x_groups:
+            x_group_df = x_group['df']
+            x_hits = np.sum(x_group['hits'], axis=0)
+            axs[0].plot(x_group_df['channels'], x_hits,
+                        label=f'Pitch: {x_group_df["pitch(mm)"]}, Interpitch: {x_group_df["interpitch(mm)"]}')
+        axs[0].legend()
+
+        for y_group in self.y_groups:
+            y_group_df = y_group['df']
+            y_hits = np.sum(y_group['hits'], axis=0)
+            axs[1].plot(y_group_df['channels'], y_hits,
+                        label=f'Pitch: {y_group_df["pitch(mm)"]}, Interpitch: {y_group_df["interpitch(mm)"]}')
+        axs[1].legend()
         fig.tight_layout()
 
     def plot_centroids_2d(self):
@@ -512,6 +581,21 @@ def find_true_clusters(bool_array):
     clusters.append(true_indices[start:])
 
     return clusters
+
+
+def get_cluster_sizes(clusters):
+    """
+    Get the sizes of the clusters in all events.
+    :param clusters: List of clusters.
+    :return: Sizes of the clusters.
+    """
+    if len(clusters) == 0:
+        return []
+    if isinstance(clusters[0], list):  # Multiple clusters in each event, keep structure
+        return [[len(cluster) for cluster in event_clusters] for event_clusters in clusters]
+    else:  # Single cluster in each event
+        return [len(cluster) for cluster in clusters]
+
 
 
 def get_cluster_centroids_all_events(clusters, cluster_indices, pos_array, amp_array):

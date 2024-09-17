@@ -12,12 +12,15 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit as cf
+from scipy.stats import skewnorm
 
 from M3RefTracking import M3RefTracking
 from DetectorConfigLoader import DetectorConfigLoader
 from Detector import Detector
 from DreamDetector import DreamDetector
 from DreamData import DreamData
+from BancoTelescope import BancoTelescope
+from BancoLadder import BancoLadder
 
 
 def main():
@@ -29,16 +32,16 @@ def main():
     # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/9-11-24/'
     # run_name = 'new_strip_check_7-12-24'
     # run_name = 'ig1_test1'
-    # run_name = 'banco_flipped_7-8-24'
+    run_name = 'banco_flipped_7-8-24'
     # run_name = 'ig1_sg1_stats4'
-    run_name = 'sg1_stats_7-26-24'
+    # run_name = 'sg1_stats_7-26-24'
     run_dir = f'{base_dir}{run_name}/'
     # sub_run_name = 'hv1'
     # sub_run_name = 'new_detector_short'
     # sub_run_name = 'drift_600_resist_460'
     # sub_run_name = 'quick_test'
-    # sub_run_name = 'max_hv_long'
-    sub_run_name = 'max_hv_long_1'
+    sub_run_name = 'max_hv_long'
+    # sub_run_name = 'max_hv_long_1'
 
     # det_single = 'asacusa_strip_1'
     # det_single = 'asacusa_strip_2'
@@ -49,14 +52,17 @@ def main():
     # det_single = None
 
     # file_nums = 'all'
-    # file_nums = list(range(0, 645))
-    file_nums = list(range(100, 210))
+    file_nums = list(range(0, 645))
+    # file_nums = list(range(100, 200))
+    # file_nums = list(range(100, 110))
 
     chunk_size = 100  # Number of files to process at once
 
     run_json_path = f'{run_dir}run_config.json'
     data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
     ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
+    banco_data_dir = f'{run_dir}{sub_run_name}/banco_data/'
+    banco_noise_dir = f'{base_dir}/banco_noise/'
     m3_dir = f'{run_dir}{sub_run_name}/m3_tracking_root/'
     out_dir = f'{out_dir}{det_single}/'
     try:
@@ -66,10 +72,18 @@ def main():
 
     z_align_range = [5, 5]  # mm range to search for optimal z position
 
+    det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
+
     print(f'Getting ray data...')
     ray_data = M3RefTracking(m3_dir, single_track=True, file_nums=file_nums)
 
-    det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
+    # Load banco
+    banco_telescope = BancoTelescope(det_config_loader, sub_run_name, banco_data_dir, banco_noise_dir)
+    banco_telescope.read_data(ray_data)
+    banco_telescope.align_ladders(ray_data)
+    plt.show()
+    input('Press Enter to continue...')
+
     for detctor_name in det_config_loader.included_detectors:
         if det_single is not None and detctor_name != det_single:
             continue
@@ -91,44 +105,90 @@ def main():
             det.load_dream_data(data_dir, ped_dir, 10, file_nums, chunk_size)
             print(f'Hits shape: {det.dream_data.hits.shape}')
             # det.dream_data.plot_noise_metric()
-            det.dream_data.plot_pedestals()
+            # det.dream_data.plot_pedestals()
             det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
             det.dream_data.plot_amplitudes_vs_strip()
-            # plt.show()
-            param_ranges = {'amplitude': [10, 5000]}
-            det.dream_data.plot_fit_param('amplitude', param_ranges)
-            det.dream_data.plot_fit_param('time_max')
-            # plt.show()
+            # # plt.show()
+            # param_ranges = {'amplitude': [10, 5000]}
+            # det.dream_data.plot_fit_param('amplitude', param_ranges)
+            # det.dream_data.plot_fit_param('time_max')
+            # # plt.show()
             det.make_sub_detectors()
-            event_nums = det.plot_xy_amp_sum_vs_event_num(True, 500, False, 15)
-            det.plot_amplitude_sum_vs_event_num()
-            det.plot_num_hit_xy_hist()
-            print(f'Det data: {len(det.dream_data.data_amps)}')
-            print(f'Ray data: {len(ray_data.ray_data)}')
-            det.plot_centroids_2d()
-            plot_ray_hits_2d(det, ray_data)
+            # event_nums = det.plot_xy_amp_sum_vs_event_num(True, 500, False, 15)
+            # det.plot_amplitude_sum_vs_event_num()
+            # det.plot_num_hit_xy_hist()
+            # print(f'Det data: {len(det.dream_data.data_amps)}')
+            # print(f'Ray data: {len(ray_data.ray_data)}')
+            # det.plot_centroids_2d()
+            # plot_ray_hits_2d(det, ray_data)
             det.add_rotation(90, 'z')
-            det.plot_centroids_2d()
-            det.plot_centroids_2d_heatmap()
-            det.plot_centroids_2d_scatter_heat()
+            # det.plot_centroids_2d()
+            # det.plot_centroids_2d_heatmap()
+            # det.plot_centroids_2d_scatter_heat()
             plot_ray_hits_2d(det, ray_data)
+            det.plot_hits_1d()
             # plt.show()
+
+            z_orig = det.center[2]
+            x_bnds = det.center[0] - det.size[0] / 2, det.center[0] + det.size[0] / 2
+            y_bnds = det.center[1] - det.size[1] / 2, det.center[1] + det.size[1] / 2
+            ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=0.1)
 
             align_dream(det, ray_data, z_align_range)
+            plot_ray_hits_2d(det, ray_data)
 
-            get_residuals(det, ray_data, plot=True)
+            # sub_centroids, sub_triggers = det.get_sub_centroids_coords()
+            # weird_trigger = None
+            # for sub_det, sub_centroids_i, sub_triggers_i in zip(det.sub_detectors, sub_centroids, sub_triggers):
+            #     print('Here')
+            #     for centroid, trigger in zip(sub_centroids_i, sub_triggers_i):
+            #         if centroid[1] < -50:
+            #             print(f'Weird centroid: {centroid}, trigger: {trigger}')
+            #             weird_trigger = int(trigger)
+            #     sub_det.plot_cluster_sizes()
+            #     break
+            #
+            # # Get event number index corresponding to weird trigger from det.dream_data
+            # weird_trigger_index = np.where(det.dream_data.event_nums == weird_trigger)[0][0]
+            # print(f'Weird trigger index: {weird_trigger_index}')
+            # det.plot_event_1d(weird_trigger_index)
+            # det.plot_event_2d(weird_trigger_index)
+            #
+            # for sub_det in det.sub_detectors:
+            #     triggers, centroids = sub_det.get_event_centroids()
+            #     if triggers.shape[0] != centroids.shape[0]:
+            #         print(f'Error: Triggers and centroids have different shapes: {triggers.shape}, {centroids.shape}')
+            #     if len(centroids) == 0:
+            #         continue
+            #     zs = np.full((len(centroids), 1), 0)  # Add z coordinate to centroids
+            #     centroids = np.hstack((centroids, zs))  # Combine x, y, z
+            #     centroids_rot = det.convert_coords_to_global(centroids)
+            #     # Get centroid and rotated centroid corresponding to weird trigger
+            #     weird_centroid = centroids[np.where(triggers == weird_trigger)[0][0]]
+            #     weird_centroid_rot = centroids_rot[np.where(triggers == weird_trigger)[0][0]]
+            #     print(f'Weird centroid: {weird_centroid}, rotated: {weird_centroid_rot}')
+            #     break
+
+            get_residuals(det, ray_data, plot=True, in_det=True, tolerance=1.0)
+            plt.show()
 
             x_subs_mean, y_subs_mean, x_subs_std, y_subs_std = get_residuals(det, ray_data, plot=False, sub_reses=True)
-            pitches_x, pitches_y, resolutions, res_xs, res_ys = [], [], [], [], []
+            pitches_x, pitches_y, inter_pitches_x, inter_pitches_y  = [], [], [], []
+            resolutions, res_xs, res_ys = [], [], []
             for i, (x_mean, y_mean, x_std, y_std) in enumerate(zip(x_subs_mean, y_subs_mean, x_subs_std, y_subs_std)):
                 x_mean, y_mean = int(x_mean * 1000), int(y_mean * 1000)
                 x_std, y_std = int(x_std * 1000), int(y_std * 1000)
                 pitch_x = det.sub_detectors[i].x_pitch
                 pitch_y = det.sub_detectors[i].y_pitch
-                print(f'Sub-Detector {i} (pitch_x: {pitch_x}, pitch_y: {pitch_y}) '
+                inter_pitch_x = det.sub_detectors[i].x_interpitch
+                inter_pitch_y = det.sub_detectors[i].y_interpitch
+                print(f'Sub-Detector {i} '
+                      f'(pitch_x: {pitch_x}, pitch_y: {pitch_y}, inter_x: {inter_pitch_x}, inter_y: {inter_pitch_y}) '
                       f'x_mean: {x_mean}μm, y_mean: {y_mean}μm, x_std: {x_std}μm, y_std: {y_std}μm')
                 pitches_x.append(pitch_x)
                 pitches_y.append(pitch_y)
+                inter_pitches_x.append(inter_pitch_x)
+                inter_pitches_y.append(inter_pitch_y)
                 res_xs.append(x_std)
                 res_ys.append(y_std)
                 resolutions.append(np.sqrt(x_std ** 2 + y_std ** 2))
@@ -151,6 +211,8 @@ def main():
             all_figures = [plt.figure(num) for num in plt.get_fignums()]
             for fig_i, fig in enumerate(all_figures):
                 fig_name = fig.axes[0].get_title() + f'_{fig_i}'
+                fig_name = fig_name.replace(' ', '_').replace('(', '').replace(')', '').replace(',', '')
+                fig_name = fig_name.replace(':', '').replace('.', '')
                 fig.savefig(f'{out_dir}{fig_name}.png')
 
             plt.show()
@@ -260,15 +322,26 @@ def align_dream(det, ray_data, z_range):
     det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
 
 
-def get_residuals(det, ray_data, sub_reses=False, plot=False):
+def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tolerance=0.0):
     x_res, y_res, = [], []
     x_subs_mean, x_subs_std, y_subs_mean, y_subs_std = [], [], [], []
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
-    for sub_centroids, sub_triggers in zip(subs_centroids, subs_triggers):
+    for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
+        if in_det:
+            x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
 
         # Find indices of sub_triggers in event_num_rays
         matched_indices = np.in1d(np.array(sub_triggers), np.array(event_num_rays)).nonzero()[0]
+
+        if len(matched_indices) == 0:
+            x_res.extend(None)
+            y_res.extend(None)
+            x_subs_mean.append(None)
+            y_subs_mean.append(None)
+            x_subs_std.append(None)
+            y_subs_std.append(None)
+            continue
 
         centroids_i_matched = sub_centroids[matched_indices]
 
@@ -285,7 +358,8 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False):
         y_subs_std.append(y_popt_i[2])
 
         if plot:
-            plot_xy_residuals_2d(x_rays, y_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1])
+            title_post = sub_det.description
+            plot_xy_residuals_2d(x_rays, y_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1], title_post)
 
     if sub_reses:
         return x_subs_mean, y_subs_mean, x_subs_std, y_subs_std
@@ -359,15 +433,38 @@ def fit_residuals(x_res, y_res):
         return [np.max(x_counts), np.mean(x_res), np.std(x_res)], [np.max(y_counts), np.mean(y_res), np.std(y_res)]
 
 
-def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
+def get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance=0.0):
+    """
+    Get rays that are within the sub-detector.
+    :param det:
+    :param sub_det:
+    :param x_rays:
+    :param y_rays:
+    :param event_num_rays:
+    :param tolerance: Tolerance in mm for ray to be in sub-detector.
+    :return:
+    """
+    x_rays_sub, y_rays_sub, event_num_rays_sub = [], [], []
+    for x_ray, y_ray, event_num_ray in zip(x_rays, y_rays, event_num_rays):
+        if det.in_sub_det(sub_det.sub_index, x_ray, y_ray, det.center[2], tolerance):
+            x_rays_sub.append(x_ray)
+            y_rays_sub.append(y_ray)
+            event_num_rays_sub.append(event_num_ray)
+    return x_rays_sub, y_rays_sub, event_num_rays_sub
+
+
+def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     """
     Plot residuals of measured x and y positions vs reference x and y positions.
     :param xs_ref: Reference x positions.
     :param ys_ref: Reference y positions.
     :param xs_meas: Measured x positions.
     :param ys_meas: Measured y positions.
+    :param title_post: Postfix for title containing sub-detector info
     :return:
     """
+
+    # 2D plot of detector centroids and ray hits with red line connecting them
     fig, ax = plt.subplots()
     ax.scatter(xs_ref, ys_ref, color='blue', label='Reference', marker='.', alpha=0.5)
     ax.scatter(xs_meas, ys_meas, color='green', label='Measured', marker='.', alpha=0.5)
@@ -376,8 +473,10 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
     ax.set_xlabel('x (mm)')
     ax.set_ylabel('y (mm)')
     ax.legend()
+    ax.set_title(f'2D Hit Centroids and Rays {title_post}')
     fig.tight_layout()
 
+    # 2D plot of ray hits on x-axis and detector centroids on y-axis
     fig, ax = plt.subplots()
     ax.scatter(xs_ref, xs_meas, color='blue', label='X Residuals')
     ax.scatter(ys_ref, ys_meas, color='red', label='Y Residuals')
@@ -385,6 +484,7 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
     ax.set_ylabel('Measured Position (mm)')
     ax.legend()
     ax.grid()
+    ax.set_title(f'Detector Centroids vs Ray Hits {title_post}')
     fig.tight_layout()
 
     x_res = xs_meas - xs_ref
@@ -392,6 +492,7 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
 
     x_popt, y_popt = fit_residuals(x_res, y_res)
 
+    # Histogram of x residuals
     fig, ax = plt.subplots()
     ax.hist(x_res, bins=500, color='blue', histtype='step')
     x_res = np.array(x_res)
@@ -404,8 +505,10 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
     ax.set_xlim(x_popt[1] - 5 * x_popt[2], x_popt[1] + 5 * x_popt[2])
     ax.set_xlabel('X Residual (mm)')
     ax.set_ylabel('Events')
+    ax.set_title(f'X Residuals Histogram {title_post}')
     fig.tight_layout()
 
+    # Histogram of y residuals
     fig, ax = plt.subplots()
     ax.hist(y_res, bins=500, color='green', histtype='step')
     y_res = np.array(y_res)
@@ -418,10 +521,34 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas):
     ax.set_xlim(y_popt[1] - 5 * y_popt[2], y_popt[1] + 5 * y_popt[2])
     ax.set_xlabel('Y Residual (mm)')
     ax.set_ylabel('Events')
+    ax.set_title(f'Y Residuals Histogram {title_post}')
+    fig.tight_layout()
+
+    # Histogram of r residuals
+    r_res = np.sqrt(x_res ** 2 + y_res ** 2)
+    n_r_bins = 200
+    fig, ax = plt.subplots()
+    ax.hist(r_res, bins=500, color='purple', histtype='step')
+    r_res = np.array(r_res)
+    r_res = r_res[r_res < np.percentile(r_res, 95)]
+    r_counts, r_bin_edges = np.histogram(r_res, bins=n_r_bins)
+    r_bins = (r_bin_edges[1:] + r_bin_edges[:-1]) / 2
+    ax.bar(r_bins, r_counts, width=r_bin_edges[1] - r_bin_edges[0], color='purple', alpha=0.5)
+    func = lambda x, a, alpha, xi, omega: a * skewnorm.pdf(x, alpha, xi, omega)
+    p0 = [np.max(r_counts) * n_r_bins / (2 * np.pi), 0, np.mean(r_bins), 50]
+    p_names = ['a', 'alpha', 'xi', 'omega']
+    r_popt, r_pcov = cf(func, r_bins, r_counts, p0=p0)
+    r_plot_xs = np.linspace(r_bin_edges[0], r_bin_edges[-1], 1000)
+    ax.plot(r_plot_xs, func(r_plot_xs, *r_popt), color='red', linestyle='-', label='R Fit')
+    ax.set_xlim(0, np.max(r_res))
+    ax.set_xlabel('R Residual (mm)')
+    ax.set_ylabel('Events')
+    ax.set_title(f'R Residuals Histogram {title_post}')
     fig.tight_layout()
 
     print(f'X Residuals: Mean={int(x_popt[1] * 1000)}μm, Std={int(x_popt[2] * 1000)}μm')
     print(f'Y Residuals: Mean={int(y_popt[1] * 1000)}μm, Std={int(y_popt[2] * 1000)}μm')
+    print(f'R Residuals: Mean={int(r_popt[2] * 1000)}μm')
 
 
 def plot_ray_hits_2d(det, ray_data):

@@ -9,7 +9,6 @@ Created as saclay_micromegas/Detector.py
 """
 
 import numpy as np
-import quaternion
 from scipy.spatial.transform import Rotation as R
 
 
@@ -118,7 +117,7 @@ class Detector:
         # zs = np.full((len(self.cluster_centroids), 1), 0)  # Add z coordinate to centroids
         # self.cluster_centroids = np.hstack((self.cluster_centroids, zs))  # Combine x, y, z
 
-        # Center coordinates around center of detector
+        # Center coordinates around center of detector. Accuracy of active size not critical, will be aligned away
         coords = coords - self.active_size / 2
 
         # Rotate cluster centroids to global coordinates
@@ -126,6 +125,18 @@ class Detector:
 
         # Translate cluster centroids to global coordinates
         coords = coords + self.center
+
+        return coords
+
+    def convert_global_coords_to_local(self, coords):
+        # Translate global coordinates to the detector's local frame by subtracting the detector center
+        coords = coords - self.center
+
+        # Rotate coordinates from global to local by applying the inverse of the detector's rotations
+        coords = rotate_coordinates_inverse(coords, self.rotations, self.euler_rotation_order)
+
+        # Adjust coordinates to be centered in the detector's local frame
+        coords = coords + self.active_size / 2
 
         return coords
 
@@ -142,6 +153,24 @@ def rotate_coordinates(coords, rotations, rotation_order='zyx'):
 
 def rotate_coordinates_single(coords, rotation, rotation_order='zyx'):
     r = R.from_euler(rotation_order, rotation, degrees=True)
+    coords = r.apply(coords)
+
+    return coords
+
+
+def rotate_coordinates_inverse(coords, rotations, rotation_order='zyx'):
+    if rotations is None:
+        return coords
+
+    # Apply the rotations in reverse order and negate the angles to reverse the transformation
+    for rotation in reversed(rotations):
+        coords = rotate_coordinates_single_inverse(coords, rotation, rotation_order)
+
+    return coords
+
+
+def rotate_coordinates_single_inverse(coords, rotation, rotation_order='zyx'):
+    r = R.from_euler(rotation_order, rotation, degrees=True).inv()  # Invert the rotation
     coords = r.apply(coords)
 
     return coords
