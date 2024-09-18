@@ -11,6 +11,7 @@ Created as saclay_micromegas/BancoLadder_new.py
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit as cf
+from scipy.optimize import minimize
 
 import uproot
 
@@ -70,8 +71,8 @@ class BancoLadder(Detector):
     def get_largest_cluster_chip_num_by_trigger(self, trigger):
         return self.cluster_chips[self.cluster_triggers.index(trigger)][0]
 
-    def read_banco_data(self, file_path):
-        self.data = read_banco_file(file_path)
+    def read_banco_data(self, file_path, event_start=None, event_stop=None):
+        self.data = read_banco_file(file_path, event_start=event_start, event_stop=event_stop)
 
     def read_banco_noise(self, file_path, noise_threshold=1):
         self.noise_pixels = get_noise_pixels(read_banco_file(file_path), noise_threshold)
@@ -87,8 +88,10 @@ class BancoLadder(Detector):
 
     def cluster_data(self, min_pixels=2, max_pixels=100, chip=None, event_list=None):
         data = self.data
+        print(f'Number of hits: {len(data)}')
         if event_list is not None:
             data = data[np.isin(data[:, 0], event_list)]
+        print(f'Number of hits after filtering: {len(data)}')
         trigger_col = data[:, 0]  # Get all triggers, repeated if more than one hit per trigger
         unique_trigger_rows = np.unique(trigger_col, return_index=True)[1]  # Get first row indices of unique triggers
         event_split_data = np.split(data, unique_trigger_rows[1:])  # Split the data into events
@@ -148,6 +151,9 @@ class BancoLadder(Detector):
 
     def convert_cluster_coords(self):
         self.cluster_centroids = self.largest_cluster_centroids_local_coords
+        if self.cluster_centroids is None or len(self.cluster_centroids) == 0:
+            print('No cluster centroids to convert.')
+            return
         zs = np.full((len(self.cluster_centroids), 1), 0)  # Add z coordinate to centroids
         self.cluster_centroids = np.hstack((self.cluster_centroids, zs))  # Combine x, y, z
 
@@ -169,13 +175,69 @@ class BancoLadder(Detector):
         z_orig = self.center[2]
         x_bnds = self.center[0] - self.size[0] / 2, self.center[0] + self.size[0] / 2
         y_bnds = self.center[1] - self.size[1] / 2, self.center[1] + self.size[1] / 2
-        ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=0.1)
+        ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=1.5)
         banco_traversing_triggers = ray_traversing_triggers - 1  # Rays start at 1, banco starts at 0
         print(f'Number of traversing triggers: {len(ray_traversing_triggers)}')
         print(f'Bounds: x={x_bnds}, y={y_bnds}, z={z_orig}')
         return banco_traversing_triggers
 
     def align_ladder(self, ray_data):
+        """
+        Align the ladder to the ray data.
+        :param ray_data:
+        :return:
+        """
+        iterations, zs = list(np.arange(3)), []
+        z_rot_align = 0
+        for i in iterations:
+            print()
+            print(f'Iteration {i}: Getting residuals for ladder {self.ladder_num} with '
+                  f'center=[{self.center[0]:.2f}, {self.center[1]:.2f}, {self.center[2]:.2f}] mm, rotations='
+                  f'z_rot={z_rot_align:.3f}, {self.rotations}')
+            zs.append(self.center[2])
+            good_triggers = self.get_close_triggers(ray_data)
+            x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = self.get_residuals_no_fit_triggers(ray_data, good_triggers, plot=False)
+            print(f'Ladder {self.name} X Residuals Mean: {x_mu} Sigma: {x_sd}')
+            print(f'Ladder {self.name} Y Residuals Mean: {y_mu} Sigma: {y_sd}')
+            aligned_x, aligned_y = self.center[0] + x_mu, self.center[1] + y_mu
+            self.set_center(x=aligned_x, y=aligned_y)
+            self.convert_cluster_coords()
+
+            z_align = self.res_z_alignment(ray_data, z_range=(20 / (i + 1)), z_points=200, plot=False)
+            self.set_center(z=z_align)
+            self.convert_cluster_coords()
+
+        good_triggers = self.get_close_triggers(ray_data)
+        self.get_residuals_no_fit_triggers(ray_data, good_triggers, plot=True)
+
+        fig, ax = plt.subplots()
+        ax.plot(iterations + [iterations[-1] + 1], zs + [self.center[2]], marker='o')
+        ax.grid(zorder=0)
+        ax.set_title(f'Ladder {self.name} Z Alignment Iterations')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Z Alignment (mm)')
+        fig.tight_layout()
+
+        self.align_minimizer(ray_data)
+
+        # x_rot_align, y_rot_align, z_rot_align = self.align_rotation(ray_data, plot=True)
+        # self.add_rotation(z_rot_align, 'z')
+        # self.convert_cluster_coords()
+        # good_triggers = self.get_close_triggers(ray_data)
+        # x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = self.get_residuals_no_fit_triggers(ray_data, good_triggers, plot=False)
+        # print(f'Ladder {self.name} X Residuals Mean: {x_mu} Sigma: {x_sd}')
+        # print(f'Ladder {self.name} Y Residuals Mean: {y_mu} Sigma: {y_sd}')
+        # good_triggers = self.get_close_triggers(ray_data)
+        # self.get_residuals_no_fit_triggers(ray_data, good_triggers, plot=True)
+        # self.align_rotation(ray_data, plot=True)
+
+        x_mu, x_sd, y_mu, y_sd, r_mu, r_sd = self.get_residuals_no_fit_triggers(ray_data, good_triggers, plot=False)
+        print(f'Ladder {self.name} X Residuals Mean: {x_mu} Sigma: {x_sd}')
+        print(f'Ladder {self.name} Y Residuals Mean: {y_mu} Sigma: {y_sd}')
+
+        self.plot_cluster_centroids()
+
+    def align_ladder_old(self, ray_data):
         """
         Align the ladder to the ray data.
         :param ray_data:
@@ -346,6 +408,36 @@ class BancoLadder(Detector):
 
         return np.mean(x_res), np.std(x_res), np.mean(y_res), np.std(y_res), np.mean(r_res), np.std(r_res)
 
+    def align_minimizer(self, ray_data):
+        """
+        Use scipy minimizer to align ladder to ray data.
+        :param ray_data:
+        :return:
+        """
+        original_z = self.center[2]
+        original_z_rot = 0.0
+
+        z_bounds = (original_z - 20, original_z + 20)
+        z_rot_bounds = (-5.0, 5.0)
+
+        self.set_center(z=z_bounds[0])
+        z_min_ray_triggers = self.get_close_triggers(ray_data)
+        self.set_center(z=z_bounds[1])
+        z_max_ray_triggers = self.get_close_triggers(ray_data)
+        common_triggers = np.intersect1d(z_min_ray_triggers, z_max_ray_triggers)
+
+        self.add_rotation(original_z_rot, 'z')
+
+        res = minimize(get_residuals_minimizer, np.array([original_z, original_z_rot]),
+                       args=(self, ray_data, common_triggers), bounds=[z_bounds, z_rot_bounds])
+        print(res)
+        z, z_rot = res.x
+        print(f'Original Z: {original_z} --> Optimal Z: {z}')
+        print(f'Original Z Rotation: {original_z_rot} --> Optimal Z Rotation: {z_rot}')
+        self.set_center(z=z)
+        self.replace_last_rotation(z_rot, 'z')
+        self.convert_cluster_coords()
+
     def res_z_alignment(self, ray_data, z_range=20., z_points=20, plot=True):
         """
         Align ladder by minimizing residuals between ray and cluster centroids
@@ -409,7 +501,7 @@ class BancoLadder(Detector):
 
         return z_min_sum
 
-    def align_rotation(self, ray_data, plot=True, n_points=1000):
+    def align_rotation(self, ray_data, plot=True, n_points=200):
         """
         Align ladder by minimizing residuals between ray and cluster centroids
         :param ray_data:
@@ -421,7 +513,7 @@ class BancoLadder(Detector):
         original_rotations = self.rotations
         x_min, x_max = -0.5, 0.5
         y_min, y_max = -0.5, 0.5
-        z_min, z_max = -0.5, 0.5
+        z_min, z_max = -2.5, 2.5
         x_rotations = np.linspace(x_min, x_max, n_points)
         y_rotations = np.linspace(y_min, y_max, n_points)
         z_rotations = np.linspace(z_min, z_max, n_points)
@@ -562,12 +654,19 @@ class BancoLadder(Detector):
         fig.tight_layout()
 
 
-def read_banco_file(file_path):
+def read_banco_file(file_path, event_start=None, event_stop=None):
     field_name = 'fData'
     with uproot.open(file_path) as file:
         tree_name = f"{file.keys()[0].split(';')[0]};{max([int(key.split(';')[-1]) for key in file.keys()])}"
         tree = file[tree_name]
-        data = np.array(tree[field_name].array(library='np'))
+        if event_start is not None and event_stop is not None:
+            data = tree[field_name].array(library='np', entry_start=event_start, entry_stop=event_stop)
+        elif event_start is not None:
+            data = tree[field_name].array(library='np', entry_start=event_start)
+        elif event_stop is not None:
+            data = tree[field_name].array(library='np', entry_stop=event_stop)
+        else:
+            data = tree[field_name].array(library='np')
         trg_nums, chip_nums, col_nums, row_nums = data['trgNum'], data['chipId'], data['col'], data['row']
         col_nums = col_nums + (chip_nums - 4) * 1024
         data = np.array([trg_nums, row_nums, col_nums]).T
@@ -781,6 +880,31 @@ def get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids, plot=False):
         fig.tight_layout()
 
     return x_residuals, y_residuals
+
+
+def get_residuals_minimizer(x, ladder, ray_data, ray_triggers):
+    """
+    Minimize residuals between ray and cluster centroids.
+    :param x: Array of z and z rotation
+    :param ladder:
+    :param ray_data:
+    :param ray_triggers:
+    :return:
+    """
+    z, z_rot = x
+    ladder.set_center(z=z)
+    ladder.replace_last_rotation(z_rot, 'z')
+    ladder.convert_cluster_coords()
+    x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(z, ray_triggers)
+
+    cluster_centroids, banco_triggers = np.array(ladder.cluster_centroids), np.array(ladder.cluster_triggers) + 1
+    cluster_centroids = cluster_centroids[np.isin(banco_triggers, event_num_rays)]
+
+    x_res, y_res = get_ray_ladder_residuals(x_rays, y_rays, cluster_centroids)
+    x_res, y_res = np.array(x_res), np.array(y_res)
+    r_res = np.sqrt(x_res ** 2 + y_res ** 2)
+
+    return np.mean(r_res)
 
 
 def quadratic_shift(x, a, c, d):

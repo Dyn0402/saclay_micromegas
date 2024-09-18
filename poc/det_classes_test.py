@@ -11,6 +11,7 @@ import os
 
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from scipy.optimize import curve_fit as cf
 from scipy.stats import skewnorm
 
@@ -32,16 +33,16 @@ def main():
     # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/9-11-24/'
     # run_name = 'new_strip_check_7-12-24'
     # run_name = 'ig1_test1'
-    run_name = 'banco_flipped_7-8-24'
+    # run_name = 'banco_flipped_7-8-24'
     # run_name = 'ig1_sg1_stats4'
-    # run_name = 'sg1_stats_7-26-24'
+    run_name = 'sg1_stats_7-26-24'
     run_dir = f'{base_dir}{run_name}/'
     # sub_run_name = 'hv1'
     # sub_run_name = 'new_detector_short'
     # sub_run_name = 'drift_600_resist_460'
     # sub_run_name = 'quick_test'
-    sub_run_name = 'max_hv_long'
-    # sub_run_name = 'max_hv_long_1'
+    # sub_run_name = 'max_hv_long'
+    sub_run_name = 'max_hv_long_1'
 
     # det_single = 'asacusa_strip_1'
     # det_single = 'asacusa_strip_2'
@@ -53,6 +54,7 @@ def main():
 
     # file_nums = 'all'
     file_nums = list(range(0, 645))
+    # file_nums = list(range(0, 100))
     # file_nums = list(range(100, 200))
     # file_nums = list(range(100, 110))
 
@@ -79,10 +81,60 @@ def main():
 
     # Load banco
     banco_telescope = BancoTelescope(det_config_loader, sub_run_name, banco_data_dir, banco_noise_dir)
+    # banco_telescope.read_data(ray_data, event_stop=1000000)
     banco_telescope.read_data(ray_data)
+    # for ladder in banco_telescope.ladders:
+    #     ladder.plot_cluster_centroids()
+    # plt.show()
     banco_telescope.align_ladders(ray_data)
-    plt.show()
-    input('Press Enter to continue...')
+    # plt.show()
+
+    # for trigger in banco_telescope.four_ladder_triggers:
+    #     print(f'Trigger: {trigger}')
+    #     xs, ys, zs = [], [], []
+    #     for ladder in banco_telescope.ladders:
+    #         x, y, z = ladder.get_cluster_centroid_by_trigger(trigger)
+    #         xs.append(x)
+    #         ys.append(y)
+    #         zs.append(z)
+    #
+    #     # Fit xs and yz as a function of z to a line, then plot the points and the lines in two 2D plots and 1 3D plot
+    #     xs, ys, zs = np.array(xs), np.array(ys), np.array(zs)
+    #     popt_x, pcov_x = cf(linear, zs, xs)
+    #     popt_y, pcov_y = cf(linear, zs, ys)
+    #
+    #     fig, ax = plt.subplots()
+    #     ax.scatter(zs, xs, color='blue', label='X')
+    #     ax.plot(zs, linear(zs, *popt_x), color='red', label='Fit')
+    #     ax.set_xlabel('Z (mm)')
+    #     ax.set_ylabel('X (mm)')
+    #     ax.legend()
+    #     ax.grid()
+    #     fig.tight_layout()
+    #
+    #     fig, ax = plt.subplots()
+    #     ax.scatter(zs, ys, color='blue', label='Y')
+    #     ax.plot(zs, linear(zs, *popt_y), color='red', label='Fit')
+    #     ax.set_xlabel('Z (mm)')
+    #     ax.set_ylabel('Y (mm)')
+    #     ax.legend()
+    #     ax.grid()
+    #     fig.tight_layout()
+    #
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111, projection='3d')
+    #     ax.scatter(xs, ys, zs, color='blue')
+    #     ax.plot(linear(zs, *popt_x), linear(zs, *popt_y), zs, color='red')
+    #     ax.set_xlabel('X (mm)')
+    #     ax.set_ylabel('Y (mm)')
+    #     ax.set_zlabel('Z (mm)')
+    #     fig.tight_layout()
+    #
+    #     plt.show()
+
+    # plt.show()
+
+    # input('Press Enter to continue...')
 
     for detctor_name in det_config_loader.included_detectors:
         if det_single is not None and detctor_name != det_single:
@@ -169,7 +221,8 @@ def main():
             #     print(f'Weird centroid: {weird_centroid}, rotated: {weird_centroid_rot}')
             #     break
 
-            get_residuals(det, ray_data, plot=True, in_det=True, tolerance=1.0)
+            # get_residuals(det, ray_data, plot=True, in_det=True, tolerance=1.0)
+            get_banco_telescope_residuals(det, banco_telescope, plot=True)
             plt.show()
 
             x_subs_mean, y_subs_mean, x_subs_std, y_subs_std = get_residuals(det, ray_data, plot=False, sub_reses=True)
@@ -406,6 +459,39 @@ def get_residuals_align(det, ray_data, triggers, sub_reses=False, plot=False):
     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
 
 
+def get_banco_telescope_residuals(det, banco_telescope, plot=False):
+    """
+    Get residuals between Banco telescope and detector.
+    :param det:
+    :param banco_telescope:
+    :param plot:
+    :return:
+    """
+    banco_triggers = np.array(banco_telescope.four_ladder_triggers)  # banco starts at 0, dream starts at 1
+
+    for sub_det in det.sub_detectors:
+        x_banco_rays, y_banco_rays = banco_telescope.get_xy_track_positions(det.center[2], banco_triggers)
+        xs_sub, ys_sub, triggers_sub = get_rays_in_sub_det(det, sub_det, x_banco_rays, y_banco_rays, banco_triggers + 1,
+                                                           tolerance=0.0)
+        matched_indices = np.in1d(np.array(triggers_sub), np.array(banco_triggers + 1)).nonzero()[0]
+
+        if len(matched_indices) == 0:
+            print(f'No matched indices for {sub_det.description}')
+            continue
+
+        xs_sub, ys_sub = np.array(xs_sub), np.array(ys_sub)
+
+        x_banco_matched = np.array(x_banco_rays)[matched_indices]
+        y_banco_matched = np.array(y_banco_rays)[matched_indices]
+
+        if plot:
+            title_post = sub_det.description
+            try:
+                plot_xy_residuals_2d(x_banco_matched, y_banco_matched, xs_sub, ys_sub, title_post)
+            except:
+                print(f'Error plotting {sub_det.description}')
+
+
 def fit_residuals(x_res, y_res):
     # Get residuals between 5th and 95th percentile
     x_res = np.array(x_res)
@@ -584,6 +670,10 @@ def plot_ray_hits_2d(det, ray_data):
 
 def gaus(x, a, x0, sigma):
     return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
+
+
+def linear(x, a, b):
+    return a * x + b
 
 
 if __name__ == '__main__':

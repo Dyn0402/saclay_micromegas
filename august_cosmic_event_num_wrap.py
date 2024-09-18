@@ -13,21 +13,38 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from datetime import datetime
+import time
 
 import uproot
 import awkward as ak
 
-# matplotlib.use('TkAgg')  # or another available backend
 
 def main():
-    plot_event_num()
+    # base_path = '/local/home/dn277127/Bureau/cosmic_data/sg1_stats_7-26-24/max_hv_long_1/'
+    base_path = 'F:/Saclay/cosmic_data/sg1_stats_7-26-24/max_hv_long_1/'
+
+    plot_event_num(base_path)
+    # plot_banco_event_num(base_path)
     print('donzo')
 
 
-def plot_event_num():
-    # rays_path = 'F:/Saclay/cosmic_data/sg1_stats_7-26-24/max_hv_long_1/m3_tracking_root/'
-    rays_path = '/local/home/dn277127/Bureau/cosmic_data/sg1_stats_7-26-24/max_hv_long_1/m3_tracking_root/'
-    file_dates_path = '/local/home/dn277127/Bureau/cosmic_data/sg1_stats_7-26-24/max_hv_long_1/file_dates.txt'
+def plot_banco_event_num(base_path):
+    banco_dir = f'{base_path}banco_data/'
+    for file_name in os.listdir(banco_dir):
+        if '.root' in file_name:
+            with uproot.open(banco_dir + file_name) as file:
+                tree = file[file.keys()[0]]
+                data = tree['fData'].array(library='np')
+                trg_nums, chip_nums, col_nums, row_nums = data['trgNum'], data['chipId'], data['col'], data['row']
+
+                print(f'{file_name}: total entries: {len(trg_nums)}, total unique triggers: {len(np.unique(trg_nums))}, max trigger: {np.max(trg_nums)}')
+
+    plt.show()
+
+
+def plot_event_num(base_path):
+    rays_path = f'{base_path}m3_tracking_root/'
+    file_dates_path = f'{base_path}file_dates.txt'
 
     file_dates, file_nums = [], []
     with open(file_dates_path, 'r') as file:
@@ -69,6 +86,7 @@ def plot_event_num():
 
             print(file_num, event_nums[0], event_nums[-1], mod_date)
 
+    print(f'Total events: {np.sum(events_per_file)}')
     fig, ax = plt.subplots()
     ax.plot(file_nums, events_per_file, 'o')
     ax.set_xlabel('File Number')
@@ -85,9 +103,15 @@ def plot_event_num():
     ax3.set_ylabel('Times per file (s)')
 
     fig4, ax4 = plt.subplots()
-    ax4.plot(file_num, file_times, 'o')
+    ax4.plot(file_nums, file_times, 'o')
     ax4.set_xlabel('Date')
     ax4.set_ylabel('Events per File')
+
+    fig5, ax5 = plt.subplots()
+    ax5.plot(dates, file_nums, 'o')
+    ax5.axhline(646.5, color='r')
+    ax5.set_xlabel('Date')
+    ax5.set_ylabel('File Number')
 
     plt.show()
 
