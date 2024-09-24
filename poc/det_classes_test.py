@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.optimize import curve_fit as cf
-from scipy.stats import skewnorm
+from scipy.stats import skewnorm, alpha
 
 from M3RefTracking import M3RefTracking
 from DetectorConfigLoader import DetectorConfigLoader
@@ -27,7 +27,7 @@ from BancoLadder import BancoLadder
 def main():
     base_dir = 'F:/Saclay/cosmic_data/'
     det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-10-24/'
+    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-24-24/'
     # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
     # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/9-11-24/'
@@ -53,9 +53,9 @@ def main():
     # det_single = None
 
     # file_nums = 'all'
-    file_nums = list(range(0, 645))
+    # file_nums = list(range(0, 645))
     # file_nums = list(range(0, 100))
-    # file_nums = list(range(100, 200))
+    file_nums = list(range(100, 200))
     # file_nums = list(range(100, 110))
 
     chunk_size = 100  # Number of files to process at once
@@ -81,8 +81,12 @@ def main():
 
     # Load banco
     banco_telescope = BancoTelescope(det_config_loader, sub_run_name, banco_data_dir, banco_noise_dir)
-    # banco_telescope.read_data(ray_data, event_stop=1000000)
-    banco_telescope.read_data(ray_data)
+    banco_telescope.read_data(ray_data, filtered=True)
+    # triggers = banco_telescope.get_all_banco_traversing_triggers(ray_data)
+    # with open(f'{banco_data_dir}banco_triggers.txt', 'w') as file:
+    #     for trigger in triggers:
+    #         file.write(f'{trigger}\n')
+    # input('Press Enter to continue...')
     # for ladder in banco_telescope.ladders:
     #     ladder.plot_cluster_centroids()
     # plt.show()
@@ -469,27 +473,37 @@ def get_banco_telescope_residuals(det, banco_telescope, plot=False):
     """
     banco_triggers = np.array(banco_telescope.four_ladder_triggers)  # banco starts at 0, dream starts at 1
 
-    for sub_det in det.sub_detectors:
+    subs_centroids, subs_triggers = det.get_sub_centroids_coords()
+    for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
         x_banco_rays, y_banco_rays = banco_telescope.get_xy_track_positions(det.center[2], banco_triggers)
-        xs_sub, ys_sub, triggers_sub = get_rays_in_sub_det(det, sub_det, x_banco_rays, y_banco_rays, banco_triggers + 1,
+        fig, ax = plt.subplots()
+        ax.scatter(x_banco_rays, y_banco_rays, color='blue', label='Banco Rays', marker='.', alpha=0.5)
+        ax.scatter(sub_centroids[:, 0], sub_centroids[:, 1], color='red', label='Detector Centroids', marker='.', alpha=0.5)
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+        ax.legend()
+        ax.set_title(f'2D Hit Centroids and Rays {sub_det.description}')
+        fig.tight_layout()
+        continue
+        x_banco_rays, y_banco_rays, triggers_banco = get_rays_in_sub_det(det, sub_det, x_banco_rays, y_banco_rays, banco_triggers + 1,
                                                            tolerance=0.0)
-        matched_indices = np.in1d(np.array(triggers_sub), np.array(banco_triggers + 1)).nonzero()[0]
+        matched_indices = np.in1d(np.array(sub_triggers), np.array(triggers_banco))
 
         if len(matched_indices) == 0:
             print(f'No matched indices for {sub_det.description}')
             continue
 
-        xs_sub, ys_sub = np.array(xs_sub), np.array(ys_sub)
+        centroids_i_matched = sub_centroids[matched_indices]
 
-        x_banco_matched = np.array(x_banco_rays)[matched_indices]
-        y_banco_matched = np.array(y_banco_rays)[matched_indices]
+        x_banco_rays, y_banco_rays = np.array(x_banco_rays), np.array(y_banco_rays)
 
         if plot:
             title_post = sub_det.description
-            try:
-                plot_xy_residuals_2d(x_banco_matched, y_banco_matched, xs_sub, ys_sub, title_post)
-            except:
-                print(f'Error plotting {sub_det.description}')
+            # try:
+            plot_xy_residuals_2d(x_banco_rays, y_banco_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1],
+                                 title_post)
+            # except:
+            #     print(f'Error plotting {sub_det.description}')
 
 
 def fit_residuals(x_res, y_res):
@@ -576,6 +590,10 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     x_res = xs_meas - xs_ref
     y_res = ys_meas - ys_ref
 
+    if len(x_res) == 0 or len(y_res) == 0:
+        print('No residuals to plot')
+        return
+
     x_popt, y_popt = fit_residuals(x_res, y_res)
 
     # Histogram of x residuals
@@ -623,9 +641,12 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     func = lambda x, a, alpha, xi, omega: a * skewnorm.pdf(x, alpha, xi, omega)
     p0 = [np.max(r_counts) * n_r_bins / (2 * np.pi), 0, np.mean(r_bins), 50]
     p_names = ['a', 'alpha', 'xi', 'omega']
-    r_popt, r_pcov = cf(func, r_bins, r_counts, p0=p0)
-    r_plot_xs = np.linspace(r_bin_edges[0], r_bin_edges[-1], 1000)
-    ax.plot(r_plot_xs, func(r_plot_xs, *r_popt), color='red', linestyle='-', label='R Fit')
+    try:
+        r_popt, r_pcov = cf(func, r_bins, r_counts, p0=p0)
+        r_plot_xs = np.linspace(r_bin_edges[0], r_bin_edges[-1], 1000)
+        ax.plot(r_plot_xs, func(r_plot_xs, *r_popt), color='red', linestyle='-', label='R Fit')
+    except:
+        print('Error fitting skewnorm to r residuals')
     ax.set_xlim(0, np.max(r_res))
     ax.set_xlabel('R Residual (mm)')
     ax.set_ylabel('Events')

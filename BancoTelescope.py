@@ -56,6 +56,17 @@ class BancoTelescope:
             ys.append(y)
         return np.array(xs), np.array(ys)
 
+    def get_all_banco_traversing_triggers(self, ray_data):
+        """
+        Get the triggers for all events that have a ray traversing any ladder in the Banco telescope.
+        :param ray_data:
+        :return:
+        """
+        all_triggers = []
+        for ladder in self.ladders:
+            all_triggers += list(ladder.get_banco_traversing_triggers(ray_data))
+        return np.unique(all_triggers)
+
     def load_from_config(self, det_config_loader):
         for detector_name in det_config_loader.included_detectors:
             det_config = det_config_loader.get_det_config(detector_name, sub_run_name=self.sub_run_name)
@@ -68,11 +79,13 @@ class BancoTelescope:
                 print(f'Active Size: {det.active_size}')
                 self.ladders.append(det)
 
-    def read_data(self, ray_data=None, event_start=None, event_stop=None):
+    def read_data(self, ray_data=None, event_start=None, event_stop=None, filtered=False):
         run_name = get_banco_run_name(self.data_dir)
         for ladder in self.ladders:
             print(f'\nReading data for {ladder.name}')
             data_path = f'{self.data_dir}{run_name}{ladder.ladder_num}.root'
+            if filtered:
+                data_path = data_path.replace('.root', '_filtered.root')
             noise_path = f'{self.noise_dir}Noise_{ladder.ladder_num}.root'
 
             banco_traversing_triggers = None
@@ -103,16 +116,18 @@ class BancoTelescope:
         print(f'Bottom Arm ladder z spacing: {self.ladders[1].center[2] - self.ladders[0].center[2]} mm')
         print(f'Top Arm ladder z spacing: {self.ladders[3].center[2] - self.ladders[2].center[2]} mm')
 
-        # Combine ladder_cluster_centroids into single dict with trigger_id as key and {ladder: centroid} as value
-        all_trigger_ids = np.unique(np.concatenate([ladder.cluster_triggers for ladder in self.ladders]))
-        all_cluster_centroids = {}
-        for trig_id in all_trigger_ids:
-            event_ladder_clusters = {}
-            for ladder in self.ladders:
-                if trig_id in ladder.cluster_triggers:
-                    event_ladder_clusters[ladder] = ladder.cluster_centroids[
-                        np.where(ladder.cluster_triggers == trig_id)[0][0]]
-            all_cluster_centroids[trig_id] = event_ladder_clusters
+        # # Combine ladder_cluster_centroids into single dict with trigger_id as key and {ladder: centroid} as value
+        # all_trigger_ids = np.unique(np.concatenate([ladder.cluster_triggers for ladder in self.ladders]))
+        # all_cluster_centroids = {}
+        # for trig_id in all_trigger_ids:
+        #     event_ladder_clusters = {}
+        #     for ladder in self.ladders:
+        #         if trig_id in ladder.cluster_triggers:
+        #             event_ladder_clusters[ladder] = ladder.cluster_centroids[
+        #                 np.where(ladder.cluster_triggers == trig_id)[0][0]]
+        #     all_cluster_centroids[trig_id] = event_ladder_clusters
+
+        all_cluster_centroids = self.combine_cluster_centroids()
 
         lower_bounds = [ladder.center - ladder.size / 2 for ladder in self.ladders]
         upper_bounds = [ladder.center + ladder.size / 2 for ladder in self.ladders]
@@ -194,6 +209,33 @@ class BancoTelescope:
             ax.set_ylabel(r'Residual Width ($\mu m$)')
             ax.legend()
             fig.tight_layout()
+
+    def combine_cluster_centroids(self):
+        # Combine ladder_cluster_centroids into a single dict with trigger_id as key and {ladder: centroid} as value
+        all_trigger_ids = np.unique(np.concatenate([ladder.cluster_triggers for ladder in self.ladders]))
+        all_cluster_centroids = {}
+
+        # Sort cluster_triggers for each ladder for faster lookup
+        # for ladder in self.ladders:
+        #     sorted_idx = np.argsort(ladder.cluster_triggers)
+        #     ladder.cluster_triggers = ladder.cluster_triggers[sorted_idx]
+        #     ladder.cluster_centroids = ladder.cluster_centroids[sorted_idx]
+
+        # Traverse the sorted cluster_triggers for each ladder using a pointer
+        for trig_id in all_trigger_ids:
+            event_ladder_clusters = {}
+
+            for ladder in self.ladders:
+                cluster_idx = 0
+                while cluster_idx < len(ladder.cluster_triggers) and ladder.cluster_triggers[cluster_idx] < trig_id:
+                    cluster_idx += 1
+
+                if cluster_idx < len(ladder.cluster_triggers) and ladder.cluster_triggers[cluster_idx] == trig_id:
+                    event_ladder_clusters[ladder] = ladder.cluster_centroids[cluster_idx]
+
+            all_cluster_centroids[trig_id] = event_ladder_clusters
+
+        return all_cluster_centroids
 
 
 def get_banco_run_name(base_dir, start_string='multinoiseScan', end_string='-ladder'):

@@ -23,6 +23,8 @@ class BancoLadder(Detector):
         super().__init__(name=name, center=center, size=size, rotations=rotations, config=config)
 
         self.ladder_num = int(self.name[-3:])
+        self.data_path = None
+        self.noise_path = None
 
         self.pitch_x = 26.88  # microns spacing between pixels in x direction
         self.pitch_y = 29.24  # microns spacing between pixels in y direction
@@ -72,9 +74,11 @@ class BancoLadder(Detector):
         return self.cluster_chips[self.cluster_triggers.index(trigger)][0]
 
     def read_banco_data(self, file_path, event_start=None, event_stop=None):
+        self.data_path = file_path
         self.data = read_banco_file(file_path, event_start=event_start, event_stop=event_stop)
 
     def read_banco_noise(self, file_path, noise_threshold=1):
+        self.noise_path = file_path
         self.noise_pixels = get_noise_pixels(read_banco_file(file_path), noise_threshold)
 
     def get_data_noise_pixels(self, noise_threshold=None):
@@ -171,11 +175,12 @@ class BancoLadder(Detector):
             cluster_centoids_global_coords.append(centroids)
         return cluster_centoids_global_coords
 
-    def get_banco_traversing_triggers(self, ray_data):
+    def get_banco_traversing_triggers(self, ray_data, expansion_factor=1.5):
         z_orig = self.center[2]
         x_bnds = self.center[0] - self.size[0] / 2, self.center[0] + self.size[0] / 2
         y_bnds = self.center[1] - self.size[1] / 2, self.center[1] + self.size[1] / 2
-        ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=1.5)
+        ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds,
+                                                                   expansion_factor=expansion_factor)
         banco_traversing_triggers = ray_traversing_triggers - 1  # Rays start at 1, banco starts at 0
         print(f'Number of traversing triggers: {len(ray_traversing_triggers)}')
         print(f'Bounds: x={x_bnds}, y={y_bnds}, z={z_orig}')
