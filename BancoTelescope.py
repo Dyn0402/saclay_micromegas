@@ -126,12 +126,41 @@ class BancoTelescope:
         #             event_ladder_clusters[ladder] = ladder.cluster_centroids[
         #                 np.where(ladder.cluster_triggers == trig_id)[0][0]]
         #     all_cluster_centroids[trig_id] = event_ladder_clusters
+        #
+        # # all_cluster_centroids = self.combine_cluster_centroids()
+        #
+        # lower_bounds = [ladder.center - ladder.size / 2 for ladder in self.ladders]
+        # upper_bounds = [ladder.center + ladder.size / 2 for ladder in self.ladders]
+        #
+        # residuals, four_ladder_events = {ladder.name: {'x': [], 'y': []} for ladder in self.ladders}, 0
+        # self.four_ladder_triggers = []
+        # for trig_id, event_clusters in all_cluster_centroids.items():
+        #     x, y, z = [], [], []
+        #     for ladder, cluster in event_clusters.items():
+        #         x.append(cluster[0])
+        #         y.append(cluster[1])
+        #         z.append(cluster[2])
+        #     if len(event_clusters) == 4:
+        #         popt_x_inv, pcov_x_inv = cf(linear, z, x)
+        #         popt_y_inv, pcov_y_inv = cf(linear, z, y)
 
-        all_cluster_centroids = self.combine_cluster_centroids()
+        # Precompute a dictionary for each ladder that maps trigger_id to its centroid
+        ladder_trigger_centroid_map = {}
+        for ladder in self.ladders:
+            ladder_trigger_centroid_map[ladder] = {
+                trig_id: centroid for trig_id, centroid in zip(ladder.cluster_triggers, ladder.cluster_centroids)
+            }
 
-        lower_bounds = [ladder.center - ladder.size / 2 for ladder in self.ladders]
-        upper_bounds = [ladder.center + ladder.size / 2 for ladder in self.ladders]
+        # Combine ladder_cluster_centroids into a single dict with trigger_id as key and {ladder: centroid} as value
+        all_cluster_centroids = {}
+        for trig_id in np.unique(np.concatenate([ladder.cluster_triggers for ladder in self.ladders])):
+            event_ladder_clusters = {
+                ladder: ladder_trigger_centroid_map[ladder][trig_id]
+                for ladder in self.ladders if trig_id in ladder_trigger_centroid_map[ladder]
+            }
+            all_cluster_centroids[trig_id] = event_ladder_clusters
 
+        # Now proceed with calculating residuals, etc.
         residuals, four_ladder_events = {ladder.name: {'x': [], 'y': []} for ladder in self.ladders}, 0
         self.four_ladder_triggers = []
         for trig_id, event_clusters in all_cluster_centroids.items():

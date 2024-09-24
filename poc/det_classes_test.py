@@ -55,7 +55,8 @@ def main():
     # file_nums = 'all'
     # file_nums = list(range(0, 645))
     # file_nums = list(range(0, 100))
-    file_nums = list(range(100, 200))
+    # file_nums = list(range(100, 200))
+    file_nums = list(range(100, 500))
     # file_nums = list(range(100, 110))
 
     chunk_size = 100  # Number of files to process at once
@@ -227,7 +228,7 @@ def main():
 
             # get_residuals(det, ray_data, plot=True, in_det=True, tolerance=1.0)
             get_banco_telescope_residuals(det, banco_telescope, plot=True)
-            plt.show()
+            # plt.show()
 
             x_subs_mean, y_subs_mean, x_subs_std, y_subs_std = get_residuals(det, ray_data, plot=False, sub_reses=True)
             pitches_x, pitches_y, inter_pitches_x, inter_pitches_y  = [], [], [], []
