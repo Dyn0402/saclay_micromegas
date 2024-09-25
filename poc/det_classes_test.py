@@ -511,7 +511,7 @@ def get_banco_telescope_residuals(det, banco_telescope, plot=False):
             #     print(f'Error plotting {sub_det.description}')
 
 
-def fit_residuals(x_res, y_res):
+def fit_residuals(x_res, y_res, n_bins=200):
     # Get residuals between 5th and 95th percentile
     x_res = np.array(x_res)
     y_res = np.array(y_res)
@@ -519,8 +519,8 @@ def fit_residuals(x_res, y_res):
     y_res = y_res[(y_res > np.percentile(y_res, 5)) & (y_res < np.percentile(y_res, 95))]
 
     # Bin residuals with numpy
-    x_counts, x_bin_edges = np.histogram(x_res, bins=200)
-    y_counts, y_bin_edges = np.histogram(y_res, bins=200)
+    x_counts, x_bin_edges = np.histogram(x_res, bins=n_bins)
+    y_counts, y_bin_edges = np.histogram(y_res, bins=n_bins)
 
     # Fit gaussians to residuals
     x_bins = (x_bin_edges[1:] + x_bin_edges[:-1]) / 2
@@ -599,14 +599,16 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
         print('No residuals to plot')
         return
 
-    x_popt, y_popt = fit_residuals(x_res, y_res)
+    n_bins = len(x_res) // 5 if len(x_res) // 5 < 200 else 200
+    n_bins = 10 if n_bins < 10 else n_bins
+    x_popt, y_popt = fit_residuals(x_res, y_res, n_bins)
 
     # Histogram of x residuals
     fig, ax = plt.subplots()
     ax.hist(x_res, bins=500, color='blue', histtype='step')
     x_res = np.array(x_res)
     x_res = x_res[(x_res > np.percentile(x_res, 5)) & (x_res < np.percentile(x_res, 95))]
-    x_counts, x_bin_edges = np.histogram(x_res, bins=200)
+    x_counts, x_bin_edges = np.histogram(x_res, bins=n_bins)
     x_bins = (x_bin_edges[1:] + x_bin_edges[:-1]) / 2
     ax.bar(x_bins, x_counts, width=x_bin_edges[1] - x_bin_edges[0], color='blue', alpha=0.5)
     x_plot_xs = np.linspace(x_bin_edges[0], x_bin_edges[-1], 1000)
@@ -622,7 +624,7 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     ax.hist(y_res, bins=500, color='green', histtype='step')
     y_res = np.array(y_res)
     y_res = y_res[(y_res > np.percentile(y_res, 5)) & (y_res < np.percentile(y_res, 95))]
-    y_counts, y_bin_edges = np.histogram(y_res, bins=200)
+    y_counts, y_bin_edges = np.histogram(y_res, bins=n_bins)
     y_bins = (y_bin_edges[1:] + y_bin_edges[:-1]) / 2
     ax.bar(y_bins, y_counts, width=y_bin_edges[1] - y_bin_edges[0], color='green', alpha=0.5)
     y_plot_xs = np.linspace(y_bin_edges[0], y_bin_edges[-1], 1000)
