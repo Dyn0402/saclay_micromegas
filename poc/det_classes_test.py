@@ -53,10 +53,10 @@ def main():
     # det_single = None
 
     # file_nums = 'all'
-    # file_nums = list(range(0, 645))
+    file_nums = list(range(0, 645))
     # file_nums = list(range(0, 100))
     # file_nums = list(range(100, 200))
-    file_nums = list(range(100, 500))
+    # file_nums = list(range(100, 500))
     # file_nums = list(range(100, 110))
 
     chunk_size = 100  # Number of files to process at once
@@ -476,27 +476,31 @@ def get_banco_telescope_residuals(det, banco_telescope, plot=False):
 
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
-        x_banco_rays, y_banco_rays = banco_telescope.get_xy_track_positions(det.center[2], banco_triggers)
+        x_banco_rays_all, y_banco_rays_all = banco_telescope.get_xy_track_positions(det.center[2], banco_triggers)
+        x_banco_rays, y_banco_rays, triggers_banco = get_rays_in_sub_det(det, sub_det, x_banco_rays_all,
+                                                                         y_banco_rays_all, banco_triggers + 1,
+                                                                         tolerance=0.0)
         fig, ax = plt.subplots()
-        ax.scatter(x_banco_rays, y_banco_rays, color='blue', label='Banco Rays', marker='.', alpha=0.5)
+        ax.scatter(x_banco_rays_all, y_banco_rays_all, color='blue', label='Banco Rays', marker='.', alpha=0.5)
         ax.scatter(sub_centroids[:, 0], sub_centroids[:, 1], color='red', label='Detector Centroids', marker='.', alpha=0.5)
+        ax.scatter(x_banco_rays, y_banco_rays, color='green', label='Banco Rays in Detector', marker='.', alpha=0.5)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.legend()
         ax.set_title(f'2D Hit Centroids and Rays {sub_det.description}')
         fig.tight_layout()
-        continue
-        x_banco_rays, y_banco_rays, triggers_banco = get_rays_in_sub_det(det, sub_det, x_banco_rays, y_banco_rays, banco_triggers + 1,
-                                                           tolerance=0.0)
-        matched_indices = np.in1d(np.array(sub_triggers), np.array(triggers_banco))
+        print(f'Centroids: {sub_centroids.shape}, Banco Rays: {len(x_banco_rays)}, Banco Triggers: {len(triggers_banco)}, Banco All: {len(x_banco_rays_all)}')
 
-        if len(matched_indices) == 0:
+        matched_indices = np.in1d(np.array(sub_triggers), np.array(triggers_banco))
+        centroids_i_matched = sub_centroids[matched_indices]
+        print(f'Matched indices: {matched_indices.shape}, {len(matched_indices)}, matched centroids: {centroids_i_matched.shape}')
+
+        if len(centroids_i_matched) == 0:
             print(f'No matched indices for {sub_det.description}')
             continue
 
-        centroids_i_matched = sub_centroids[matched_indices]
-
-        x_banco_rays, y_banco_rays = np.array(x_banco_rays), np.array(y_banco_rays)
+        matched_banco_indices = np.in1d(np.array(triggers_banco), np.array(sub_triggers))
+        x_banco_rays, y_banco_rays = np.array(x_banco_rays)[matched_banco_indices], np.array(y_banco_rays)[matched_banco_indices]
 
         if plot:
             title_post = sub_det.description
