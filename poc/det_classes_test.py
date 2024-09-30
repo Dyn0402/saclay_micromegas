@@ -45,11 +45,11 @@ def main():
     sub_run_name = 'max_hv_long_1'
 
     # det_single = 'asacusa_strip_1'
-    # det_single = 'asacusa_strip_2'
+    det_single = 'asacusa_strip_2'
     # det_single = 'strip_grid_1'
     # det_single = 'inter_grid_1'
     # det_single = 'urw_inter'
-    det_single = 'urw_strip'
+    # det_single = 'urw_strip'
     # det_single = None
 
     # file_nums = 'all'
@@ -608,6 +608,8 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     ax.hist(x_res, bins=500, color='blue', histtype='step')
     x_res = np.array(x_res)
     x_res = x_res[(x_res > np.percentile(x_res, 5)) & (x_res < np.percentile(x_res, 95))]
+    if len(x_res) < 10:
+        return
     x_counts, x_bin_edges = np.histogram(x_res, bins=n_bins)
     x_bins = (x_bin_edges[1:] + x_bin_edges[:-1]) / 2
     ax.bar(x_bins, x_counts, width=x_bin_edges[1] - x_bin_edges[0], color='blue', alpha=0.5)
@@ -619,11 +621,16 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     ax.set_title(f'X Residuals Histogram {title_post}')
     fig.tight_layout()
 
+    print(f'X Residuals: Mean={int(x_popt[1] * 1000)}μm, Std={int(x_popt[2] * 1000)}μm')
+
+
     # Histogram of y residuals
     fig, ax = plt.subplots()
     ax.hist(y_res, bins=500, color='green', histtype='step')
     y_res = np.array(y_res)
     y_res = y_res[(y_res > np.percentile(y_res, 5)) & (y_res < np.percentile(y_res, 95))]
+    if len(y_res) < 10:
+        return
     y_counts, y_bin_edges = np.histogram(y_res, bins=n_bins)
     y_bins = (y_bin_edges[1:] + y_bin_edges[:-1]) / 2
     ax.bar(y_bins, y_counts, width=y_bin_edges[1] - y_bin_edges[0], color='green', alpha=0.5)
@@ -635,6 +642,8 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     ax.set_title(f'Y Residuals Histogram {title_post}')
     fig.tight_layout()
 
+    print(f'Y Residuals: Mean={int(y_popt[1] * 1000)}μm, Std={int(y_popt[2] * 1000)}μm')
+
     # Histogram of r residuals
     r_res = np.sqrt(x_res ** 2 + y_res ** 2)
     n_r_bins = 200
@@ -642,6 +651,8 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     ax.hist(r_res, bins=500, color='purple', histtype='step')
     r_res = np.array(r_res)
     r_res = r_res[r_res < np.percentile(r_res, 95)]
+    if len(r_res) > 10:
+        return
     r_counts, r_bin_edges = np.histogram(r_res, bins=n_r_bins)
     r_bins = (r_bin_edges[1:] + r_bin_edges[:-1]) / 2
     ax.bar(r_bins, r_counts, width=r_bin_edges[1] - r_bin_edges[0], color='purple', alpha=0.5)
@@ -652,6 +663,7 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
         r_popt, r_pcov = cf(func, r_bins, r_counts, p0=p0)
         r_plot_xs = np.linspace(r_bin_edges[0], r_bin_edges[-1], 1000)
         ax.plot(r_plot_xs, func(r_plot_xs, *r_popt), color='red', linestyle='-', label='R Fit')
+        print(f'R Residuals: Mean={int(r_popt[2] * 1000)}μm')
     except:
         print('Error fitting skewnorm to r residuals')
     ax.set_xlim(0, np.max(r_res))
@@ -660,9 +672,6 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     ax.set_title(f'R Residuals Histogram {title_post}')
     fig.tight_layout()
 
-    print(f'X Residuals: Mean={int(x_popt[1] * 1000)}μm, Std={int(x_popt[2] * 1000)}μm')
-    print(f'Y Residuals: Mean={int(y_popt[1] * 1000)}μm, Std={int(y_popt[2] * 1000)}μm')
-    print(f'R Residuals: Mean={int(r_popt[2] * 1000)}μm')
 
 
 def plot_ray_hits_2d(det, ray_data):
