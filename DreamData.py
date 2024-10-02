@@ -10,6 +10,7 @@ Created as saclay_micromegas/DreamData.py
 
 import os
 import concurrent.futures
+from functools import partial
 from tqdm import tqdm
 
 import numpy as np
@@ -98,7 +99,7 @@ class DreamData:
     def get_noise_thresholds(self, noise_sigmas=5):
         self.noise_thresholds = get_noise_thresholds(self.ped_sigmas, noise_sigmas)
 
-    def read_data(self, file_nums=None, chunk_size=100):
+    def read_data(self, file_nums=None, chunk_size=100, trigger_list=None):
         if self.data_dir is None:
             print('Error: No data directory specified.')
             return None
@@ -109,10 +110,15 @@ class DreamData:
             print('Error: No data files found.')
             return None
 
-        def read_file(data_file):
+        def read_file(data_file, select_triggers=None):
             data_file_path = f'{self.data_dir}{data_file}'
-            data = read_det_data(data_file_path)
-            data_event_nums = read_det_data(data_file_path, tree_name='nt', variable_name='eventId')
+            # data = read_det_data(data_file_path)
+            # data_event_nums = read_det_data(data_file_path, tree_name='nt', variable_name='eventId')
+            all_data = read_det_data_vars(data_file_path, ['amplitude', 'eventId'])
+            data, data_event_nums = all_data['amplitude'], all_data['eventId']
+            if select_triggers is not None:
+                mask = np.isin(data_event_nums, select_triggers)
+                data, data_event_nums = data[mask], data_event_nums[mask]
             data = self.split_det_data(data, self.feu_connectors, starting_connector=1, to_connectors=False)
             data = self.subtract_common_noise(data, self.ped_means)
             data = subtract_pedestal(data, self.ped_means)
@@ -127,7 +133,8 @@ class DreamData:
             if self.event_nums is None:
                 self.event_nums = []
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                for data_i, event_nums in tqdm(executor.map(read_file, chunk_files), total=len(chunk_files)):
+                read_file_partial = partial(read_file, select_triggers=trigger_list)
+                for data_i, event_nums in tqdm(executor.map(read_file_partial, chunk_files), total=len(chunk_files)):
                     self.data.append(data_i)
                     self.event_nums.append(event_nums)
 
@@ -521,6 +528,22 @@ def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):
     # Get the variable data from the tree
     variable_data = ak.to_numpy(tree[variable_name].array())
     variable_data = variable_data.astype(np.float32)
+    root_file.close()
+
+    return variable_data
+
+
+def read_det_data_vars(file_path, variables, tree_name='nt'):
+    vector.register_awkward()
+    # Open the ROOT file with uproot
+    root_file = uproot.open(file_path)
+
+    # Access the tree in the file
+    tree = root_file[tree_name]
+
+    # Get the variable data from the tree
+    variable_data = tree.arrays(variables, library='np')
+    variable_data = {key: val.astype(np.float32) for key, val in variable_data.items()}
     root_file.close()
 
     return variable_data

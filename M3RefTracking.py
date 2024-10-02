@@ -19,10 +19,12 @@ import awkward as ak
 
 
 class M3RefTracking:
-    def __init__(self, ray_dir, file_nums='all', variables=None, single_track=True):
+    def __init__(self, ray_dir, file_nums='all', variables=None, single_track=True, trigger_list=None):
         self.ray_dir = ray_dir
         self.file_nums = file_nums
         self.single_track = single_track
+        self.trigger_list = trigger_list
+
         self.chi2_cut = 1.5
         self.detector_xy_extent_cuts = {'x': [-250, 250], 'y': [-250, 250]}
         if variables is None:
@@ -32,6 +34,8 @@ class M3RefTracking:
             self.variables = variables
 
         self.ray_data = get_ray_data(ray_dir, file_nums, variables)
+        if self.trigger_list is not None:
+            self.filter_on_trigger_list()
         if single_track:
             self.get_single_track_events()
 
@@ -93,6 +97,28 @@ class M3RefTracking:
             if self.variables is None or var in self.variables:
                 self.ray_data[var] = ak.ravel(self.ray_data[var][mask])
 
+    def filter_on_trigger_list(self):
+        """
+        Filter the ray data on the trigger list.
+        Sort trigger list and ray data by event number first to make filtering faster.
+        :return:
+        """
+        if self.trigger_list is None:
+            return self.ray_data
+
+        # Sort trigger list and ray data by event number
+        trigger_list = np.array(self.trigger_list)
+        sort_idx = np.argsort(trigger_list)
+        trigger_list = trigger_list[sort_idx]
+        sort_idx = np.argsort(self.ray_data['evn'])
+        for var in self.variables:
+            self.ray_data[var] = self.ray_data[var][sort_idx]
+
+        # Filter ray data on trigger list
+        mask = np.isin(self.ray_data['evn'], trigger_list)
+        for var in self.variables:
+            self.ray_data[var] = self.ray_data[var][mask]
+
     def plot_xy(self, z, event_list=None, multi_track_events=False, one_track=True):
         x, y, event_nums = self.get_xy_positions(z, event_list, multi_track_events, one_track)
         fig, ax = plt.subplots()
@@ -128,9 +154,9 @@ def get_ray_data(ray_dir, file_nums='all', variables=None):
     data = []
     with concurrent.futures.ThreadPoolExecutor() as executor:  # Use ThreadPoolExecutor for parallel file processing
         # Use tqdm for a progress bar and map the read_file function across all root_files
-        for new_data in tqdm(executor.map(read_file, root_files), total=len(root_files)):
-            if new_data is not None:
-                data.append(new_data)
+        for file_data in tqdm(executor.map(read_file, root_files), total=len(root_files)):
+            if file_data is not None:
+                data.append(file_data)
     data = ak.concatenate(data, axis=0)
 
     return data

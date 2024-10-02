@@ -11,6 +11,7 @@ Created as saclay_micromegas/BancoTelescope.py
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from scipy.optimize import curve_fit as cf
 
 from DetectorConfigLoader import DetectorConfigLoader
@@ -79,7 +80,7 @@ class BancoTelescope:
                 print(f'Active Size: {det.active_size}')
                 self.ladders.append(det)
 
-    def read_data(self, ray_data=None, event_start=None, event_stop=None, filtered=False):
+    def read_data(self, ray_data=None, event_start=None, event_stop=None, filtered=False, trigger_list=None):
         run_name = get_banco_run_name(self.data_dir)
         for ladder in self.ladders:
             print(f'\nReading data for {ladder.name}')
@@ -88,9 +89,17 @@ class BancoTelescope:
                 data_path = data_path.replace('.root', '_filtered.root')
             noise_path = f'{self.noise_dir}Noise_{ladder.ladder_num}.root'
 
-            banco_traversing_triggers = None
+            banco_traversing_triggers, selected_triggers = None, None
             if ray_data is not None:
                 banco_traversing_triggers = ladder.get_banco_traversing_triggers(ray_data)
+
+            if trigger_list is not None:
+                if banco_traversing_triggers is not None:
+                    selected_triggers = np.intersect1d(banco_traversing_triggers, trigger_list)
+                else:
+                    selected_triggers = trigger_list
+            else:
+                selected_triggers = banco_traversing_triggers
 
             print('Reading banco_noise')
             ladder.read_banco_noise(noise_path)
@@ -101,7 +110,7 @@ class BancoTelescope:
             print('Combining data noise')
             ladder.combine_data_noise()
             print('Clustering data')
-            ladder.cluster_data(min_pixels=1, max_pixels=8, chip=None, event_list=banco_traversing_triggers)
+            ladder.cluster_data(min_pixels=1, max_pixels=8, chip=None, event_list=selected_triggers)
             print('Getting largest clusters')
             ladder.get_largest_clusters()
             print('Converting cluster coords')
@@ -239,6 +248,50 @@ class BancoTelescope:
             ax.legend()
             fig.tight_layout()
 
+    def get_good_n_ladder_events(self, n=4):
+        # Precompute a dictionary for each ladder that maps trigger_id to its centroid
+        ladder_trigger_centroid_map = {}
+        for ladder in self.ladders:
+            ladder_trigger_centroid_map[ladder] = {
+                trig_id: centroid for trig_id, centroid in zip(ladder.cluster_triggers, ladder.cluster_centroids)
+            }
+
+        # Combine ladder_cluster_centroids into a single dict with trigger_id as key and {ladder: centroid} as value
+        all_cluster_centroids = {}
+        for trig_id in np.unique(np.concatenate([ladder.cluster_triggers for ladder in self.ladders])):
+            event_ladder_clusters = {
+                ladder: ladder_trigger_centroid_map[ladder][trig_id]
+                for ladder in self.ladders if trig_id in ladder_trigger_centroid_map[ladder]
+            }
+            all_cluster_centroids[trig_id] = event_ladder_clusters
+
+        # Now proceed with calculating residuals, etc.
+        n_ladder_triggers = []
+        for trig_id, event_clusters in all_cluster_centroids.items():
+            x, y, z = [], [], []
+            for ladder, cluster in event_clusters.items():
+                x.append(cluster[0])
+                y.append(cluster[1])
+                z.append(cluster[2])
+            if len(event_clusters) == n:
+                popt_x_inv, pcov_x_inv = cf(linear, z, x)
+                popt_y_inv, pcov_y_inv = cf(linear, z, y)
+
+                good_event = True
+                for ladder, cluster in event_clusters.items():
+                    res_x = (cluster[0] - linear(cluster[2], *popt_x_inv)) * 1000
+                    res_y = (cluster[1] - linear(cluster[2], *popt_y_inv)) * 1000
+                    res_r = np.sqrt(res_x ** 2 + res_y ** 2)
+                    if res_r > 100:
+                        print(f'Excluding event {trig_id} Ladder {ladder.name} '
+                              f'Residuals: X: {res_x:.2f} Y: {res_y:.2f} R: {res_r:.2f}')
+                        good_event = False
+                if not good_event:
+                    continue
+                n_ladder_triggers.append(trig_id)
+
+        return n_ladder_triggers
+
     def combine_cluster_centroids(self):
         # Combine ladder_cluster_centroids into a single dict with trigger_id as key and {ladder: centroid} as value
         all_trigger_ids = np.unique(np.concatenate([ladder.cluster_triggers for ladder in self.ladders]))
@@ -265,6 +318,49 @@ class BancoTelescope:
             all_cluster_centroids[trig_id] = event_ladder_clusters
 
         return all_cluster_centroids
+
+    def write_ladder_alignments_to_file(self, align_out_dir):
+            for ladder in self.ladders:
+                file_path = f'{align_out_dir}{ladder.name}_alignment.txt'
+                ladder.write_det_alignment_to_file(file_path)
+
+    def read_ladder_alignments_from_file(self, align_in_dir):
+        for ladder in self.ladders:
+            file_path = f'{align_in_dir}{ladder.name}_alignment.txt'
+            ladder.read_det_alignment_from_file(file_path)
+
+    def write_good_n_ladder_event_nums_to_file(self, file_path, ns=None):
+        """
+        Write the event numbers for events with hits on n ladders to a pandas csv
+        :param file_path:
+        :param ns: List of ns for which to get good n ladder events. If None, get all ladders.
+        :return:
+        """
+        if ns is None:
+            ns = [len(self.ladders)]
+        ladder_nums, event_nums = [], []
+        for n_ladders in sorted(ns, reverse=True):
+            good_events = self.get_good_n_ladder_events(n_ladders)
+            good_events = list(np.setdiff1d(good_events, event_nums))
+            ladder_nums += [n_ladders] * len(good_events)
+            event_nums += good_events
+        df = pd.DataFrame({'n_ladders': ladder_nums, 'event_num': event_nums})
+        df = df.sort_values('event_num')
+        df.to_csv(file_path, index=False)
+
+    def read_good_n_ladder_event_nums_from_file(self, file_path, ns=None):
+        """
+        Read the event numbers for events with hits on n ladders from a pandas csv
+        :param file_path:
+        :param ns: List of ns for which to get good n ladder events. If None, get all ladders.
+        :return:
+        """
+        df = pd.read_csv(file_path)
+        if ns is not None:
+            df = df[df['n_ladders'].isin(ns)]
+
+        return df['event_num'].values
+
 
 
 def get_banco_run_name(base_dir, start_string='multinoiseScan', end_string='-ladder'):

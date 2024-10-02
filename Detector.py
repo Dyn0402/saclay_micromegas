@@ -140,6 +140,36 @@ class Detector:
 
         return coords
 
+    def write_det_alignment_to_file(self, file_path):
+        with open(file_path, 'w') as file:
+            file.write(f'name: {self.name}\n')
+            file.write(f'det_center_coords: {list(self.center)}\n')
+            file.write(f'det_size: {list(self.size)}\n')
+            file.write(f'det_active_size: {list(self.active_size)}\n')
+            file.write('det_orientation:\n')
+            file.write(f'euler_rotation_order: {self.euler_rotation_order}\n')
+            for rotation_i, rotation in enumerate(self.rotations):
+                file.write(f'rotation {rotation_i}: {rotation}\n')
+
+    def read_det_alignment_from_file(self, file_path):
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+            for line in lines:
+                if 'name:' in line:
+                    self.name = line.split(':')[-1].strip()
+                elif 'det_center_coords:' in line:
+                    self.set_center([float(coord) for coord in line.split(':')[-1].strip()[1:-1].split(',')])
+                elif 'det_size:' in line:
+                    self.set_size([float(coord) for coord in line.split(':')[-1].strip()[1:-1].split(',')])
+                elif 'det_active_size:' in line:
+                    self.active_size = np.array([float(coord) for coord in line.split(':')[-1].strip()[1:-1].split(',')])
+                elif 'det_orientation:' in line:
+                    self.rotations = []
+                elif 'euler_rotation_order:' in line:
+                    self.euler_rotation_order = line.split(':')[-1].strip()
+                else:
+                    self.add_rotation([float(angle) for angle in line.split(':')[-1].strip()[1:-1].split(',')])
+
 
 def rotate_coordinates(coords, rotations, rotation_order='zyx'):
     if rotations is None:

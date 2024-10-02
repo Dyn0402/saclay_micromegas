@@ -27,7 +27,7 @@ from BancoLadder import BancoLadder
 def main():
     base_dir = 'F:/Saclay/cosmic_data/'
     det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-24-24/'
+    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/10-2-24/'
     # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
     # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/9-11-24/'
@@ -45,11 +45,11 @@ def main():
     sub_run_name = 'max_hv_long_1'
 
     # det_single = 'asacusa_strip_1'
-    det_single = 'asacusa_strip_2'
+    # det_single = 'asacusa_strip_2'
     # det_single = 'strip_grid_1'
     # det_single = 'inter_grid_1'
     # det_single = 'urw_inter'
-    # det_single = 'urw_strip'
+    det_single = 'urw_strip'
     # det_single = None
 
     # file_nums = 'all'
@@ -61,13 +61,30 @@ def main():
 
     chunk_size = 100  # Number of files to process at once
 
+    read_good_banco_triggers = True  # If True, read good banco triggers from file, if False, get them from BancoTelescope
+    realign_banco = False  # If False, read alignment from file, if True, realign Banco telescope
+    realign_dream = False  # If False, read alignment from file, if True, realign Dream detector
+
+    banco_event_ns = [3]
+
     run_json_path = f'{run_dir}run_config.json'
     data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
     ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
     banco_data_dir = f'{run_dir}{sub_run_name}/banco_data/'
-    banco_noise_dir = f'{base_dir}/banco_noise/'
+    banco_noise_dir = f'{base_dir}banco_noise/'
     m3_dir = f'{run_dir}{sub_run_name}/m3_tracking_root/'
+
+    alignment_dir = f'{run_dir}alignments/'
+    select_triggers_dir = f'{run_dir}select_triggers/'
     out_dir = f'{out_dir}{det_single}/'
+    try:
+        os.mkdir(alignment_dir)
+    except FileExistsError:
+        pass
+    try:
+        os.mkdir(select_triggers_dir)
+    except FileExistsError:
+        pass
     try:
         os.mkdir(out_dir)
     except FileExistsError:
@@ -82,7 +99,12 @@ def main():
 
     # Load banco
     banco_telescope = BancoTelescope(det_config_loader, sub_run_name, banco_data_dir, banco_noise_dir)
-    banco_telescope.read_data(ray_data, filtered=True)
+    if not realign_banco:
+        banco_telescope.read_ladder_alignments_from_file(alignment_dir)
+    banco_triggers = None
+    if read_good_banco_triggers:
+        banco_triggers = banco_telescope.read_good_n_ladder_event_nums_from_file(f'{select_triggers_dir}good_n_ladder_event_nums.csv', banco_event_ns)
+    banco_telescope.read_data(ray_data, filtered=True, trigger_list=banco_triggers)
     # triggers = banco_telescope.get_all_banco_traversing_triggers(ray_data)
     # with open(f'{banco_data_dir}banco_triggers.txt', 'w') as file:
     #     for trigger in triggers:
@@ -91,8 +113,16 @@ def main():
     # for ladder in banco_telescope.ladders:
     #     ladder.plot_cluster_centroids()
     # plt.show()
-    banco_telescope.align_ladders(ray_data)
+    if realign_banco:
+        banco_telescope.align_ladders(ray_data)
+        banco_telescope.write_ladder_alignments_to_file(alignment_dir)
     # plt.show()
+    if not read_good_banco_triggers:
+        banco_telescope.write_good_n_ladder_event_nums_to_file(f'{select_triggers_dir}good_n_ladder_event_nums.csv', [3, 4])
+    # input('Press Enter to continue...')
+
+    # Get list of triggers with rays traversing Banco telescope and one dream detector
+
 
     # for trigger in banco_telescope.four_ladder_triggers:
     #     print(f'Trigger: {trigger}')
@@ -141,12 +171,12 @@ def main():
 
     # input('Press Enter to continue...')
 
-    for detctor_name in det_config_loader.included_detectors:
-        if det_single is not None and detctor_name != det_single:
+    for detector_name in det_config_loader.included_detectors:
+        if det_single is not None and detector_name != det_single:
             continue
 
-        print(detctor_name)
-        det_config = det_config_loader.get_det_config(detctor_name, sub_run_name=sub_run_name)
+        print(detector_name)
+        det_config = det_config_loader.get_det_config(detector_name, sub_run_name=sub_run_name)
         # print(det_config)
         if det_config['det_type'] == 'm3':
             continue
@@ -159,7 +189,11 @@ def main():
             print(f'FEU Num: {det.feu_num}')
             print(f'FEU Channels: {det.feu_connectors}')
             print(f'HV: {det.hv}')
-            det.load_dream_data(data_dir, ped_dir, 10, file_nums, chunk_size)
+            if realign_dream:
+                banco_dream_triggers = None
+            else:
+                banco_dream_triggers = np.array(banco_triggers) + 1
+            det.load_dream_data(data_dir, ped_dir, 10, file_nums, chunk_size, banco_dream_triggers)
             print(f'Hits shape: {det.dream_data.hits.shape}')
             # det.dream_data.plot_noise_metric()
             # det.dream_data.plot_pedestals()
@@ -178,7 +212,8 @@ def main():
             # print(f'Ray data: {len(ray_data.ray_data)}')
             # det.plot_centroids_2d()
             # plot_ray_hits_2d(det, ray_data)
-            det.add_rotation(90, 'z')
+            if realign_dream:
+                det.add_rotation(90, 'z')
             # det.plot_centroids_2d()
             # det.plot_centroids_2d_heatmap()
             # det.plot_centroids_2d_scatter_heat()
@@ -191,7 +226,12 @@ def main():
             y_bnds = det.center[1] - det.size[1] / 2, det.center[1] + det.size[1] / 2
             ray_traversing_triggers = ray_data.get_traversing_triggers(z_orig, x_bnds, y_bnds, expansion_factor=0.1)
 
-            align_dream(det, ray_data, z_align_range)
+            alignment_file = f'{alignment_dir}{det.name}_alignment.txt'
+            if realign_dream:
+                align_dream(det, ray_data, z_align_range)
+                det.write_det_alignment_to_file(alignment_file)
+            else:
+                det.read_det_alignment_from_file(alignment_file)
             plot_ray_hits_2d(det, ray_data)
 
             # sub_centroids, sub_triggers = det.get_sub_centroids_coords()
@@ -227,44 +267,44 @@ def main():
             #     break
 
             # get_residuals(det, ray_data, plot=True, in_det=True, tolerance=1.0)
-            get_banco_telescope_residuals(det, banco_telescope, plot=True)
+            get_banco_telescope_residuals(det, banco_telescope, banco_triggers, plot=True)
             # plt.show()
 
-            x_subs_mean, y_subs_mean, x_subs_std, y_subs_std = get_residuals(det, ray_data, plot=False, sub_reses=True)
-            pitches_x, pitches_y, inter_pitches_x, inter_pitches_y  = [], [], [], []
-            resolutions, res_xs, res_ys = [], [], []
-            for i, (x_mean, y_mean, x_std, y_std) in enumerate(zip(x_subs_mean, y_subs_mean, x_subs_std, y_subs_std)):
-                x_mean, y_mean = int(x_mean * 1000), int(y_mean * 1000)
-                x_std, y_std = int(x_std * 1000), int(y_std * 1000)
-                pitch_x = det.sub_detectors[i].x_pitch
-                pitch_y = det.sub_detectors[i].y_pitch
-                inter_pitch_x = det.sub_detectors[i].x_interpitch
-                inter_pitch_y = det.sub_detectors[i].y_interpitch
-                print(f'Sub-Detector {i} '
-                      f'(pitch_x: {pitch_x}, pitch_y: {pitch_y}, inter_x: {inter_pitch_x}, inter_y: {inter_pitch_y}) '
-                      f'x_mean: {x_mean}μm, y_mean: {y_mean}μm, x_std: {x_std}μm, y_std: {y_std}μm')
-                pitches_x.append(pitch_x)
-                pitches_y.append(pitch_y)
-                inter_pitches_x.append(inter_pitch_x)
-                inter_pitches_y.append(inter_pitch_y)
-                res_xs.append(x_std)
-                res_ys.append(y_std)
-                resolutions.append(np.sqrt(x_std ** 2 + y_std ** 2))
-            # Sort by pitch_x
-            pitches_x, pitches_y, resolutions, res_xs, res_ys = zip(*sorted(zip(pitches_x, pitches_y, resolutions, res_xs, res_ys)))
-            print(pitches_x, pitches_y, resolutions, res_xs, res_ys)
-            # Write to file in out_dir
-            with open(f'{out_dir}{det.name}_res_vs_pitch.txt', 'w') as file:
-                file.write(f'Pitch (mm)\tResolution (um)\tX Res (um)\tY Res (um)\n')
-                for pitch_x, pitch_y, res, res_x, res_y in zip(pitches_x, pitches_y, resolutions, res_xs, res_ys):
-                    file.write(f'{pitch_x}\t{pitch_y}\t{res}\t{res_x}\t{res_y}\n')
-            print(det.name)
-            fig, ax = plt.subplots()
-            ax.plot(pitches_x, resolutions, marker='o', zorder=10)
-            ax.set_xlabel('Pitch (mm)')
-            ax.set_ylabel('Resolution (μm)')
-            ax.grid()
-            fig.tight_layout()
+            # x_subs_mean, y_subs_mean, x_subs_std, y_subs_std = get_residuals(det, ray_data, plot=False, sub_reses=True)
+            # pitches_x, pitches_y, inter_pitches_x, inter_pitches_y  = [], [], [], []
+            # resolutions, res_xs, res_ys = [], [], []
+            # for i, (x_mean, y_mean, x_std, y_std) in enumerate(zip(x_subs_mean, y_subs_mean, x_subs_std, y_subs_std)):
+            #     x_mean, y_mean = int(x_mean * 1000), int(y_mean * 1000)
+            #     x_std, y_std = int(x_std * 1000), int(y_std * 1000)
+            #     pitch_x = det.sub_detectors[i].x_pitch
+            #     pitch_y = det.sub_detectors[i].y_pitch
+            #     inter_pitch_x = det.sub_detectors[i].x_interpitch
+            #     inter_pitch_y = det.sub_detectors[i].y_interpitch
+            #     print(f'Sub-Detector {i} '
+            #           f'(pitch_x: {pitch_x}, pitch_y: {pitch_y}, inter_x: {inter_pitch_x}, inter_y: {inter_pitch_y}) '
+            #           f'x_mean: {x_mean}μm, y_mean: {y_mean}μm, x_std: {x_std}μm, y_std: {y_std}μm')
+            #     pitches_x.append(pitch_x)
+            #     pitches_y.append(pitch_y)
+            #     inter_pitches_x.append(inter_pitch_x)
+            #     inter_pitches_y.append(inter_pitch_y)
+            #     res_xs.append(x_std)
+            #     res_ys.append(y_std)
+            #     resolutions.append(np.sqrt(x_std ** 2 + y_std ** 2))
+            # # Sort by pitch_x
+            # pitches_x, pitches_y, resolutions, res_xs, res_ys = zip(*sorted(zip(pitches_x, pitches_y, resolutions, res_xs, res_ys)))
+            # print(pitches_x, pitches_y, resolutions, res_xs, res_ys)
+            # # Write to file in out_dir
+            # with open(f'{out_dir}{det.name}_res_vs_pitch.txt', 'w') as file:
+            #     file.write(f'Pitch (mm)\tResolution (um)\tX Res (um)\tY Res (um)\n')
+            #     for pitch_x, pitch_y, res, res_x, res_y in zip(pitches_x, pitches_y, resolutions, res_xs, res_ys):
+            #         file.write(f'{pitch_x}\t{pitch_y}\t{res}\t{res_x}\t{res_y}\n')
+            # print(det.name)
+            # fig, ax = plt.subplots()
+            # ax.plot(pitches_x, resolutions, marker='o', zorder=10)
+            # ax.set_xlabel('Pitch (mm)')
+            # ax.set_ylabel('Resolution (μm)')
+            # ax.grid()
+            # fig.tight_layout()
 
             all_figures = [plt.figure(num) for num in plt.get_fignums()]
             for fig_i, fig in enumerate(all_figures):
@@ -464,15 +504,17 @@ def get_residuals_align(det, ray_data, triggers, sub_reses=False, plot=False):
     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
 
 
-def get_banco_telescope_residuals(det, banco_telescope, plot=False):
+def get_banco_telescope_residuals(det, banco_telescope, banco_triggers=None, plot=False):
     """
     Get residuals between Banco telescope and detector.
     :param det:
     :param banco_telescope:
+    :param banco_triggers:
     :param plot:
     :return:
     """
-    banco_triggers = np.array(banco_telescope.four_ladder_triggers)  # banco starts at 0, dream starts at 1
+    if banco_triggers is None:
+        banco_triggers = np.array(banco_telescope.four_ladder_triggers)  # banco starts at 0, dream starts at 1
 
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
@@ -494,10 +536,41 @@ def get_banco_telescope_residuals(det, banco_telescope, plot=False):
         matched_indices = np.in1d(np.array(sub_triggers), np.array(triggers_banco))
         centroids_i_matched = sub_centroids[matched_indices]
         print(f'Matched indices: {matched_indices.shape}, {len(matched_indices)}, matched centroids: {centroids_i_matched.shape}')
+        if len(triggers_banco) > 0:
+            print(f'Percent matched: {len(centroids_i_matched) / len(triggers_banco) * 100:.2f}%')
 
         if len(centroids_i_matched) == 0:
             print(f'No matched indices for {sub_det.description}')
             continue
+
+        fig, ax = plt.subplots()
+        ax.scatter(triggers_banco, [1] * len(triggers_banco), color='blue', label='Banco Triggers', marker='.')
+        ax.scatter(sub_triggers, [2] * len(sub_triggers), color='red', label='Detector Triggers', marker='.')
+        ax.scatter(np.array(sub_triggers)[matched_indices], [3] * len(centroids_i_matched), color='green',
+                   label='Matched Triggers', marker='.')
+        ax.set_xlabel('Trigger Number')
+        ax.set_yticks([1, 2, 3])
+        ax.set_yticklabels(['Banco', 'Detector', 'Matched'])
+        ax.legend()
+        ax.set_title(f'Trigger Numbers {sub_det.description}')
+        fig.tight_layout()
+
+        matched_triggers = np.array(sub_triggers)[matched_indices]
+        matched_x_indices = np.in1d(np.array(sub_det.x_cluster_triggers), matched_triggers)
+        x_clust_sizes = np.array(sub_det.x_largest_cluster_sizes)[matched_x_indices]
+        matched_y_indices = np.in1d(np.array(sub_det.y_cluster_triggers), matched_triggers)
+        y_clust_sizes = np.array(sub_det.y_largest_cluster_sizes)[matched_y_indices]
+        # Plot histograms of x and y cluster sizes, which will be integers
+        fig, ax = plt.subplots()
+        ax.hist(x_clust_sizes, bins=np.arange(-0.5, 10.5, 1), color='blue', alpha=0.5, label='X Cluster Sizes')
+        ax.hist(y_clust_sizes, bins=np.arange(-0.5, 10.5, 1), color='red', alpha=0.5, label='Y Cluster Sizes')
+        ax.set_xlabel('Cluster Size')
+        ax.set_ylabel('Counts')
+        ax.legend()
+        ax.set_title(f'Cluster Sizes {sub_det.description}')
+        fig.tight_layout()
+
+
 
         matched_banco_indices = np.in1d(np.array(triggers_banco), np.array(sub_triggers))
         x_banco_rays, y_banco_rays = np.array(x_banco_rays)[matched_banco_indices], np.array(y_banco_rays)[matched_banco_indices]
@@ -505,8 +578,8 @@ def get_banco_telescope_residuals(det, banco_telescope, plot=False):
         if plot:
             title_post = sub_det.description
             # try:
-            plot_xy_residuals_2d(x_banco_rays, y_banco_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1],
-                                 title_post)
+            plot_xy_residuals_2d_2(x_banco_rays, y_banco_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1], 20,
+                                   title_post)
             # except:
             #     print(f'Error plotting {sub_det.description}')
 
@@ -534,7 +607,7 @@ def fit_residuals(x_res, y_res, n_bins=200):
         y_popt, y_pcov = cf(gaus, y_bins, y_counts, p0=p0_y, bounds=fit_bounds)
 
         return x_popt, y_popt
-    except RuntimeError:
+    except (RuntimeError, ValueError):  # Except runtime or value error
         return [np.max(x_counts), np.mean(x_res), np.std(x_res)], [np.max(y_counts), np.mean(y_res), np.std(y_res)]
 
 
@@ -672,6 +745,109 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     ax.set_title(f'R Residuals Histogram {title_post}')
     fig.tight_layout()
 
+
+def plot_xy_residuals_2d_2(xs_ref, ys_ref, xs_meas, ys_meas, n_bins=20, title_post=None):
+    """
+    Plot residuals of measured x and y positions vs reference x and y positions.
+    :param xs_ref: Reference x positions.
+    :param ys_ref: Reference y positions.
+    :param xs_meas: Measured x positions.
+    :param ys_meas: Measured y positions.
+    :param n_bins: Number of bins for histogram.
+    :param title_post: Postfix for title containing sub-detector info
+    :return:
+    """
+
+    # 2D plot of detector centroids and ray hits with red line connecting them
+    fig, ax = plt.subplots()
+    ax.scatter(xs_ref, ys_ref, color='blue', label='Reference', marker='.', alpha=0.5)
+    ax.scatter(xs_meas, ys_meas, color='green', label='Measured', marker='.', alpha=0.5)
+    for x_ref, y_ref, x_meas, y_meas in zip(xs_ref, ys_ref, xs_meas, ys_meas):
+        ax.plot([x_ref, x_meas], [y_ref, y_meas], color='red', linewidth=0.5)
+    ax.set_xlabel('x (mm)')
+    ax.set_ylabel('y (mm)')
+    ax.legend()
+    ax.set_title(f'2D Hit Centroids and Rays {title_post}')
+    fig.tight_layout()
+
+    x_res = xs_meas - xs_ref
+    y_res = ys_meas - ys_ref
+
+    if len(x_res) == 0 or len(y_res) == 0:
+        print('No residuals to plot')
+        return
+
+    print(f'x_res: {x_res}')
+    print(f'y_res: {y_res}')
+
+    try:
+        x_popt, y_popt = fit_residuals(x_res, y_res, n_bins)
+
+        # Histogram of x residuals
+        fig, ax = plt.subplots()
+        ax.hist(x_res, bins=500, color='blue', histtype='step')
+        if len(x_res) < 10:
+            return
+        x_counts, x_bin_edges = np.histogram(x_res, bins=n_bins)
+        x_plot_xs = np.linspace(x_bin_edges[0], x_bin_edges[-1], 1000)
+        ax.plot(x_plot_xs, gaus(x_plot_xs, *x_popt), color='red', linestyle='-', label='X Fit')
+        ax.set_xlim(x_popt[1] - 5 * x_popt[2], x_popt[1] + 5 * x_popt[2])
+        ax.annotate(fr'$\sigma$={int(x_popt[2] * 1000)}μm', (0.2, 0.92), xycoords='axes fraction', fontsize=14,
+                    bbox=dict(facecolor='wheat', alpha=0.5), ha='center', va='center')
+        ax.set_xlabel('X Residual (mm)')
+        ax.set_ylabel('Events')
+        ax.set_title(f'X Residuals Histogram {title_post}')
+        fig.tight_layout()
+
+        print(f'X Residuals: Mean={int(x_popt[1] * 1000)}μm, Std={int(x_popt[2] * 1000)}μm')
+
+        # Histogram of y residuals
+        fig, ax = plt.subplots()
+        ax.hist(y_res, bins=500, color='green', histtype='step')
+        if len(y_res) < 10:
+            return
+        y_counts, y_bin_edges = np.histogram(y_res, bins=n_bins)
+        y_plot_xs = np.linspace(y_bin_edges[0], y_bin_edges[-1], 1000)
+        ax.plot(y_plot_xs, gaus(y_plot_xs, *y_popt), color='red', linestyle='-', label='Y Fit')
+        ax.set_xlim(y_popt[1] - 5 * y_popt[2], y_popt[1] + 5 * y_popt[2])
+        ax.annotate(fr'$\sigma$={int(y_popt[2] * 1000)}μm', (0.2, 0.92), xycoords='axes fraction', fontsize=14,
+                    bbox=dict(facecolor='wheat', alpha=0.5), ha='center', va='center')
+        ax.set_xlabel('Y Residual (mm)')
+        ax.set_ylabel('Events')
+        ax.set_title(f'Y Residuals Histogram {title_post}')
+        fig.tight_layout()
+
+        print(f'Y Residuals: Mean={int(y_popt[1] * 1000)}μm, Std={int(y_popt[2] * 1000)}μm')
+
+        # Histogram of r residuals
+        r_res = np.sqrt(x_res ** 2 + y_res ** 2)
+        n_r_bins = n_bins
+        fig, ax = plt.subplots()
+        ax.hist(r_res, bins=500, color='purple', histtype='step')
+        r_res = np.array(r_res)
+        r_res = r_res[r_res < np.percentile(r_res, 95)]
+        if len(r_res) > 10:
+            return
+        r_counts, r_bin_edges = np.histogram(r_res, bins=n_r_bins)
+        r_bins = (r_bin_edges[1:] + r_bin_edges[:-1]) / 2
+        ax.bar(r_bins, r_counts, width=r_bin_edges[1] - r_bin_edges[0], color='purple', alpha=0.5)
+        func = lambda x, a, alpha, xi, omega: a * skewnorm.pdf(x, alpha, xi, omega)
+        p0 = [np.max(r_counts) * n_r_bins / (2 * np.pi), 0, np.mean(r_bins), 50]
+        p_names = ['a', 'alpha', 'xi', 'omega']
+        try:
+            r_popt, r_pcov = cf(func, r_bins, r_counts, p0=p0)
+            r_plot_xs = np.linspace(r_bin_edges[0], r_bin_edges[-1], 1000)
+            ax.plot(r_plot_xs, func(r_plot_xs, *r_popt), color='red', linestyle='-', label='R Fit')
+            print(f'R Residuals: Mean={int(r_popt[2] * 1000)}μm')
+        except:
+            print('Error fitting skewnorm to r residuals')
+        ax.set_xlim(0, np.max(r_res))
+        ax.set_xlabel('R Residual (mm)')
+        ax.set_ylabel('Events')
+        ax.set_title(f'R Residuals Histogram {title_post}')
+        fig.tight_layout()
+    except Exception as e:
+        print(f'Error: {e}')
 
 
 def plot_ray_hits_2d(det, ray_data):
