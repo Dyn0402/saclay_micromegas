@@ -58,6 +58,8 @@ class DreamData:
 
         self.hits = None
 
+        self.raw_amp_hist = None
+
     def read_ped_data(self):
         ped_dir = self.ped_dir if self.ped_dir is not None else self.data_dir
         if ped_dir is None:
@@ -99,7 +101,7 @@ class DreamData:
     def get_noise_thresholds(self, noise_sigmas=5):
         self.noise_thresholds = get_noise_thresholds(self.ped_sigmas, noise_sigmas)
 
-    def read_data(self, file_nums=None, chunk_size=100, trigger_list=None):
+    def read_data(self, file_nums=None, chunk_size=100, trigger_list=None, hist_raw_amps=False):
         if self.data_dir is None:
             print('Error: No data directory specified.')
             return None
@@ -115,14 +117,14 @@ class DreamData:
             # data = read_det_data(data_file_path)
             # data_event_nums = read_det_data(data_file_path, tree_name='nt', variable_name='eventId')
             all_data = read_det_data_vars(data_file_path, ['amplitude', 'eventId'])
-            data, data_event_nums = all_data['amplitude'], all_data['eventId']
+            data_raw, data_event_nums = all_data['amplitude'], all_data['eventId']
             if select_triggers is not None:
                 mask = np.isin(data_event_nums, select_triggers)
-                data, data_event_nums = data[mask], data_event_nums[mask]
-            data = self.split_det_data(data, self.feu_connectors, starting_connector=1, to_connectors=False)
-            data = self.subtract_common_noise(data, self.ped_means)
+                data_raw, data_event_nums = data_raw[mask], data_event_nums[mask]
+            data_raw = self.split_det_data(data_raw, self.feu_connectors, starting_connector=1, to_connectors=False)
+            data = self.subtract_common_noise(data_raw, self.ped_means)
             data = subtract_pedestal(data, self.ped_means)
-            return data, data_event_nums
+            return data, data_raw, data_event_nums
 
         print('Reading in data...')
 
@@ -134,9 +136,24 @@ class DreamData:
                 self.event_nums = []
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 read_file_partial = partial(read_file, select_triggers=trigger_list)
-                for data_i, event_nums in tqdm(executor.map(read_file_partial, chunk_files), total=len(chunk_files)):
+                for data_i, data_raw_i, event_nums in tqdm(executor.map(read_file_partial, chunk_files), total=len(chunk_files)):
                     self.data.append(data_i)
                     self.event_nums.append(event_nums)
+                    if hist_raw_amps:
+                        n_events, n_channels, n_samples = data_raw_i.shape
+                        print(f'data_raw_i shape: {data_raw_i.shape}')
+                        data_raw_i = data_raw_i.transpose(1, 0, 2).reshape(n_channels, n_events * n_samples)
+                        print(f'data_raw_i shape: {data_raw_i.shape}')
+                        print(f'data_raw_i[0:, 0].shape: {data_raw_i[:, 0].shape}')
+                        bins_y = np.arange(-0.5, 4096.5, 50)
+                        bins_x = np.arange(-0.5, n_channels + 0.5, 1)
+
+                        histograms = np.array([np.histogram(data_raw_i[i], bins=bins_y)[0] for i in range(n_channels)])
+
+                        if self.raw_amp_hist is None:
+                            self.raw_amp_hist = histograms
+                        else:
+                            self.raw_amp_hist += histograms
 
             self.data = np.concatenate(self.data)
 
@@ -515,6 +532,28 @@ class DreamData:
     def plot_pedestal_fit(self, channel):
         ped_data = self.ped_data[channel]
         fit_pedestals(ped_data, plot=True)
+
+    def plot_raw_amps_2d_hist(self):
+        """
+        Plot a 2D histogram of the raw amplitudes for each channel in the detector.
+        :return:
+        """
+        if self.raw_amp_hist is None:
+            print('Error: Raw amplitude histogram not created.')
+            return
+        fig, ax = plt.subplots()
+        ax.set_title(f'Raw Amplitudes')
+        ax.set_xlabel('Channel')
+        ax.set_ylabel('Amplitude')
+        # If there are 0 events make the color white
+        cmap = plt.cm.jet
+        cmap.set_under('w')
+        # set log scale on color bar
+        n_channels = self.raw_amp_hist.shape[0]
+        h = ax.imshow(self.raw_amp_hist.T, origin='lower', aspect='auto', cmap=cmap,
+                      extent=[-0.5, n_channels, -0.5, 4096.5], norm=LogNorm(vmin=1))
+        cbar = fig.colorbar(h, ax=ax)
+        fig.tight_layout()
 
 
 def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):

@@ -570,8 +570,6 @@ def get_banco_telescope_residuals(det, banco_telescope, banco_triggers=None, plo
         ax.set_title(f'Cluster Sizes {sub_det.description}')
         fig.tight_layout()
 
-
-
         matched_banco_indices = np.in1d(np.array(triggers_banco), np.array(sub_triggers))
         x_banco_rays, y_banco_rays = np.array(x_banco_rays)[matched_banco_indices], np.array(y_banco_rays)[matched_banco_indices]
 
