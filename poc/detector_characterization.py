@@ -24,30 +24,34 @@ from DreamData import DreamData
 
 
 def main():
-    base_dir = 'F:/Saclay/cosmic_data/'
-    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-24-24/'
-    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/9-11-24/'
-    run_name = 'sg1_stats_7-26-24'
+    # base_dir = 'F:/Saclay/cosmic_data/'
+    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-24-24/'
+    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/10-16-24/'
+    # run_name = 'sg1_stats_7-26-24'
+    # run_name = 'urw_inter_sp1_test_10-14-24'
+    run_name = 'urw_inter_sp1_test2_10-16-24'
     run_dir = f'{base_dir}{run_name}/'
     sub_run_name = 'max_hv_long_1'
+    sub_run_name = 'test_1'
 
-    det_single = 'asacusa_strip_1'
+    # det_single = 'asacusa_strip_1'
     # det_single = 'asacusa_strip_2'
     # det_single = 'strip_grid_1'
     # det_single = 'inter_grid_1'
     # det_single = 'urw_inter'
     # det_single = 'urw_strip'
+    det_single = 'strip_plein_1'
     # det_single = None
 
-    # file_nums = 'all'
-    file_nums = list(range(0, 645))
+    file_nums = 'all'
+    # file_nums = list(range(0, 645))
 
-    chunk_size = 100  # Number of files to process at once
+    chunk_size = 5  # Number of files to process at once
 
-    realign_dream = False  # If False, read alignment from file, if True, realign Dream detector
+    realign_dream = True  # If False, read alignment from file, if True, realign Dream detector
 
     run_json_path = f'{run_dir}run_config.json'
     data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
@@ -96,7 +100,7 @@ def main():
             # det.dream_data.plot_pedestals()
             det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
             det.dream_data.plot_amplitudes_vs_strip()
-            # # plt.show()
+            plt.show()
             # param_ranges = {'amplitude': [10, 5000]}
             # det.dream_data.plot_fit_param('amplitude', param_ranges)
             # det.dream_data.plot_fit_param('time_max')
