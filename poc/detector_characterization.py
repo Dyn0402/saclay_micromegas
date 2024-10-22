@@ -22,14 +22,16 @@ from Detector import Detector
 from DreamDetector import DreamDetector
 from DreamData import DreamData
 
+from det_classes_test import plot_ray_hits_2d
+
 
 def main():
-    # base_dir = 'F:/Saclay/cosmic_data/'
-    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-24-24/'
-    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/10-16-24/'
+    base_dir = 'F:/Saclay/cosmic_data/'
+    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-24-24/'
+    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/10-16-24/'
     # run_name = 'sg1_stats_7-26-24'
     # run_name = 'urw_inter_sp1_test_10-14-24'
     run_name = 'urw_inter_sp1_test2_10-16-24'
@@ -49,7 +51,7 @@ def main():
     file_nums = 'all'
     # file_nums = list(range(0, 645))
 
-    chunk_size = 5  # Number of files to process at once
+    chunk_size = 100  # Number of files to process at once
 
     realign_dream = True  # If False, read alignment from file, if True, realign Dream detector
 
@@ -90,23 +92,35 @@ def main():
             print(f'FEU Num: {det.feu_num}')
             print(f'FEU Channels: {det.feu_connectors}')
             print(f'HV: {det.hv}')
-            if realign_dream:
-                banco_dream_triggers = None
-            else:
-                banco_dream_triggers = np.array(banco_triggers) + 1
-            det.load_dream_data(data_dir, ped_dir, 10, file_nums, chunk_size, banco_dream_triggers)
+            det.load_dream_data(data_dir, ped_dir, 10, file_nums, chunk_size, save_waveforms=True)
             print(f'Hits shape: {det.dream_data.hits.shape}')
-            # det.dream_data.plot_noise_metric()
-            # det.dream_data.plot_pedestals()
+            det.dream_data.plot_noise_metric()
+
+            # hit_thresh = [1, 75]
+            hit_thresh = [75, 1000]
+            # Get indices of events with hits above threshold
+            hits = np.sum(det.dream_data.hits, axis=1)
+            hit_indices = np.where((hits > hit_thresh[0]) & (hits < hit_thresh[1]))[0]
+            det.dream_data.filter_data(hit_indices)
+            det.dream_data.plot_noise_metric()
+
+            det.dream_data.plot_pedestals()
             det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
             det.dream_data.plot_amplitudes_vs_strip()
-            plt.show()
+            # plt.show()
             # param_ranges = {'amplitude': [10, 5000]}
             # det.dream_data.plot_fit_param('amplitude', param_ranges)
             # det.dream_data.plot_fit_param('time_max')
             # # plt.show()
             det.make_sub_detectors()
-            # event_nums = det.plot_xy_amp_sum_vs_event_num(True, 500, False, 15)
+            event_nums = det.plot_xy_amp_sum_vs_event_num(True, 500, False, 15)
+
+            # for event_num in range(len(det.dream_data.hits)):
+            #     det.plot_event_1d(event_num)
+            #     det.plot_event_2d(event_num)
+            #     det.dream_data.plot_waveforms(event_num)
+            #     plt.show()
+
             # det.plot_amplitude_sum_vs_event_num()
             # det.plot_num_hit_xy_hist()
             # print(f'Det data: {len(det.dream_data.data_amps)}')
@@ -120,7 +134,8 @@ def main():
             # det.plot_centroids_2d_scatter_heat()
             plot_ray_hits_2d(det, ray_data)
             det.plot_hits_1d()
-            # plt.show()
+
+            plt.show()
 
             z_orig = det.center[2]
             x_bnds = det.center[0] - det.size[0] / 2, det.center[0] + det.size[0] / 2
