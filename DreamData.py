@@ -51,6 +51,7 @@ class DreamData:
         self.ped_sigmas = None
         self.noise_thresholds = None
 
+        self.waveforms = None
         self.data_amps = None
         self.data_time_of_max = None
         self.data_fit_success = None
@@ -101,7 +102,7 @@ class DreamData:
     def get_noise_thresholds(self, noise_sigmas=5):
         self.noise_thresholds = get_noise_thresholds(self.ped_sigmas, noise_sigmas)
 
-    def read_data(self, file_nums=None, chunk_size=100, trigger_list=None, hist_raw_amps=False):
+    def read_data(self, file_nums=None, chunk_size=100, trigger_list=None, hist_raw_amps=False, save_waveforms=False):
         if self.data_dir is None:
             print('Error: No data directory specified.')
             return None
@@ -160,6 +161,9 @@ class DreamData:
             print(f'Read in data shape: {self.data.shape}')
             print('Getting amplitudes...')
             self.get_event_amplitudes()
+
+            if save_waveforms:
+                self.waveforms = self.data.copy()
 
             # Clear self.data to free up memory
             self.data = None
@@ -265,6 +269,20 @@ class DreamData:
             return None
 
         return det_data
+
+    def filter_data(self, data_indices):
+        """
+        Filter data, keep only data at indices.
+        :param data_indices:
+        :return:
+        """
+        self.data_amps = self.data_amps[data_indices]
+        self.data_time_of_max = self.data_time_of_max[data_indices]
+        self.data_fit_success = self.data_fit_success[data_indices]
+        self.event_nums = self.event_nums[data_indices]
+        self.hits = self.hits[data_indices]
+        if self.waveforms is not None:
+            self.waveforms = self.waveforms[data_indices]
 
     def plot_event_amplitudes(self, channel=None):
         amps = np.ravel(self.data_amps) if channel is None else self.data_amps[:, channel]
@@ -554,6 +572,49 @@ class DreamData:
                       extent=[-0.5, n_channels, -0.5, 4096.5], norm=LogNorm(vmin=1))
         cbar = fig.colorbar(h, ax=ax)
         fig.tight_layout()
+
+    def plot_waveforms(self, event_num):
+        """
+        Plot waveforms for specific event
+        :param self:
+        :param event_num:
+        :return:
+        """
+        num_connectors = len(self.feu_connectors)
+
+        # Create a figure and axes
+        fig, axes = plt.subplots(num_connectors, 1, figsize=(10, 8), sharex=True)
+
+        waveforms_split = self.split_det_data(self.waveforms, self.feu_connectors, to_connectors=True)
+        min_amp, max_amp = 0, 100
+
+        for connector_i, (ax, waveform_connector) in enumerate(zip(axes, waveforms_split)):
+            colors = plt.cm.brg(np.linspace(0, 0.6, len(waveform_connector[event_num])))  # Create colors for each strip
+            for strip_i, waveform in enumerate(waveform_connector[event_num]):
+                color = colors[strip_i]  # Use colormap color for each strip
+                if strip_i == 0:
+                    ax.plot(waveform, label=f'Connector {self.starting_connector + connector_i}', color=color)
+                else:
+                    ax.plot(waveform, color=color)
+                min_amp = min(min_amp, np.min(waveform))
+                max_amp = max(max_amp, np.max(waveform))
+
+            # Add labels and text
+            if connector_i == num_connectors - 1:
+                ax.set_xlabel('Sample')
+            if connector_i == 0:  # Print the event number
+                ax.text(0.01, 0.98, f'Event {event_num}', ha='left', va='top', transform=ax.transAxes)
+            ax.set_ylabel('Amplitude')
+            ax.legend(loc='upper right')
+
+        # Set consistent y-limits for all plots
+        min_max_range = max_amp - min_amp
+        for ax in axes:
+            ax.set_ylim(min_amp - 0.05 * min_max_range, max_amp + 0.05 * min_max_range)
+
+        # Adjust layout
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0)
 
 
 def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):
