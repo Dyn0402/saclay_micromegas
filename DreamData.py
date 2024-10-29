@@ -19,6 +19,7 @@ from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit as cf
 from datetime import datetime
 from time import time
+import copy
 
 import uproot
 import awkward as ak
@@ -61,6 +62,9 @@ class DreamData:
 
         self.raw_amp_hist = None
 
+    def copy(self):
+        return copy.deepcopy(self)
+
     def read_ped_data(self):
         ped_dir = self.ped_dir if self.ped_dir is not None else self.data_dir
         if ped_dir is None:
@@ -72,9 +76,9 @@ class DreamData:
             print('Error: No ped files found.')
             return None
         if len(ped_files) > 1:
-            print('Warning: Multiple ped files found, using first one.')
+            print('Warning: Multiple ped files found, using last one.')
             print(f'Ped files found: {ped_files}')
-        ped_file_path = f'{ped_dir}{ped_files[0]}'
+        ped_file_path = f'{ped_dir}{ped_files[-1]}'
 
         ped_data = read_det_data(ped_file_path)
         self.ped_data = self.split_det_data(ped_data, self.feu_connectors, starting_connector=1, to_connectors=False)
@@ -85,7 +89,9 @@ class DreamData:
     def get_pedestals(self):
         pedestals = get_pedestals_by_median(self.ped_data)
         ped_common_noise_sub = self.subtract_common_noise(self.ped_data, pedestals)
+        print(f'Pedestal data shape: {ped_common_noise_sub.shape}')
         ped_fits = get_pedestal_fits(ped_common_noise_sub)
+        print(f'Pedestal fits: {ped_fits["mean"].shape}')
         self.ped_means = ped_fits['mean']
         self.ped_sigmas = ped_fits['sigma']
 
@@ -485,8 +491,11 @@ class DreamData:
         ax.set_title('Amplitudes vs Strip')
         ax.set_xlabel('Strip')
         ax.set_ylabel('Amplitude')
-        cbar = fig.colorbar(h[3], ax=ax)
-        cbar.set_label('Counts')
+        try:
+            cbar = fig.colorbar(h[3], ax=ax)
+            cbar.set_label('Counts')
+        except ValueError:
+            pass
 
         fig.tight_layout()
 
@@ -550,6 +559,33 @@ class DreamData:
     def plot_pedestal_fit(self, channel):
         ped_data = self.ped_data[channel]
         fit_pedestals(ped_data, plot=True)
+
+    def plot_common_noise(self, connector=0):
+        """
+        Plot common noise vs total sample number for a connector.
+        :param connector:
+        :return:
+        """
+        pedestals = get_pedestals_by_median(self.ped_data)
+        data_connectors = self.split_det_data(self.ped_data, self.feu_connectors, to_connectors=True)
+        peds_connectors = self.split_det_data(pedestals, self.feu_connectors, to_connectors=True)
+        print(f'Connector {connector + self.starting_connector} Data: {data_connectors[connector].shape}')
+        print(f'Connector {connector + self.starting_connector} Peds: {peds_connectors[connector].shape}')
+        connector_common_noise = get_common_noise(data_connectors[connector], peds_connectors[connector])
+        print(f'Connector {connector + self.starting_connector} Common Noise: {connector_common_noise.shape}')
+        fig, ax = plt.subplots()
+        ax.plot(connector_common_noise)
+        ax.set_title(f'Connector {connector + self.starting_connector} Common Noise')
+        ax.set_xlabel('Pedestal Event Number')
+        ax.set_ylabel('Common Noise')
+        fig.tight_layout()
+
+        fig, ax = plt.subplots()
+        ax.plot(connector_common_noise.flatten())
+        ax.set_title(f'Connector {connector + self.starting_connector} Common Noise')
+        ax.set_xlabel('Cumulative Sample Number')
+        ax.set_ylabel('Common Noise')
+        fig.tight_layout()
 
     def plot_raw_amps_2d_hist(self):
         """

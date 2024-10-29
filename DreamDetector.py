@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
+import copy
 
 from Detector import Detector
 from DreamData import DreamData
@@ -45,6 +46,9 @@ class DreamDetector(Detector):
         self.sub_triggers = None
         self.sub_det_corners_local = None
         self.sub_det_corners_global = None
+
+    def copy(self):
+        return copy.deepcopy(self)
 
     def load_from_config_dream(self):
         dream_feus = self.config['dream_feus']
@@ -308,6 +312,7 @@ class DreamDetector(Detector):
             x_hits = np.sum(x_group['hits'], axis=0)
             axs[0].plot(x_group_df['channels'], x_hits,
                         label=f'Pitch: {x_group_df["pitch(mm)"]}, Interpitch: {x_group_df["interpitch(mm)"]}')
+        axs[0].set_ylim(bottom=0)
         axs[0].legend()
 
         for y_group in self.y_groups:
@@ -315,6 +320,7 @@ class DreamDetector(Detector):
             y_hits = np.sum(y_group['hits'], axis=0)
             axs[1].plot(y_group_df['channels'], y_hits,
                         label=f'Pitch: {y_group_df["pitch(mm)"]}, Interpitch: {y_group_df["interpitch(mm)"]}')
+        axs[1].set_ylim(bottom=0)
         axs[1].legend()
         fig.tight_layout()
 

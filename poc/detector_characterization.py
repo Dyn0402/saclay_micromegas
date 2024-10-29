@@ -32,24 +32,25 @@ def main():
     # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
     # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/10-16-24/'
-    # run_name = 'sg1_stats_7-26-24'
+    run_name = 'sg1_stats_7-26-24'
     # run_name = 'urw_inter_sp1_test_10-14-24'
-    run_name = 'urw_inter_sp1_test2_10-16-24'
+    # run_name = 'urw_inter_sp1_test2_10-16-24'
     run_dir = f'{base_dir}{run_name}/'
     sub_run_name = 'max_hv_long_1'
-    sub_run_name = 'test_1'
+    # sub_run_name = 'test_1'
 
     # det_single = 'asacusa_strip_1'
     # det_single = 'asacusa_strip_2'
-    # det_single = 'strip_grid_1'
+    det_single = 'strip_grid_1'
     # det_single = 'inter_grid_1'
     # det_single = 'urw_inter'
     # det_single = 'urw_strip'
-    det_single = 'strip_plein_1'
+    # det_single = 'strip_plein_1'
     # det_single = None
 
-    file_nums = 'all'
+    # file_nums = 'all'
     # file_nums = list(range(0, 645))
+    file_nums = list(range(0, 100))
 
     chunk_size = 100  # Number of files to process at once
 
@@ -97,14 +98,34 @@ def main():
             det.dream_data.plot_noise_metric()
 
             # hit_thresh = [1, 75]
-            hit_thresh = [75, 1000]
+            # hit_thresh = [75, 1000]
             # Get indices of events with hits above threshold
-            hits = np.sum(det.dream_data.hits, axis=1)
-            hit_indices = np.where((hits > hit_thresh[0]) & (hits < hit_thresh[1]))[0]
-            det.dream_data.filter_data(hit_indices)
+            # hits = np.sum(det.dream_data.hits, axis=1)
+            # hit_indices = np.where((hits > hit_thresh[0]) & (hits < hit_thresh[1]))[0]
+            # det.dream_data.filter_data(hit_indices)
+            # det.dream_data.plot_noise_metric()
+
+            in_range = False  # If True, filter hits in range, if False, filter hits out of range
+            # x_ray_bounds, y_ray_bounds = [-30, 30], [-30, 30]
+            x_ray_bounds, y_ray_bounds = [-62, 42], [-40, 45]
+            ray_events = filter_ray_xy(ray_data, det.center[2], x_ray_bounds, y_ray_bounds)
+            if in_range:
+                dream_data_indices = np.where(np.isin(det.dream_data.event_nums, ray_events))[0]
+            else:
+                dream_data_indices = np.where(~np.isin(det.dream_data.event_nums, ray_events))[0]
+
+            # max_amp_thresh = [3500, 4000]
+            max_amp_thresh = [0, 4000]
+            max_amps = np.max(det.dream_data.data_amps, axis=1)
+            max_amp_indices = np.where((max_amps > max_amp_thresh[0]) & (max_amps < max_amp_thresh[1]))[0]
+            dream_data_indices = np.intersect1d(dream_data_indices, max_amp_indices)
+
+            det.dream_data.filter_data(dream_data_indices)
+
             det.dream_data.plot_noise_metric()
 
             det.dream_data.plot_pedestals()
+            # det.dream_data.plot_common_noise(0)
             det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
             det.dream_data.plot_amplitudes_vs_strip()
             # plt.show()
@@ -114,12 +135,6 @@ def main():
             # # plt.show()
             det.make_sub_detectors()
             event_nums = det.plot_xy_amp_sum_vs_event_num(True, 500, False, 15)
-
-            # for event_num in range(len(det.dream_data.hits)):
-            #     det.plot_event_1d(event_num)
-            #     det.plot_event_2d(event_num)
-            #     det.dream_data.plot_waveforms(event_num)
-            #     plt.show()
 
             # det.plot_amplitude_sum_vs_event_num()
             # det.plot_num_hit_xy_hist()
@@ -134,6 +149,12 @@ def main():
             # det.plot_centroids_2d_scatter_heat()
             plot_ray_hits_2d(det, ray_data)
             det.plot_hits_1d()
+
+            for event_num in range(len(det.dream_data.hits)):
+                det.plot_event_1d(event_num)
+                det.plot_event_2d(event_num)
+                det.dream_data.plot_waveforms(event_num)
+                plt.show()
 
             plt.show()
 
@@ -277,6 +298,24 @@ def main():
         print('\n')
 
     print('donzo')
+
+
+def filter_ray_xy(ray_data, det_z, x_bnds, y_bnds):
+    """
+    Get event_nums of events in ray_data that are within x_bnds and y_bnds.
+    :param ray_data:
+    :param det_z:
+    :param x_bnds:
+    :param y_bnds:
+    :return:
+    """
+    x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det_z)
+
+    x_indices = np.where((x_rays > x_bnds[0]) & (x_rays < x_bnds[1]))[0]
+    y_indices = np.where((y_rays > y_bnds[0]) & (y_rays < y_bnds[1]))[0]
+    xy_indices = np.intersect1d(x_indices, y_indices)
+
+    return event_num_rays[xy_indices]
 
 
 if __name__ == '__main__':

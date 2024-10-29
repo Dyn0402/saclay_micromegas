@@ -10,6 +10,7 @@ Created as saclay_micromegas/Detector.py
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import copy
 
 
 class Detector:
@@ -27,6 +28,9 @@ class Detector:
 
         if self.config is not None:
             self.load_from_config()
+
+    def copy(self):
+        return copy.deepcopy(self)
 
     def load_from_config(self):
         self.name = self.config.get('name')
