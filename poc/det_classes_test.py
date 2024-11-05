@@ -22,6 +22,7 @@ from DreamDetector import DreamDetector
 from DreamData import DreamData
 from BancoTelescope import BancoTelescope
 from BancoLadder import BancoLadder
+from Measure import Measure
 
 
 def main():
@@ -609,6 +610,33 @@ def fit_residuals(x_res, y_res, n_bins=200):
         return [np.max(x_counts), np.mean(x_res), np.std(x_res)], [np.max(y_counts), np.mean(y_res), np.std(y_res)]
 
 
+def fit_residuals_return_err(x_res, y_res, n_bins=200):
+    # Get residuals between 5th and 95th percentile
+    x_res = np.array(x_res)
+    y_res = np.array(y_res)
+    x_res = x_res[(x_res > np.percentile(x_res, 5)) & (x_res < np.percentile(x_res, 95))]
+    y_res = y_res[(y_res > np.percentile(y_res, 5)) & (y_res < np.percentile(y_res, 95))]
+
+    # Bin residuals with numpy
+    x_counts, x_bin_edges = np.histogram(x_res, bins=n_bins)
+    y_counts, y_bin_edges = np.histogram(y_res, bins=n_bins)
+
+    # Fit gaussians to residuals
+    x_bins = (x_bin_edges[1:] + x_bin_edges[:-1]) / 2
+    y_bins = (y_bin_edges[1:] + y_bin_edges[:-1]) / 2
+
+    fit_bounds = [(-np.inf, -np.inf, 0), (np.inf, np.inf, np.inf)]
+    p0_x = [np.max(x_counts), np.mean(x_res), np.std(x_res)]
+    p0_y = [np.max(y_counts), np.mean(y_res), np.std(y_res)]
+    try:
+        x_popt, x_pcov = cf(gaus, x_bins, x_counts, p0=p0_x, bounds=fit_bounds)
+        y_popt, y_pcov = cf(gaus, y_bins, y_counts, p0=p0_y, bounds=fit_bounds)
+
+        return x_popt, y_popt, np.sqrt(np.diag(x_pcov)), np.sqrt(np.diag(y_pcov))
+    except (RuntimeError, ValueError):  # Except runtime or value error
+        return [np.max(x_counts), np.mean(x_res), np.std(x_res)], [np.max(y_counts), np.mean(y_res), np.std(y_res)], None, None
+
+
 def get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance=0.0):
     """
     Get rays that are within the sub-detector.
@@ -653,14 +681,18 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     fig.tight_layout()
 
     # 2D plot of ray hits on x-axis and detector centroids on y-axis
-    fig, ax = plt.subplots()
-    ax.scatter(xs_ref, xs_meas, color='blue', label='X Residuals')
-    ax.scatter(ys_ref, ys_meas, color='red', label='Y Residuals')
-    ax.set_xlabel('Reference Position (mm)')
-    ax.set_ylabel('Measured Position (mm)')
-    ax.legend()
-    ax.grid()
-    ax.set_title(f'Detector Centroids vs Ray Hits {title_post}')
+    fig, axs = plt.subplots(ncols=2)
+    axs[0].scatter(xs_ref, xs_meas, color='blue', label='X Residuals')
+    axs[1].scatter(ys_ref, ys_meas, color='red', label='Y Residuals')
+    axs[0].set_xlabel('Reference Position (mm)')
+    axs[1].set_xlabel('Reference Position (mm)')
+    axs[0].set_ylabel('Measured Position (mm)')
+    axs[1].set_ylabel('Measured Position (mm)')
+    axs[0].legend()
+    axs[1].legend()
+    axs[0].grid(zorder=0)
+    axs[1].grid(zorder=0)
+    fig.suptitle(f'Detector Centroids vs Ray Hits {title_post}')
     fig.tight_layout()
 
     x_res = xs_meas - xs_ref
@@ -672,24 +704,31 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
 
     n_bins = len(x_res) // 5 if len(x_res) // 5 < 200 else 200
     n_bins = 10 if n_bins < 10 else n_bins
-    x_popt, y_popt = fit_residuals(x_res, y_res, n_bins)
+    x_popt, y_popt, x_perr, y_perr = fit_residuals_return_err(x_res, y_res, n_bins)
+
+    x_fit_str = f'Mean={Measure(x_popt[1], x_perr[1]) * 1000}μm\nWidth={Measure(x_popt[2], x_perr[2]) * 1000}μm'
+    y_fit_str = f'Mean={Measure(y_popt[1], y_perr[1]) * 1000}μm\nWidth={Measure(y_popt[2], y_perr[2]) * 1000}μm'
 
     # Histogram of x residuals
     fig, ax = plt.subplots()
     ax.hist(x_res, bins=500, color='blue', histtype='step')
+    ax_twin = ax.twinx()
     x_res = np.array(x_res)
     x_res = x_res[(x_res > np.percentile(x_res, 5)) & (x_res < np.percentile(x_res, 95))]
     if len(x_res) < 10:
         return
     x_counts, x_bin_edges = np.histogram(x_res, bins=n_bins)
     x_bins = (x_bin_edges[1:] + x_bin_edges[:-1]) / 2
-    ax.bar(x_bins, x_counts, width=x_bin_edges[1] - x_bin_edges[0], color='blue', alpha=0.5)
+    ax_twin.bar(x_bins, x_counts, width=x_bin_edges[1] - x_bin_edges[0], color='blue', alpha=0.5)
     x_plot_xs = np.linspace(x_bin_edges[0], x_bin_edges[-1], 1000)
-    ax.plot(x_plot_xs, gaus(x_plot_xs, *x_popt), color='red', linestyle='-', label='X Fit')
-    ax.set_xlim(x_popt[1] - 5 * x_popt[2], x_popt[1] + 5 * x_popt[2])
+    ax_twin.plot(x_plot_xs, gaus(x_plot_xs, *x_popt), color='red', linestyle='-', label='X Fit')
+    ax_twin.set_xlim(x_popt[1] - 5 * x_popt[2], x_popt[1] + 5 * x_popt[2])
     ax.set_xlabel('X Residual (mm)')
-    ax.set_ylabel('Events')
+    ax.set_ylabel('Events (Step Histogram)')
+    ax_twin.set_ylabel('Events (Filled&Fit Histogram)')
     ax.set_title(f'X Residuals Histogram {title_post}')
+    ax.annotate(x_fit_str, xy=(0.05, 0.95), xycoords='axes fraction', fontsize=8, ha='left', va='top',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
     fig.tight_layout()
 
     print(f'X Residuals: Mean={int(x_popt[1] * 1000)}μm, Std={int(x_popt[2] * 1000)}μm')
@@ -698,19 +737,23 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     # Histogram of y residuals
     fig, ax = plt.subplots()
     ax.hist(y_res, bins=500, color='green', histtype='step')
+    ax_twin = ax.twinx()
     y_res = np.array(y_res)
     y_res = y_res[(y_res > np.percentile(y_res, 5)) & (y_res < np.percentile(y_res, 95))]
     if len(y_res) < 10:
         return
     y_counts, y_bin_edges = np.histogram(y_res, bins=n_bins)
     y_bins = (y_bin_edges[1:] + y_bin_edges[:-1]) / 2
-    ax.bar(y_bins, y_counts, width=y_bin_edges[1] - y_bin_edges[0], color='green', alpha=0.5)
+    ax_twin.bar(y_bins, y_counts, width=y_bin_edges[1] - y_bin_edges[0], color='green', alpha=0.5)
     y_plot_xs = np.linspace(y_bin_edges[0], y_bin_edges[-1], 1000)
-    ax.plot(y_plot_xs, gaus(y_plot_xs, *y_popt), color='red', linestyle='-', label='Y Fit')
-    ax.set_xlim(y_popt[1] - 5 * y_popt[2], y_popt[1] + 5 * y_popt[2])
+    ax_twin.plot(y_plot_xs, gaus(y_plot_xs, *y_popt), color='red', linestyle='-', label='Y Fit')
+    ax_twin.set_xlim(y_popt[1] - 5 * y_popt[2], y_popt[1] + 5 * y_popt[2])
     ax.set_xlabel('Y Residual (mm)')
-    ax.set_ylabel('Events')
+    ax.set_ylabel('Events (Step Histogram)')
+    ax_twin.set_ylabel('Events (Filled&Fit Histogram)')
     ax.set_title(f'Y Residuals Histogram {title_post}')
+    ax.annotate(y_fit_str, xy=(0.05, 0.95), xycoords='axes fraction', fontsize=8, ha='left', va='top',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
     fig.tight_layout()
 
     print(f'Y Residuals: Mean={int(y_popt[1] * 1000)}μm, Std={int(y_popt[2] * 1000)}μm')
