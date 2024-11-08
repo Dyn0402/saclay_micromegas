@@ -96,6 +96,8 @@ def main():
             det.load_dream_data(data_dir, ped_dir, 10, file_nums, chunk_size, save_waveforms=True)
             print(f'Hits shape: {det.dream_data.hits.shape}')
             det.dream_data.plot_noise_metric()
+            det.dream_data.plot_fine_timestamp_hist()
+            plt.show()
 
             # hit_thresh = [1, 75]
             # hit_thresh = [75, 1000]

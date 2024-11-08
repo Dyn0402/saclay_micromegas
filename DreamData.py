@@ -47,6 +47,7 @@ class DreamData:
         self.ped_data = None
         self.data = None
         self.event_nums = None
+        self.fine_time_stamps = None
 
         self.ped_means = None
         self.ped_sigmas = None
@@ -123,15 +124,15 @@ class DreamData:
             data_file_path = f'{self.data_dir}{data_file}'
             # data = read_det_data(data_file_path)
             # data_event_nums = read_det_data(data_file_path, tree_name='nt', variable_name='eventId')
-            all_data = read_det_data_vars(data_file_path, ['amplitude', 'eventId'])
-            data_raw, data_event_nums = all_data['amplitude'], all_data['eventId']
+            all_data = read_det_data_vars(data_file_path, ['amplitude', 'eventId', 'ftst'])
+            data_raw, data_event_nums, data_ft_stamp = all_data['amplitude'], all_data['eventId'], all_data['ftst']
             if select_triggers is not None:
                 mask = np.isin(data_event_nums, select_triggers)
-                data_raw, data_event_nums = data_raw[mask], data_event_nums[mask]
+                data_raw, data_event_nums, data_ft_stamp = data_raw[mask], data_event_nums[mask], data_ft_stamp[mask]
             data_raw = self.split_det_data(data_raw, self.feu_connectors, starting_connector=1, to_connectors=False)
             data = self.subtract_common_noise(data_raw, self.ped_means)
             data = subtract_pedestal(data, self.ped_means)
-            return data, data_raw, data_event_nums
+            return data, data_raw, data_event_nums, data_ft_stamp
 
         print('Reading in data...')
 
@@ -141,11 +142,14 @@ class DreamData:
             self.data = []
             if self.event_nums is None:
                 self.event_nums = []
+            if self.fine_time_stamps is None:
+                self.fine_time_stamps = []
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 read_file_partial = partial(read_file, select_triggers=trigger_list)
-                for data_i, data_raw_i, event_nums in tqdm(executor.map(read_file_partial, chunk_files), total=len(chunk_files)):
+                for data_i, data_raw_i, event_nums, ft_stamps in tqdm(executor.map(read_file_partial, chunk_files), total=len(chunk_files)):
                     self.data.append(data_i)
                     self.event_nums.append(event_nums)
+                    self.fine_time_stamps.append(ft_stamps)
                     if hist_raw_amps:
                         n_events, n_channels, n_samples = data_raw_i.shape
                         print(f'data_raw_i shape: {data_raw_i.shape}')
@@ -176,6 +180,7 @@ class DreamData:
             print(f'Processed chunk {chunk_idx // chunk_size + 1}/{(len(data_files) + chunk_size - 1) // chunk_size}')
 
         self.event_nums = np.concatenate(self.event_nums)
+        self.fine_time_stamps = np.concatenate(self.fine_time_stamps)
         print('Getting hits...')
         self.get_hits()
 
@@ -187,13 +192,18 @@ class DreamData:
 
         num_chunks = max(os.cpu_count() - 1, 1)
         data_chunks = np.array_split(self.data, num_chunks, axis=0)
+        fine_timestamp_chunks = np.array_split(self.fine_time_stamps, num_chunks, axis=0)
 
         def process_chunk(chunk):
             return get_waveform_fits(chunk, self.noise_thresholds, self.waveform_fit_func)
 
         fits_list = []
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            for fits in tqdm(executor.map(process_chunk, data_chunks), total=num_chunks):
+            for fits, fine_timestamp_chunk in zip(tqdm(executor.map(process_chunk, data_chunks), total=num_chunks), fine_timestamp_chunks):
+                # Correct time of max for fine timestamp
+                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                fits['time_max'] = fits['time_max'] + fine_timestamp_chunk[:, np.newaxis]  # NOT FINISHED
+                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 fits_list.append(fits)
 
         fit_params = {key: np.concatenate([fits[key] for fits in fits_list], axis=0) for key in fits_list[0].keys()}
@@ -651,6 +661,19 @@ class DreamData:
         # Adjust layout
         fig.tight_layout()
         fig.subplots_adjust(hspace=0)
+
+    def plot_fine_timestamp_hist(self):
+        """
+        Plot histogram of fine timestamps.
+        :return:
+        """
+        fine_time_stamps = np.ravel(self.fine_time_stamps)
+        fig, ax = plt.subplots()
+        ax.hist(fine_time_stamps, bins=100)
+        ax.set_title('Fine Timestamps')
+        ax.set_xlabel('Fine Timestamp')
+        ax.set_ylabel('Counts')
+        fig.tight_layout()
 
 
 def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):

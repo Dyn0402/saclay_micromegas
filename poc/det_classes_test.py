@@ -54,8 +54,8 @@ def main():
     # det_single = None
 
     # file_nums = 'all'
-    file_nums = list(range(0, 645))
-    # file_nums = list(range(0, 100))
+    # file_nums = list(range(0, 645))
+    file_nums = list(range(0, 100))
     # file_nums = list(range(100, 200))
     # file_nums = list(range(100, 500))
     # file_nums = list(range(100, 110))
@@ -503,6 +503,54 @@ def get_residuals_align(det, ray_data, triggers, sub_reses=False, plot=False):
     x_res_i_mean, y_res_i_mean = x_popt[1], y_popt[1]
     x_res_i_std, y_res_i_std = x_popt[2], y_popt[2]
     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
+
+
+# def get_residuals_clust_sizes(det, ray_data, sub_reses=False, plot=False, in_det=False, tolerance=0.0):
+#     x_res, y_res, = [], []
+#     x_subs_mean, x_subs_std, y_subs_mean, y_subs_std = [], [], [], []
+#     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
+#     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
+#         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
+#         if in_det:
+#             x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+#
+#         # Find indices of sub_triggers in event_num_rays
+#         matched_indices = np.in1d(np.array(sub_triggers), np.array(event_num_rays)).nonzero()[0]
+#
+#         if len(matched_indices) == 0:
+#             x_res.extend(None)
+#             y_res.extend(None)
+#             x_subs_mean.append(None)
+#             y_subs_mean.append(None)
+#             x_subs_std.append(None)
+#             y_subs_std.append(None)
+#             continue
+#
+#         centroids_i_matched = sub_centroids[matched_indices]
+#
+#         x_res_i = centroids_i_matched[:, 0] - x_rays
+#         y_res_i = centroids_i_matched[:, 1] - y_rays
+#
+#         x_res.extend(x_res_i)
+#         y_res.extend(y_res_i)
+#
+#         x_popt_i, y_popt_i = fit_residuals(x_res_i, y_res_i)
+#         x_subs_mean.append(x_popt_i[1])
+#         y_subs_mean.append(y_popt_i[1])
+#         x_subs_std.append(x_popt_i[2])
+#         y_subs_std.append(y_popt_i[2])
+#
+#         if plot:
+#             title_post = sub_det.description
+#             plot_xy_residuals_2d(x_rays, y_rays, centroids_i_matched[:, 0], centroids_i_matched[:, 1], title_post)
+#
+#     if sub_reses:
+#         return x_subs_mean, y_subs_mean, x_subs_std, y_subs_std
+#
+#     x_popt, y_popt = fit_residuals(x_res, y_res)
+#     x_res_i_mean, y_res_i_mean = x_popt[1], y_popt[1]
+#     x_res_i_std, y_res_i_std = x_popt[2], y_popt[2]
+#     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
 
 
 def get_banco_telescope_residuals(det, banco_telescope, banco_triggers=None, plot=False):
