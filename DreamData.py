@@ -37,9 +37,13 @@ class DreamData:
         self.ped_flag = '_pedthr_'
         self.data_flag = '_datrun_'
 
-        # self.waveform_fit_func = 'waveform_func'
-        self.waveform_fit_func = 'max_sample'
+        self.waveform_fit_func = 'waveform_func'
+        # self.waveform_fit_func = 'max_sample'
+        # self.waveform_fit_func = 'parabola'
+        # self.waveform_fit_func = 'gaus'
         self.noise_thresh_sigmas = 4
+
+        self.fine_timestamp_constant = 0.1
 
         self.channels_per_connector = 64
         self.starting_connector = min(self.feu_connectors)
@@ -181,6 +185,7 @@ class DreamData:
 
         self.event_nums = np.concatenate(self.event_nums)
         self.fine_time_stamps = np.concatenate(self.fine_time_stamps)
+        # self.correct_for_fine_timestamps()
         print('Getting hits...')
         self.get_hits()
 
@@ -192,21 +197,28 @@ class DreamData:
 
         num_chunks = max(os.cpu_count() - 1, 1)
         data_chunks = np.array_split(self.data, num_chunks, axis=0)
-        fine_timestamp_chunks = np.array_split(self.fine_time_stamps, num_chunks, axis=0)
+        # fine_timestamp_chunks = np.array_split(self.fine_time_stamps, num_chunks, axis=0)
 
         def process_chunk(chunk):
             return get_waveform_fits(chunk, self.noise_thresholds, self.waveform_fit_func)
 
         fits_list = []
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            for fits, fine_timestamp_chunk in zip(tqdm(executor.map(process_chunk, data_chunks), total=num_chunks), fine_timestamp_chunks):
-                # Correct time of max for fine timestamp
-                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                fits['time_max'] = fits['time_max'] + fine_timestamp_chunk[:, np.newaxis]  # NOT FINISHED
-                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # for fits, fine_timestamp_chunk in zip(tqdm(executor.map(process_chunk, data_chunks), total=num_chunks), fine_timestamp_chunks):
+            for fits in tqdm(executor.map(process_chunk, data_chunks), total=num_chunks):
+                # # Correct time of max for fine timestamp
+                # # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                # fits['time_max'] = fits['time_max'] + fine_timestamp_chunk[:, np.newaxis] * self.fine_timestamp_constant
+                # # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 fits_list.append(fits)
 
         fit_params = {key: np.concatenate([fits[key] for fits in fits_list], axis=0) for key in fits_list[0].keys()}
+
+        # print(f'fit_params["time_max"].shape: {fit_params["time_max"].shape}')
+        # print(f'fine_time_stamps.shape: {self.fine_time_stamps.shape}')
+        # print(f'fine_time_stamps[:, np.newaxis].shape: {self.fine_time_stamps[:, np.newaxis].shape}')
+        # fit_params['time_max'] = fit_params['time_max'] + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+
         if self.data_amps is None:
             self.fit_params = fit_params
             self.data_amps = fit_params['amplitude']
@@ -225,6 +237,22 @@ class DreamData:
         # self.data_fit_success = fits['success'] != 0
         # self.fit_params = fits
         print(f'Fitting time: {time() - start} s')
+
+    def correct_for_fine_timestamps(self):
+        """
+        Correct data_time_of_max and fit_params['time_max'] for fine timestamps.
+        :return:
+        """
+        self.data_time_of_max = self.data_time_of_max + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+        self.fit_params['time_max'] = self.fit_params['time_max'] + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+
+    def uncorrect_for_fine_timestamps(self):
+        """
+        Uncorrect data_time_of_max and fit_params['time_max'] for fine timestamps.
+        :return:
+        """
+        self.data_time_of_max = self.data_time_of_max - self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+        self.fit_params['time_max'] = self.fit_params['time_max'] - self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
 
     def get_hits(self, amp_min=0, time_max_range=None):
         """
@@ -310,15 +338,175 @@ class DreamData:
         ax.set_ylabel('Counts')
         fig.tight_layout()
 
-    def plot_event_time_maxes(self, channel=None):
-        time_maxes = np.ravel(self.data_time_of_max) if channel is None else self.data_time_of_max[:, channel]
+    def plot_event_time_maxes_extrvagant(self, channel=None, channels=None, max_channel=False, min_amp=None):
+        print(f'data_time_of_max.shape: {self.data_time_of_max.shape}')
+        print(f'data_amps.shape: {self.data_amps.shape}')
+
+        if channels is not None:
+            time_maxes = self.data_time_of_max[:, channels]
+            amps = self.data_amps[:, channels]
+        else:
+            time_maxes = self.data_time_of_max
+            amps = self.data_amps
+
+        print(f'time_maxes.shape: {time_maxes.shape}')
+        print(f'amps.shape: {amps.shape}')
+
+        fig, ax = plt.subplots()
+        time_of_max = np.ravel(time_maxes)
+        time_of_max = time_of_max[~np.isnan(time_of_max) & (time_of_max > -1) & (time_of_max < 40)]
+        ax.hist(time_of_max, bins=100)
+        ax.set_title('Event Time of Max')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Counts')
+        fig.tight_layout()
+
+        # plt.show()
+
+        if min_amp is not None:
+            time_maxes = time_maxes[np.max(amps, axis=1) > min_amp]
+            amps = amps[np.max(amps, axis=1) > min_amp]
+
+        print(f'time_maxes.shape: {time_maxes.shape}')
+        print(f'amps.shape: {amps.shape}')
+
+        if max_channel:
+            # Get amp and time_max of the channel with the max amplitude in each event
+
+            # Filter out events where all amplitudes are nan
+            time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
+            amps = amps[~np.all(np.isnan(amps), axis=1)]
+
+            max_amp_channels = np.nanargmax(amps, axis=1)
+            amps = np.nanmax(amps, axis=1)
+            time_maxes = time_maxes[np.arange(len(time_maxes)), max_amp_channels]
+        elif channel is not None:
+            time_maxes = time_maxes[:, channel]
+            amps = None  # Not Implemented
+        else:
+            time_maxes = np.ravel(time_maxes)
+            amps = None  # Not Implemented
+
+        print(f'time_maxes.shape: {time_maxes.shape}')
+        print(f'amps.shape: {amps.shape}')
+
+        print(amps)
+        print(time_maxes)
+
         time_maxes = time_maxes[~np.isnan(time_maxes)]
+
+        fig, ax = plt.subplots()
+        time_of_max = np.ravel(time_maxes)
+        time_of_max = time_of_max[~np.isnan(time_of_max) & (time_of_max > -1) & (time_of_max < 40)]
+        ax.hist(time_of_max, bins=100)
+        ax.set_title('Event Time of Max')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Counts')
+        fig.tight_layout()
+
+        # plt.show()
+
+        time_maxes = np.ravel(time_maxes)
+        amps = np.ravel(amps) if amps is not None else None
+
+        # Filter out when time_max not > 0 and < 32
+        time_max_range_filter = (0 <= time_maxes) & (time_maxes <= 32)
+        time_maxes = time_maxes[time_max_range_filter]
+        amps = amps[time_max_range_filter]
+
         fig, ax = plt.subplots()
         ax.hist(time_maxes, bins=100)
         ax.set_title('Event Mean Times')
         ax.set_xlabel('Time')
         ax.set_ylabel('Counts')
         fig.tight_layout()
+
+        if amps is not None:
+            # Plot 2D of time max vs amplitude
+            fig, ax = plt.subplots()
+            ax.hist2d(amps, time_maxes, bins=100, norm=LogNorm())
+            ax.set_title('Event Mean Times vs Amplitudes')
+            ax.set_ylabel('Time')
+            ax.set_xlabel('Amplitude')
+            fig.tight_layout()
+
+            # Now bin time_maxes by amplitude. Get the mean and standard deviation for each bin and plot this as an
+            # error bar plot.
+            amp_bins = np.linspace(0, np.max(amps), 100)
+            time_maxes_binned = [np.ravel(time_maxes[(amp_bins[i] < amps) & (amps < amp_bins[i + 1])]) for i in range(len(amp_bins) - 1)]
+            n_points = np.array([len(time_maxes_bin) for time_maxes_bin in time_maxes_binned])
+            time_maxes_mean = np.array([np.mean(time_maxes_bin) for time_maxes_bin in time_maxes_binned])
+            time_maxes_std = np.array([np.std(time_maxes_bin) for time_maxes_bin in time_maxes_binned])
+
+            time_maxes_mean = np.where(n_points > 10, time_maxes_mean, np.nan)
+
+            fig, ax = plt.subplots()
+            ax.errorbar(amp_bins[:-1], time_maxes_mean, yerr=time_maxes_std, fmt='o')
+            ax.set_title('Event Mean Times vs Amplitudes')
+            ax.set_ylabel('Time')
+            ax.set_xlabel('Amplitude')
+            fig.tight_layout()
+
+    def plot_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None):
+        if channels is not None:
+            time_maxes = self.data_time_of_max[:, channels]
+            amps = self.data_amps[:, channels]
+        else:
+            time_maxes = self.data_time_of_max
+            amps = self.data_amps
+
+        if min_amp is not None:
+            # Filter out events where all amplitudes are nan
+            time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
+            amps = amps[~np.all(np.isnan(amps), axis=1)]
+
+            time_maxes = time_maxes[np.nanmax(amps, axis=1) > min_amp]
+            amps = amps[np.max(amps, axis=1) > min_amp]
+
+        if max_channel:
+            # Filter out events where all amplitudes are nan
+            time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
+            amps = amps[~np.all(np.isnan(amps), axis=1)]
+
+            # Get amp and time_max of the channel with the max amplitude in each event
+            max_amp_channels = np.nanargmax(amps, axis=1)
+            time_maxes = time_maxes[np.arange(len(time_maxes)), max_amp_channels]
+        elif channel is not None:
+            time_maxes = time_maxes[:, channel]
+        else:
+            time_maxes = np.ravel(time_maxes)
+
+        time_maxes = time_maxes[~np.isnan(time_maxes)]
+
+        fig, ax = plt.subplots()
+        time_of_max = np.ravel(time_maxes)
+        time_of_max = time_of_max[(time_of_max > -1) & (time_of_max < 40)]
+
+        # Make numpy histogram and fit to gaussian
+        hist, bins = np.histogram(time_of_max, bins=100)
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+        p0 = [np.max(hist), np.mean(time_of_max), np.std(time_of_max)]
+
+        ax.bar(bin_centers, hist, width=bins[1] - bins[0], align='center', alpha=0.5)
+        ax.set_title('Event Time of Max')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Counts')
+
+        sigma = float('nan')
+        try:
+            popt, pcov = cf(gaussian, bin_centers, hist, p0=p0)
+            fit_str = f'Amplitude: {popt[0]:.2f}\nMean: {popt[1]:.2f}\nSigma: {popt[2]:.2f}'
+            ax.plot(bin_centers, gaussian(bin_centers, *popt), color='red')
+            ax.annotate(fit_str, (0.9, 0.9), xycoords='axes fraction', ha='right', va='top',
+                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+            sigma = popt[2]
+        except RuntimeError:
+            print('Error: Gaussian fit failed.')
+            ax.plot(bin_centers, gaussian(bin_centers, *p0), color='gray')
+        fig.tight_layout()
+
+        return sigma
+
 
     def plot_fit_param(self, param, params_ranges=None, channel=None):
         selection_data = self.get_selected_fit_data(param, params_ranges, channel)
@@ -514,7 +702,7 @@ class DreamData:
         Get data that fits within specified parameter ranges.
         :return:
         """
-        data, success, fit_params = self.data, self.data_fit_success, self.fit_params
+        data, success, fit_params = self.waveforms, self.data_fit_success, self.fit_params
         if channel is not None:
             data, success = data[:, channel], success[:, channel]
             params = {key: val[:, channel] for key, val in fit_params.items()}
@@ -812,6 +1000,9 @@ def get_waveform_fits(data, noise_thresholds=None, func='gaus'):
         param_names = ['amplitude', 'time_max', 'time_shift', 'q', 'amplitude_err', 'time_max_err', 'time_shift_err',
                        'q_err',
                        'success']
+    elif func == 'parabola':
+        fits = np.apply_along_axis(fit_waveform_parabola, -1, data)
+        param_names = ['amplitude', 'time_max', 'success']
     elif func == 'max_sample':
         # fits = np.apply_along_axis(get_waveform_max_sample, -1, data)
         amplitude = np.max(data, axis=-1)
@@ -832,7 +1023,7 @@ def fit_waveform_gaus(waveform):
     if amplitude == 0:
         return 0, 0, 0, 0, 0, 0, False
     mean = np.argmax(waveform)
-    sd = len(waveform) / 5
+    sd = len(waveform) / 2
     try:
         popt, pcov = cf(gaussian, np.arange(len(waveform)), waveform, p0=[amplitude, mean, sd])
         perr = np.sqrt(np.diag(pcov))
@@ -861,6 +1052,76 @@ def fit_waveform_func(waveform):
     except (RuntimeError, ValueError, IndexError):
         return amplitude, mean, 0, np.nan, np.nan, np.nan, np.nan, np.nan, False
 
+
+def fit_waveform_cubic(waveform):
+    """
+    Get the maximum amplitude and the two adjacent points to the maximum amplitude. Using the cubic equation get the
+    maximum amplitude and the time of the maximum amplitude.
+    :param waveform:
+    :return:
+    """
+    amplitude = np.max(waveform)
+    if amplitude == 0:
+        return 0, 0, False
+    max_index = np.argmax(waveform)
+    if max_index == 0 or max_index == len(waveform) - 1:
+        return amplitude, max_index, False
+    x = np.arange(max_index - 1, max_index + 2)
+    y = waveform[x]
+
+    # Unfinished
+
+
+def fit_waveform_parabola(waveform):
+    """
+    Get the maximum amplitude and the two adjacent points to the maximum amplitude. Using the parabolic equation get the
+    maximum amplitude and the time of the maximum amplitude.
+    :param waveform:
+    :return:
+    """
+    amplitude = np.max(waveform)
+    if amplitude == 0:
+        return 0, 0, False
+    max_index = np.argmax(waveform)
+    if max_index == 0 or max_index == len(waveform) - 1:
+        return amplitude, max_index, False
+    x = np.arange(max_index - 1, max_index + 2)
+    y = waveform[x]
+
+    x_vertex, y_vertex = calc_parabola_vertex(x[0], y[0], x[1], y[1], x[2], y[2])
+
+    return x_vertex, y_vertex, True
+
+    # points = list(zip(x, y))
+    # x_vertex, y_vertex, (a, b, c) = find_parabola_max(points)
+
+    # return y_vertex, x_vertex, True
+
+
+def calc_parabola_vertex(x1, y1, x2, y2, x3, y3):
+    # Convert all inputs to float to ensure floating-point division
+    x1, y1, x2, y2, x3, y3 = map(float, (x1, y1, x2, y2, x3, y3))
+
+    denom = (x1 - x2) * (x1 - x3) * (x2 - x3)
+
+    A = (x3 * (y2 - y1) + x2 * (y1 - y3) + x1 * (y3 - y2)) / denom
+
+    B = (x3 ** 2 * (y1 - y2) + x2 ** 2 * (y3 - y1) + x1 ** 2 * (y2 - y3)) / denom
+
+    C1 = x2 * x3 * (x2 - x3) * y1
+    C2 = x3 * x1 * (x3 - x1) * y2
+    C3 = x1 * x2 * (x1 - x2) * y3
+    C4 = C1 + C2 + C3
+
+    C = C4 / denom
+
+    xv = -B / (2 * A)
+    yv = C - B ** 2 / (4 * A)
+
+    if yv <= 0:
+        print(f"Warning: denom={denom} a={A} b={B} c={C} c1={C1} c2={C2} c3={C3} c4={C4}")
+
+    return xv, yv
 
 def get_waveform_max_sample(waveform):
     amplitude = np.max(waveform)
