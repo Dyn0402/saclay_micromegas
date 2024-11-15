@@ -26,12 +26,12 @@ from det_classes_test import plot_ray_hits_2d
 
 
 def main():
-    base_dir = 'F:/Saclay/cosmic_data/'
-    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-24-24/'
-    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/10-16-24/'
+    # base_dir = 'F:/Saclay/cosmic_data/'
+    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # out_dir = 'F:/Saclay/Analysis/Cosmic Bench/9-24-24/'
+    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/10-16-24/'
     # run_name = 'sg1_stats_7-26-24'
     # run_name = 'urw_inter_sp1_test_10-14-24'
     # run_name = 'urw_inter_sp1_test2_10-16-24'
@@ -52,7 +52,7 @@ def main():
 
     # file_nums = 'all'
     # file_nums = list(range(0, 645))
-    file_nums = list(range(0, 10))
+    file_nums = list(range(0, 1))
 
     chunk_size = 100  # Number of files to process at once
 
@@ -97,39 +97,15 @@ def main():
             print(f'HV: {det.hv}')
             det.load_dream_data(data_dir, ped_dir, 10, file_nums, chunk_size, save_waveforms=True)
             print(f'Hits shape: {det.dream_data.hits.shape}')
+            print(f'feu_connectors: {det.dream_data.feu_connectors}')
+            input('Press Enter to continue...')
             # det.dream_data.plot_noise_metric()
-            det.dream_data.plot_fine_timestamp_hist()
             det.dream_data.plot_event_amplitudes()
-            det.dream_data.plot_fits({'time_max': [-1, 40]}, n_max=5)
-            # plt.show()
             # det.dream_data.plot_fit_param('sigma', {'sigma': [0, 10], 'time_max': [-1, 40]})
             # det.dream_data.plot_fit_param('time_max', {'sigma': [0, 10], 'time_max': [-1, 40]})
-            det.dream_data.plot_fit_param('time_max', {'time_max': [-1, 40]})
             # plt.show()
-            det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256), min_amp=None)
             det.dream_data.correct_for_fine_timestamps()
             det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256), min_amp=None)
-
-            # Iterate over fine timestamp correction values and plot the sigma
-            fine_time_stamp_constants = np.linspace(0, 0.5, 50)
-            sigmas = []
-            det.dream_data.uncorrect_for_fine_timestamps()
-            for fine_time_stamp_constant in fine_time_stamp_constants:
-                det.dream_data.fine_timestamp_constant = fine_time_stamp_constant
-                det.dream_data.correct_for_fine_timestamps()
-                sigma = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256), min_amp=None)
-                sigmas.append(sigma)
-                det.dream_data.uncorrect_for_fine_timestamps()
-
-            fig, ax = plt.subplots()
-            ax.plot(fine_time_stamp_constants, sigmas)
-            ax.set_xlabel('Fine Timestamp Constant')
-            ax.set_ylabel('Sigma')
-            ax.set_title('Sigma vs Fine Timestamp Constant')
-            plt.show()
-
-            # det.dream_data.plot_fits({'sigma': [0, 10], 'time_max': [-1, 40]}, n_max=20)
-            plt.show()
 
             # hit_thresh = [1, 75]
             # hit_thresh = [75, 1000]

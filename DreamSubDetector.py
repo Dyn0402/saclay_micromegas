@@ -19,6 +19,7 @@ class DreamSubDetector:
         self.x_chans, self.y_chans = None, None
         self.x_amps, self.y_amps = None, None
         self.x_hits, self.y_hits = None, None
+        selx.x_times, self.y_times = None, None
         self.x_cluster_triggers, self.y_cluster_triggers = None, None
         self.x_clusters, self.y_clusters = None, None
         self.x_cluster_sizes, self.y_cluster_sizes = None, None
@@ -34,13 +35,14 @@ class DreamSubDetector:
 
         self.description = None
 
-    def set_x(self, pos, amps, hits, pitch, interpitch, connector,
+    def set_x(self, pos, amps, hits, times, pitch, interpitch, connector,
               cluster_triggers=None, clusters=None, cluster_sizes=None, cluster_centroids=None,
               largest_clusters=None, largest_cluster_sizes=None, largest_cluster_centroids=None,
               chans=None):
         self.x_pos = pos
         self.x_amps = amps
         self.x_hits = hits
+        self.x_times = times
         self.x_pitch = pitch
         self.x_interpitch = interpitch
         self.x_connector = connector
@@ -55,13 +57,14 @@ class DreamSubDetector:
 
         self.set_description()
 
-    def set_y(self, pos, amps, hits, pitch, interpitch, connector,
+    def set_y(self, pos, amps, hits, times, pitch, interpitch, connector,
               cluster_triggers=None, clusters=None, cluster_sizes=None, cluster_centroids=None,
               largest_clusters=None, largest_cluster_sizes=None, largest_cluster_centroids=None,
               chans=None):
         self.y_pos = pos
         self.y_amps = amps
         self.y_hits = hits
+        self.y_times = times
         self.y_pitch = pitch
         self.y_interpitch = interpitch
         self.y_connector = connector

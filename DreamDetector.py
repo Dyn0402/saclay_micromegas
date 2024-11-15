@@ -81,6 +81,7 @@ class DreamDetector(Detector):
             x_connector, x_channels = x_group['connector'], x_group['channels']
             x_amps = self.dream_data.get_channels_amps(x_connector, x_channels)
             x_hits = self.dream_data.get_channels_hits(x_connector, x_channels)
+            x_times = self.dream_data.get_channels_time_of_max(x_connector, x_channels)
             x_clusters, x_cluster_indices = find_clusters_all_events(x_hits)
             x_cluster_sizes = get_cluster_sizes(x_clusters)
             x_cluster_triggers = self.dream_data.event_nums[x_cluster_indices]
@@ -89,7 +90,8 @@ class DreamDetector(Detector):
             xlarge_clusts = get_largest_clusters_all_events(x_clusters, x_cluster_indices, x_cluster_centroids, x_amps)
             x_largest_clusters, x_largest_cluster_centroids = xlarge_clusts
             x_largest_cluster_sizes = get_cluster_sizes(x_largest_clusters)
-            self.x_groups.append({'df': x_group, 'amps': x_amps, 'hits': x_hits, 'clusters': x_clusters,
+            self.x_groups.append({'df': x_group, 'amps': x_amps, 'hits': x_hits, 'times': x_times,
+                                  'clusters': x_clusters,
                                   'cluster_sizes': x_cluster_sizes,
                                   'cluster_triggers': np.array(x_cluster_triggers),
                                   'cluster_centroids': x_cluster_centroids,
@@ -110,6 +112,7 @@ class DreamDetector(Detector):
             y_connector, y_channels = y_group['connector'], y_group['channels']
             y_amps = self.dream_data.get_channels_amps(y_connector, y_channels)
             y_hits = self.dream_data.get_channels_hits(y_connector, y_channels)
+            y_times = self.dream_data.get_channels_time_of_max(y_connector, y_channels)
             y_clusters, y_cluster_indices = find_clusters_all_events(y_hits)
             y_cluster_sizes = get_cluster_sizes(y_clusters)
             y_cluster_triggers = self.dream_data.event_nums[y_cluster_indices]
@@ -118,7 +121,8 @@ class DreamDetector(Detector):
             ylarge_clusts = get_largest_clusters_all_events(y_clusters, y_cluster_indices, y_cluster_centroids, y_amps)
             y_largest_clusters, y_largest_cluster_centroids = ylarge_clusts
             y_largest_cluster_sizes = get_cluster_sizes(y_largest_clusters)
-            self.y_groups.append({'df': y_group, 'amps': y_amps, 'hits': y_hits, 'clusters': y_clusters,
+            self.y_groups.append({'df': y_group, 'amps': y_amps, 'hits': y_hits, 'times': y_times,
+                                  'clusters': y_clusters,
                                   'cluster_sizes': y_cluster_sizes,
                                   'cluster_triggers': np.array(y_cluster_triggers),
                                   'cluster_centroids': y_cluster_centroids,
@@ -159,12 +163,12 @@ class DreamDetector(Detector):
                 x_interpitch, y_interpitch = x_group_df['interpitch(mm)'], y_group_df['interpitch(mm)']
 
                 sub_det = DreamSubDetector(sub_index=len(self.sub_detectors))
-                sub_det.set_x(x_pos, x_group['amps'], x_group['hits'], x_pitch, x_interpitch, x_connector,
-                              x_group['cluster_triggers'], x_group['clusters'], x_group['cluster_sizes'],
+                sub_det.set_x(x_pos, x_group['amps'], x_group['hits'], x_group['times'], x_pitch, x_interpitch,
+                              x_connector, x_group['cluster_triggers'], x_group['clusters'], x_group['cluster_sizes'],
                               x_group['cluster_centroids'], x_group['largest_clusters'],
                               x_group['largest_cluster_sizes'], x_group['largest_cluster_centroids'], x_channels)
-                sub_det.set_y(y_pos, y_group['amps'], y_group['hits'], y_pitch, y_interpitch, y_connector,
-                              y_group['cluster_triggers'], y_group['clusters'], y_group['cluster_sizes'],
+                sub_det.set_y(y_pos, y_group['amps'], y_group['hits'], y_group['times'], y_pitch, y_interpitch,
+                              y_connector, y_group['cluster_triggers'], y_group['clusters'], y_group['cluster_sizes'],
                               y_group['cluster_centroids'], y_group['largest_clusters'],
                               y_group['largest_cluster_sizes'], y_group['largest_cluster_centroids'], y_channels)
                 self.sub_detectors.append(sub_det)
