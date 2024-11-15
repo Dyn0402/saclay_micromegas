@@ -25,6 +25,8 @@ import uproot
 import awkward as ak
 import vector
 
+from Measure import Measure
+
 
 class DreamData:
     def __init__(self, data_dir, feu_num, feu_connectors, ped_dir=None, waveform_fit_func=None):
@@ -46,7 +48,8 @@ class DreamData:
             self.waveform_fit_func = waveform_fit_func
         self.noise_thresh_sigmas = 4
 
-        self.fine_timestamp_constant = 0.1
+        self.fine_timestamp_constant = 1.0 / 6
+        self.sample_period = 60  # ns
 
         self.channels_per_connector = 64
         self.starting_connector = min(self.feu_connectors)
@@ -97,9 +100,7 @@ class DreamData:
     def get_pedestals(self):
         pedestals = get_pedestals_by_median(self.ped_data)
         ped_common_noise_sub = self.subtract_common_noise(self.ped_data, pedestals)
-        print(f'Pedestal data shape: {ped_common_noise_sub.shape}')
         ped_fits = get_pedestal_fits(ped_common_noise_sub)
-        print(f'Pedestal fits: {ped_fits["mean"].shape}')
         self.ped_means = ped_fits['mean']
         self.ped_sigmas = ped_fits['sigma']
 
@@ -207,7 +208,6 @@ class DreamData:
         fits_list = []
         with concurrent.futures.ThreadPoolExecutor() as executor:
             for fits in tqdm(executor.map(process_chunk, data_chunks), total=num_chunks):
-                print(fits['time_max'])
                 fits_list.append(fits)
 
         fit_params = {key: np.concatenate([fits[key] for fits in fits_list], axis=0) for key in fits_list[0].keys()}
@@ -277,6 +277,17 @@ class DreamData:
         channels = np.array(channels)
         channel_hits = self.split_det_data(self.hits, [connector], to_connectors=False)[:, channels]
         return channel_hits
+
+    def get_channels_time_of_max(self, connector, channels):
+        """
+        Get time of max for specified channels on connector in each event.
+        :param connector: Connector number.
+        :param channels: List or array of channels.
+        :return: Time of max for specified channels in each event.
+        """
+        channels = np.array(channels)
+        channel_time_of_max = self.split_det_data(self.data_time_of_max, [connector], to_connectors=False)[:, channels]
+        return channel_time_of_max
 
     def split_det_data(self, det_data, feu_connectors, to_connectors=False, starting_connector=None):
         if starting_connector is None:
@@ -454,8 +465,9 @@ class DreamData:
             time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
             amps = amps[~np.all(np.isnan(amps), axis=1)]
 
-            time_maxes = time_maxes[np.nanmax(amps, axis=1) > min_amp]
-            amps = amps[np.max(amps, axis=1) > min_amp]
+            min_amp_mask = np.nanmax(amps, axis=1) > min_amp
+            time_maxes = time_maxes[min_amp_mask]
+            amps = amps[min_amp_mask]
 
         if max_channel:
             # Filter out events where all amplitudes are nan
@@ -473,30 +485,36 @@ class DreamData:
         time_maxes = time_maxes[~np.isnan(time_maxes)]
 
         time_of_max = np.ravel(time_maxes)
-        time_of_max = time_of_max[(time_of_max > -1) & (time_of_max < 40)]
+        time_of_max = time_of_max[(time_of_max > -1) & (time_of_max < 40)] * self.sample_period
+        original_num = len(time_of_max)
+        time_of_max = time_of_max[(time_of_max > 3 * self.sample_period) & (time_of_max < 15 * self.sample_period)]
+        cut_num = len(time_of_max)
+        if cut_num / original_num < 0.9:
+            print(f'Warning: Cut {1 - cut_num / original_num * 100:.2f}% of events.')
 
         # Make numpy histogram and fit to gaussian
-        hist, bins = np.histogram(time_of_max, bins=500)
+        hist, bins = np.histogram(time_of_max, bins=100)
         bin_centers = (bins[:-1] + bins[1:]) / 2
         p0 = [np.max(hist), np.mean(time_of_max), np.std(time_of_max)]
 
         if plot:
             fig, ax = plt.subplots()
-            ax.bar(bin_centers, hist, width=bins[1] - bins[0], align='center', alpha=0.5)
+            ax.bar(bin_centers, hist, width=bins[1] - bins[0], align='center', color='blue', alpha=0.5)
             ax.set_title('Event Time of Max')
-            ax.set_xlabel('Time')
+            ax.set_xlabel('Time [ns]')
             ax.set_ylabel('Counts')
 
-        sigma = float('nan')
+        sigma, sigma_err = np.nan, np.nan
         try:
             popt, pcov = cf(gaussian, bin_centers, hist, p0=p0)
+            fit_meas = [Measure(val, err) for val, err in zip(popt, np.sqrt(np.diag(pcov)))]
             if plot:
-                fit_str = f'Amplitude: {popt[0]:.2f}\nMean: {popt[1]:.2f}\nSigma: {popt[2]:.2f}'
+                fit_str = f'Amplitude: {fit_meas[0]}\nMean: {fit_meas[1]}\nSigma: {fit_meas[2]}'
                 fit_xs = np.linspace(bins[0], bins[-1], 1000)
                 ax.plot(fit_xs, gaussian(fit_xs, *popt), color='red')
                 ax.annotate(fit_str, (0.9, 0.9), xycoords='axes fraction', ha='right', va='top',
                             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-            sigma = popt[2]
+            sigma, sigma_err = fit_meas[2].val, fit_meas[2].err
         except RuntimeError:
             print('Error: Gaussian fit failed.')
             if plot:
@@ -504,7 +522,7 @@ class DreamData:
         if plot:
             fig.tight_layout()
 
-        return sigma
+        return sigma, sigma_err
 
 
     def plot_fit_param(self, param, params_ranges=None, channel=None):
@@ -1002,6 +1020,9 @@ def get_waveform_fits(data, noise_thresholds=None, func='gaus'):
     elif func == 'parabola':
         fits = np.apply_along_axis(fit_waveform_parabola, -1, data)
         param_names = ['amplitude', 'time_max', 'success']
+    elif func == 'parabola_vectorized':
+        fits = fit_waveform_parabola_vectorized(data)
+        param_names = ['amplitude', 'time_max', 'success']
     elif func == 'max_sample':
         # fits = np.apply_along_axis(get_waveform_max_sample, -1, data)
         amplitude = np.max(data, axis=-1)
@@ -1061,7 +1082,7 @@ def fit_waveform_cubic(waveform):
     """
     amplitude = np.max(waveform)
     if amplitude == 0:
-        return 0, 0, False
+        return np.nan, np.nan, False
     max_index = np.argmax(waveform)
     if max_index == 0 or max_index == len(waveform) - 1:
         return amplitude, max_index, False
@@ -1080,7 +1101,7 @@ def fit_waveform_parabola(waveform):
     """
     amplitude = np.max(waveform)
     if amplitude == 0:
-        return 0, 0, False
+        return np.nan, np.nan, False
     max_index = np.argmax(waveform)
     if max_index == 0 or max_index == len(waveform) - 1:
         return amplitude, max_index, False
@@ -1088,9 +1109,72 @@ def fit_waveform_parabola(waveform):
     y = waveform[x]
 
     x_vertex, y_vertex = calc_parabola_vertex(x[0], y[0], x[1], y[1], x[2], y[2])
-    print(f'points: {x} {y} vertex: {x_vertex} {y_vertex}')
+    # print(f'points: {x} {y} vertex: {x_vertex} {y_vertex}')
 
     return y_vertex, x_vertex, True
+
+
+def fit_waveform_parabola_vectorized(data):
+    max_indices = np.argmax(data, axis=-1)
+    amplitudes = np.max(data, axis=-1)
+
+    # Identify valid indices (exclude borders)
+    valid_mask = (max_indices > 0) & (max_indices < data.shape[-1] - 1)
+
+    # Gather x and y values for parabola fitting
+    x_left = max_indices - 1
+    x_mid = max_indices
+    x_right = max_indices + 1
+
+    # Keep left and right indices within bounds
+    x_left = np.clip(x_left, 0, data.shape[-1] - 1)
+    x_right = np.clip(x_right, 0, data.shape[-1] - 1)
+
+    y_left = np.take_along_axis(data, x_left[..., None], axis=-1).squeeze(-1)
+    y_mid = amplitudes
+    y_right = np.take_along_axis(data, x_right[..., None], axis=-1).squeeze(-1)
+
+    # Fit parabola for valid points only
+    xv, yv = np.full(y_mid.shape, np.nan), np.full(y_mid.shape, np.nan)
+    xv[valid_mask], yv[valid_mask] = calc_parabola_vertex_new(
+        x_left[valid_mask], y_left[valid_mask],
+        x_mid[valid_mask], y_mid[valid_mask],
+        x_right[valid_mask], y_right[valid_mask]
+    )
+
+    xv[~valid_mask], yv[~valid_mask] = np.nan, np.nan
+
+    success = valid_mask & (yv > 0)  # Optional condition for valid fits
+    return np.stack([yv, xv, success], axis=-1)
+
+
+def calc_parabola_vertex_new(x1, y1, x2, y2, x3, y3):
+    # denom = (x1 - x2) * (x1 - x3) * (x2 - x3)
+    # # if denom == 0:  # Handle edge cases early
+    # #     return None, None
+    #
+    # A = ((y2 - y1) * (x3 - x1) - (y3 - y1) * (x2 - x1)) / denom
+    # B = ((y2 - y1) * (x3**2 - x1**2) - (y3 - y1) * (x2**2 - x1**2)) / denom
+    # xv = -B / (2 * A)
+    # yv = y1 + A * (x1 - xv)**2  # Reuse A for parabola height
+
+    denom = (x1 - x2) * (x1 - x3) * (x2 - x3)
+
+    A = (x3 * (y2 - y1) + x2 * (y1 - y3) + x1 * (y3 - y2)) / denom
+
+    B = (x3 ** 2 * (y1 - y2) + x2 ** 2 * (y3 - y1) + x1 ** 2 * (y2 - y3)) / denom
+
+    C1 = x2 * x3 * (x2 - x3) * y1
+    C2 = x3 * x1 * (x3 - x1) * y2
+    C3 = x1 * x2 * (x1 - x2) * y3
+    C4 = C1 + C2 + C3
+
+    C = C4 / denom
+
+    xv = -B / (2 * A)
+    yv = C - B ** 2 / (4 * A)
+
+    return xv, yv
 
 
 def calc_parabola_vertex(x1, y1, x2, y2, x3, y3):
