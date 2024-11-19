@@ -42,7 +42,7 @@ class DetectorConfigLoader:
             print(f'Error: Sub run {sub_run_name} not found for detector {det_name}.')
         else:
             det_config.update({'run_time': sub_run['run_time']})
-            if isinstance(det_config['hv_channels'], dict):
+            if 'hv_channels' in det_config and isinstance(det_config['hv_channels'], dict):
                 hvs = get_hvs(det_config['hv_channels'], sub_run['hvs'])
                 det_config.update({'hvs': hvs})
         if self.det_type_info_dir is not None:

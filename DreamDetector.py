@@ -63,7 +63,8 @@ class DreamDetector(Detector):
         if 'det_map' in self.config:
             self.det_map = split_neighbors(self.config['det_map'], starting_connector=min(self.feu_connectors))
 
-        self.hv = self.config['hvs']
+        if 'hvs' in self.config:
+            self.hv = self.config['hvs']
 
     def load_dream_data(self, data_dir, ped_dir=None, noise_threshold_sigmas=None, file_nums=None, chunk_size=100,
                         trigger_list=None, hist_raw_amps=False, save_waveforms=False, waveform_fit_func=None):
