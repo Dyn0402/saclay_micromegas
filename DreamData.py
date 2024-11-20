@@ -53,6 +53,7 @@ class DreamData:
 
         self.channels_per_connector = 64
         self.starting_connector = min(self.feu_connectors)
+        self.connector_channels = None  # Dictionary of connectors and channels to use for each connector
 
         self.ped_data = None
         self.data = None
@@ -155,7 +156,10 @@ class DreamData:
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 read_file_partial = partial(read_file, select_triggers=trigger_list)
                 for data_i, data_raw_i, event_nums, ft_stamps in tqdm(executor.map(read_file_partial, chunk_files), total=len(chunk_files)):
+                    if self.connector_channels is not None:
+                        data_i = self.get_connector_channels(data_i)
                     self.data.append(data_i)
+                    print(f'data_i shape: {data_i.shape}')
                     self.event_nums.append(event_nums)
                     self.fine_time_stamps.append(ft_stamps)
                     if hist_raw_amps:
@@ -312,6 +316,26 @@ class DreamData:
             return None
 
         return det_data
+
+    def get_connector_channels(self, det_data):
+        """
+        Get specific channels for each connector.
+        Args:
+            det_data:
+
+        Returns:
+
+        """
+        if self.connector_channels is not None:
+            data_channels = []
+            for feu_connector, channels in self.connector_channels.items():
+                channel_offset = (feu_connector - self.starting_connector) * self.channels_per_connector
+                data_channels.append(det_data[:, channels + channel_offset])
+                # print(f'det_data shape: {det_data.shape}, det_data[:, channels + channel_offset].shape: {det_data[:, channels + channel_offset].shape}')
+            return np.concatenate(data_channels)
+        else:
+            return det_data
+
 
     def filter_data(self, data_indices):
         """
@@ -835,8 +859,19 @@ class DreamData:
 
         # Create a figure and axes
         fig, axes = plt.subplots(num_connectors, 1, figsize=(10, 8), sharex=True)
+        if num_connectors == 1:
+            axes = [axes]
 
-        waveforms_split = self.split_det_data(self.waveforms, self.feu_connectors, to_connectors=True)
+        if self.connector_channels is not None:
+            waveforms_split_hold = self.waveforms
+            # split into connectors based on the length of each array in the connector_channels dictionary
+            waveforms_split = []
+            channel_index = 0
+            for connector, channels in self.connector_channels.items():
+                waveforms_split.append(waveforms_split_hold[:, channel_index:channel_index + len(channels)])
+                channel_index += len(channels)
+        else:
+            waveforms_split = self.split_det_data(self.waveforms, self.feu_connectors, to_connectors=True)
         min_amp, max_amp = 0, 100
 
         for connector_i, (ax, waveform_connector) in enumerate(zip(axes, waveforms_split)):
