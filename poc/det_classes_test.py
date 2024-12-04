@@ -26,24 +26,26 @@ from Measure import Measure
 
 
 def main():
-    base_dir = 'F:/Saclay/cosmic_data/'
-    det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    out_dir = 'F:/Saclay/Analysis/Cosmic Bench/10-2-24/'
-    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
-    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/9-11-24/'
+    # base_dir = 'F:/Saclay/cosmic_data/'
+    # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # out_dir = 'F:/Saclay/Analysis/Cosmic Bench/10-2-24/'
+    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/12-3-24/'
     # run_name = 'new_strip_check_7-12-24'
     # run_name = 'ig1_test1'
-    # run_name = 'banco_flipped_7-8-24'
+    run_name = 'banco_flipped_7-8-24'
     # run_name = 'ig1_sg1_stats4'
-    run_name = 'sg1_stats_7-26-24'
+    # run_name = 'sg1_stats_7-26-24'
+    # run_name = 'urw_stats_10-31-24'
     run_dir = f'{base_dir}{run_name}/'
     # sub_run_name = 'hv1'
     # sub_run_name = 'new_detector_short'
     # sub_run_name = 'drift_600_resist_460'
     # sub_run_name = 'quick_test'
-    # sub_run_name = 'max_hv_long'
-    sub_run_name = 'max_hv_long_1'
+    sub_run_name = 'max_hv_long'
+    # sub_run_name = 'max_hv_long_1'
+    # sub_run_name = 'long_run'
 
     # det_single = 'asacusa_strip_1'
     # det_single = 'asacusa_strip_2'
@@ -54,17 +56,20 @@ def main():
     # det_single = None
 
     # file_nums = 'all'
+    file_nums = list(range(0, 25))
     # file_nums = list(range(0, 645))
-    file_nums = list(range(0, 100))
+    # file_nums = list(range(0, 100))
     # file_nums = list(range(100, 200))
     # file_nums = list(range(100, 500))
     # file_nums = list(range(100, 110))
 
-    chunk_size = 100  # Number of files to process at once
+    # chunk_size = 100  # Number of files to process at once
+    chunk_size = 7  # Number of files to process at once
 
-    read_good_banco_triggers = True  # If True, read good banco triggers from file, if False, get them from BancoTelescope
-    realign_banco = False  # If False, read alignment from file, if True, realign Banco telescope
-    realign_dream = False  # If False, read alignment from file, if True, realign Dream detector
+    read_good_banco_triggers = False  # If True, read good banco triggers from file, if False, get them from BancoTelescope
+    realign_banco = True  # If False, read alignment from file, if True, realign Banco telescope
+    realign_dream = True  # If False, read alignment from file, if True, realign Dream detector
+    banco_filtered = False  # If True, use filtered data, if False, use full data root file
 
     banco_event_ns = [3]
 
@@ -105,7 +110,7 @@ def main():
     banco_triggers = None
     if read_good_banco_triggers:
         banco_triggers = banco_telescope.read_good_n_ladder_event_nums_from_file(f'{select_triggers_dir}good_n_ladder_event_nums.csv', banco_event_ns)
-    banco_telescope.read_data(ray_data, filtered=True, trigger_list=banco_triggers)
+    banco_telescope.read_data(ray_data, filtered=banco_filtered, trigger_list=banco_triggers)
     # triggers = banco_telescope.get_all_banco_traversing_triggers(ray_data)
     # with open(f'{banco_data_dir}banco_triggers.txt', 'w') as file:
     #     for trigger in triggers:
@@ -234,6 +239,7 @@ def main():
             else:
                 det.read_det_alignment_from_file(alignment_file)
             plot_ray_hits_2d(det, ray_data)
+            plt.show()
 
             # sub_centroids, sub_triggers = det.get_sub_centroids_coords()
             # weird_trigger = None
@@ -429,6 +435,14 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
         if in_det:
             x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+
+        # Sort sub_triggers and sub_centroids together by sub_trigger
+        sub_triggers, sub_centroids = zip(*sorted(zip(sub_triggers, sub_centroids)))
+        sub_centroids, sub_triggers = np.array(sub_centroids), np.array(sub_triggers)
+
+        # Sort x_rays, y_rays, and event_num_rays by event_num_rays
+        event_num_rays, x_rays, y_rays = zip(*sorted(zip(event_num_rays, x_rays, y_rays)))
+        event_num_rays, x_rays, y_rays = np.array(event_num_rays), np.array(x_rays), np.array(y_rays)
 
         # Find indices of sub_triggers in event_num_rays
         matched_indices = np.in1d(np.array(sub_triggers), np.array(event_num_rays)).nonzero()[0]
