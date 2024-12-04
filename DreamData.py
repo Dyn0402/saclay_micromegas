@@ -43,6 +43,7 @@ class DreamData:
             # self.waveform_fit_func = 'waveform_func'
             self.waveform_fit_func = 'max_sample'
             # self.waveform_fit_func = 'parabola'
+            # self.waveform_fit_func = 'parabola_vectorized'
             # self.waveform_fit_func = 'gaus'
         else:
             self.waveform_fit_func = waveform_fit_func
@@ -117,6 +118,8 @@ class DreamData:
 
     def get_noise_thresholds(self, noise_sigmas=5):
         self.noise_thresholds = get_noise_thresholds(self.ped_sigmas, noise_sigmas)
+        if self.connector_channels is not None:
+            self.noise_thresholds = self.get_connector_channels(self.noise_thresholds)
 
     def read_data(self, file_nums=None, chunk_size=100, trigger_list=None, hist_raw_amps=False, save_waveforms=False):
         if self.data_dir is None:
@@ -159,7 +162,6 @@ class DreamData:
                     if self.connector_channels is not None:
                         data_i = self.get_connector_channels(data_i)
                     self.data.append(data_i)
-                    print(f'data_i shape: {data_i.shape}')
                     self.event_nums.append(event_nums)
                     self.fine_time_stamps.append(ft_stamps)
                     if hist_raw_amps:
@@ -330,8 +332,10 @@ class DreamData:
             data_channels = []
             for feu_connector, channels in self.connector_channels.items():
                 channel_offset = (feu_connector - self.starting_connector) * self.channels_per_connector
-                data_channels.append(det_data[:, channels + channel_offset])
-                # print(f'det_data shape: {det_data.shape}, det_data[:, channels + channel_offset].shape: {det_data[:, channels + channel_offset].shape}')
+                if det_data.ndim == 1:
+                    data_channels.append(det_data[channels + channel_offset])
+                elif det_data.ndim >= 2:
+                    data_channels.append(det_data[:, channels + channel_offset])
             return np.concatenate(data_channels)
         else:
             return det_data

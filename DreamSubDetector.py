@@ -19,7 +19,7 @@ class DreamSubDetector:
         self.x_chans, self.y_chans = None, None
         self.x_amps, self.y_amps = None, None
         self.x_hits, self.y_hits = None, None
-        selx.x_times, self.y_times = None, None
+        self.x_times, self.y_times = None, None
         self.x_cluster_triggers, self.y_cluster_triggers = None, None
         self.x_clusters, self.y_clusters = None, None
         self.x_cluster_sizes, self.y_cluster_sizes = None, None

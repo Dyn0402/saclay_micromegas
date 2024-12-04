@@ -147,13 +147,13 @@ class Detector:
     def write_det_alignment_to_file(self, file_path):
         with open(file_path, 'w') as file:
             file.write(f'name: {self.name}\n')
-            file.write(f'det_center_coords: {list(self.center)}\n')
-            file.write(f'det_size: {list(self.size)}\n')
-            file.write(f'det_active_size: {list(self.active_size)}\n')
+            file.write(f'det_center_coords: {[float(center) for center in self.center]}\n')
+            file.write(f'det_size: {[float(size) for size in self.size]}\n')
+            file.write(f'det_active_size: {[float(size) for size in self.active_size]}\n')
             file.write('det_orientation:\n')
             file.write(f'euler_rotation_order: {self.euler_rotation_order}\n')
             for rotation_i, rotation in enumerate(self.rotations):
-                file.write(f'rotation {rotation_i}: {rotation}\n')
+                file.write(f'rotation {rotation_i}: {[float(rot) for rot in rotation]}\n')
 
     def read_det_alignment_from_file(self, file_path):
         with open(file_path, 'r') as file:
