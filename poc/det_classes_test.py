@@ -370,10 +370,12 @@ def main():
     print('donzo')
 
 
-def align_dream(det, ray_data, z_range):
+def align_dream(det, ray_data, z_range=None, z_rot_range=None):
     x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
     det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
 
+    if z_range is None:
+        z_range = [5, 5]
     zs = np.linspace(det.center[2] - z_range[0], det.center[2] + z_range[1], 30)
     # zs = [det.center[2]]
     x_residuals, y_residuals = [], []
@@ -399,7 +401,9 @@ def align_dream(det, ray_data, z_range):
 
     det.set_center(z=z_min)
 
-    z_rots = np.linspace(-1, 1, 30)
+    if z_rot_range is None:
+        z_rot_range = [-1, 1]
+    z_rots = np.linspace(z_rot_range[0], z_rot_range[1], 30)
     x_residuals, y_residuals = [], []
     det.add_rotation(0, 'z')
     for z_rot in z_rots:
@@ -435,6 +439,9 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
         if in_det:
             x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+
+        if event_num_rays is None or len(event_num_rays) == 0:
+            continue
 
         # Sort sub_triggers and sub_centroids together by sub_trigger
         sub_triggers, sub_centroids = zip(*sorted(zip(sub_triggers, sub_centroids)))
@@ -767,6 +774,11 @@ def plot_xy_residuals_2d(xs_ref, ys_ref, xs_meas, ys_meas, title_post=None):
     n_bins = len(x_res) // 5 if len(x_res) // 5 < 200 else 200
     n_bins = 10 if n_bins < 10 else n_bins
     x_popt, y_popt, x_perr, y_perr = fit_residuals_return_err(x_res, y_res, n_bins)
+
+
+    if x_popt is None or y_popt is None or x_perr is None or y_perr is None:
+        print(f'Error fitting residuals for {title_post}')
+        return
 
     x_fit_str = f'Mean={Measure(x_popt[1], x_perr[1]) * 1000}μm\nWidth={Measure(x_popt[2], x_perr[2]) * 1000}μm'
     y_fit_str = f'Mean={Measure(y_popt[1], y_perr[1]) * 1000}μm\nWidth={Measure(y_popt[2], y_perr[2]) * 1000}μm'
