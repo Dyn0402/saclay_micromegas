@@ -386,8 +386,9 @@ def align_dream(det, ray_data, z_range=None, z_rot_range=None):
         x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data, plot=False)
         x_residuals.append(x_res_i_std)
         y_residuals.append(y_res_i_std)
-    min_res = np.min(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))
-    z_min = zs[np.argmin(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))]
+    r_res = np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2)
+    min_res = np.min(r_res)
+    z_min = zs[np.argmin(r_res)]
     fig, ax = plt.subplots()
     ax.plot(zs, x_residuals, label='X Residuals')
     ax.plot(zs, y_residuals, label='Y Residuals')
@@ -412,8 +413,9 @@ def align_dream(det, ray_data, z_range=None, z_rot_range=None):
         x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std = get_residuals(det, ray_data)
         x_residuals.append(x_res_i_std)
         y_residuals.append(y_res_i_std)
-    min_rot_res = np.min(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))
-    z_rot_min = z_rots[np.argmin(np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2))]
+    r_res = np.sqrt(np.array(x_residuals) ** 2 + np.array(y_residuals) ** 2)
+    min_rot_res = np.min(r_res)
+    z_rot_min = z_rots[np.argmin(r_res)]
     fig, ax = plt.subplots()
     ax.plot(z_rots, x_residuals, label='X Residuals')
     ax.plot(z_rots, y_residuals, label='Y Residuals')
@@ -669,7 +671,7 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
     if in_det:
         x_bnds = det.center[0] - det.size[0] / 2, det.center[0] + det.size[0] / 2
         y_bnds = det.center[1] - det.size[1] / 2, det.center[1] + det.size[1] / 2
-        ray_traversing_triggers = ray_data.get_traversing_triggers(det.center[2], x_bnds, y_bnds, expansion_factor=0.5)
+        ray_traversing_triggers = ray_data.get_traversing_triggers(det.center[2], x_bnds, y_bnds, expansion_factor=0.1)
         trigger_indices = np.in1d(np.array(event_num_rays_all), np.array(ray_traversing_triggers)).nonzero()[0]
         event_num_rays_all = event_num_rays_all[trigger_indices]
         x_rays_all, y_rays_all = x_rays_all[trigger_indices], y_rays_all[trigger_indices]
@@ -724,9 +726,16 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
                 x_misses.append(x_ray)
                 y_misses.append(y_ray)
 
+        # Get corners of active area
+        corners = [[0, 0, 0], [0, det.active_size[1], 0], [det.active_size[0], det.active_size[1], 0],
+                   [det.active_size[0], 0, 0], [0, 0, 0]]
+        corners = det.convert_coords_to_global(corners)
+
         fig, ax = plt.subplots()
         ax.scatter(x_misses, y_misses, color='red', label='Misses', marker='.', alpha=0.2)
         ax.scatter(x_hits, y_hits, color='blue', label='Hits', marker='.', alpha=0.2)
+        # Make a thin box around active area based on det.active_size
+        ax.plot([corner[0] for corner in corners], [corner[1] for corner in corners], color='black', linewidth=2)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.legend()
@@ -753,6 +762,8 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         # Plot efficiency map
         fig, ax = plt.subplots()
         c = ax.pcolormesh(x_edges, y_edges, efficiency.T, cmap='jet', shading='auto')
+        # Make a thin box around active area based on det.active_size
+        ax.plot([corner[0] for corner in corners], [corner[1] for corner in corners], color='white', linewidth=0.5)
         fig.colorbar(c, ax=ax, label='Efficiency')
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
@@ -762,6 +773,8 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         # Plot total hits and misses for statistics
         fig, ax = plt.subplots()
         c = ax.pcolormesh(x_edges, y_edges, hist_total.T, cmap='jet', shading='auto')
+        # Make a thin box around active area based on det.active_size
+        ax.plot([corner[0] for corner in corners], [corner[1] for corner in corners], color='white', linewidth=2)
         fig.colorbar(c, ax=ax, label='Number of Rays')
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
@@ -1102,7 +1115,12 @@ def plot_ray_hits_2d(det, ray_data):
     ax.set_xlabel('X (mm)')
     ax.set_ylabel('Y (mm)')
     # Draw a thin square at -100, -100, 100, 100
-    ax.plot([-100, 100, 100, -100, -100], [-100, -100, 100, 100, -100], color='black', linewidth=0.5)
+    # ax.plot([-100, 100, 100, -100, -100], [-100, -100, 100, 100, -100], color='black', linewidth=0.5)
+    # Make a thin box around active area based on det.active_size
+    corners = [[0, 0, 0], [0, det.active_size[1], 0], [det.active_size[0], det.active_size[1], 0], [det.active_size[0], 0, 0], [0, 0, 0]]
+    corners = det.convert_coords_to_global(corners)
+    ax.plot([corner[0] for corner in corners], [corner[1] for corner in corners], color='black', linewidth=0.5)
+
     ax.scatter(all_x_rays, all_y_rays, marker='o', color='blue', alpha=0.05)
     ax.scatter(0, 0, marker='x', color='red')
     text = f'{len(all_x_rays)} hits'
