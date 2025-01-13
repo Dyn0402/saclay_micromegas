@@ -62,6 +62,16 @@ class DreamDetector(Detector):
 
         if 'det_map' in self.config:
             self.det_map = split_neighbors(self.config['det_map'], starting_connector=min(self.feu_connectors))
+            # Center gerber coordinates such that (0, 0) is bottom left corner on maxes/mins of xs_gerber and ys_gerber
+            x_min = min(xs.min() for xs in self.det_map['xs_gerber'])
+            x_max = max(xs.max() for xs in self.det_map['xs_gerber'])
+            self.det_map['xs_gerber'] = self.det_map['xs_gerber'].apply(lambda x: x - x_min)
+
+            y_min = min(ys.min() for ys in self.det_map['ys_gerber'])
+            y_max = max(ys.max() for ys in self.det_map['ys_gerber'])
+            self.det_map['ys_gerber'] = self.det_map['ys_gerber'].apply(lambda y: y - y_min)
+
+            self.active_size = np.array([x_max - x_min, y_max - y_min, self.active_size[2]])
 
         if 'hvs' in self.config:
             self.hv = self.config['hvs']
