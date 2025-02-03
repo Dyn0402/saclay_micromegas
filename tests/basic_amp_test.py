@@ -25,9 +25,11 @@ def main():
     feu_connectors = [1, 2, 3, 4, 5, 6, 7, 8]
 
     if fdf_path is not None:
+        os.chdir(os.path.dirname(fdf_path.split('/')[0]))
         root_path = decode_fdf(fdf_path, decode_exe_path)
         root_path = convert_to_array(root_path, convert_exe_path)
 
+    os.chdir(os.path.dirname(root_path.split('/')[0]))
     root_dir = os.path.dirname(root_path)
     data = DreamData(root_dir, feu_number, feu_connectors)
     data.plot_amplitudes_vs_strip()
