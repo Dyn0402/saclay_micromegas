@@ -8,18 +8,9 @@ Created as saclay_micromegas/cosmic_test.py
 @author: Dylan Neff, Dylan
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-import pandas as pd
 
-from scipy.optimize import curve_fit as cf
 from scipy.stats import skewnorm
-
-import uproot
-import awkward as ak
-
-from Measure import Measure
 
 from fe_analysis import *
 

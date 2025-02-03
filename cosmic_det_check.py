@@ -8,17 +8,9 @@ Created as saclay_micromegas/cosmic_det_check.py
 @author: Dylan Neff, Dylan
 """
 
-
-import os
-
-import numpy as np
-import uproot
-import awkward as ak
 import vector
 
 import json
-
-from Measure import Measure
 
 from fe_analysis import *
 
