@@ -8,19 +8,12 @@ Created as saclay_micromegas/det_quick_read
 @author: Dylan Neff, dn277127
 """
 
-import os
-
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.optimize import curve_fit as cf
-from scipy.stats import skewnorm, alpha
 
-from M3RefTracking import M3RefTracking
-from DetectorConfigLoader import DetectorConfigLoader
-from Detector import Detector
-from DreamDetector import DreamDetector
-from DreamData import DreamData
+from Detector_Classes.M3RefTracking import M3RefTracking
+from Detector_Classes.DetectorConfigLoader import DetectorConfigLoader
+from Detector_Classes.DreamDetector import DreamDetector
 
 
 def main():

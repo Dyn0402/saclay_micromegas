@@ -11,17 +11,15 @@ import os
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.optimize import curve_fit as cf
-from scipy.stats import skewnorm, alpha
+from scipy.stats import skewnorm
 
-from M3RefTracking import M3RefTracking
-from DetectorConfigLoader import DetectorConfigLoader
-from Detector import Detector
-from DreamDetector import DreamDetector
-from DreamData import DreamData
-from BancoTelescope import BancoTelescope
-from BancoLadder import BancoLadder
+from Detector_Classes.M3RefTracking import M3RefTracking
+from Detector_Classes.DetectorConfigLoader import DetectorConfigLoader
+from Detector_Classes.Detector import Detector
+from Detector_Classes.DreamDetector import DreamDetector
+from Detector_Classes.DreamData import DreamData
+from Detector_Classes.BancoTelescope import BancoTelescope
 from Measure import Measure
 
 

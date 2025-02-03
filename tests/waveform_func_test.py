@@ -8,7 +8,7 @@ Created as saclay_micromegas/waveform_func_test
 @author: Dylan Neff, dn277127
 """
 
-from DreamData import waveform_func, waveform_func_reparam
+from Detector_Classes.DreamData import waveform_func, waveform_func_reparam
 
 import numpy as np
 import matplotlib.pyplot as plt

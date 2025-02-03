@@ -8,10 +8,8 @@ Created as saclay_micromegas/dream_map_tests.py
 @author: Dylan Neff, Dylan
 """
 
-import numpy as np
-
-from DetectorConfigLoader import load_det_map
-from DreamDetector import split_neighbors
+from Detector_Classes.DetectorConfigLoader import load_det_map
+from Detector_Classes.DreamDetector import split_neighbors
 
 
 def main():

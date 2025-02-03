@@ -8,10 +8,7 @@ Created as saclay_micromegas/banco_rotation_tests.py
 @author: Dylan Neff, Dylan
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
-
-from BancoLadder import BancoLadder
+from Detector_Classes.BancoLadder import BancoLadder
 
 
 def main():

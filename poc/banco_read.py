@@ -11,17 +11,14 @@ Created as saclay_micromegas/banco_read.py
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
 from scipy.optimize import curve_fit as cf
-from scipy.optimize import minimize
 
 import uproot
-import awkward as ak
 import vector
 
 from cosmic_det_check import get_det_data, get_xy_positions
-from BancoLadder import BancoLadder
-from M3RefTracking import M3RefTracking
+from Detector_Classes.BancoLadder import BancoLadder
+from Detector_Classes.M3RefTracking import M3RefTracking
 
 
 def main():

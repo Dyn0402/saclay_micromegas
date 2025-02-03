@@ -8,19 +8,14 @@ Created as saclay_micromegas/detector_characterization.py
 @author: Dylan Neff, Dylan
 """
 
-import os
-
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.optimize import curve_fit as cf
-from scipy.stats import skewnorm, alpha
 
-from M3RefTracking import M3RefTracking
-from DetectorConfigLoader import DetectorConfigLoader
-from Detector import Detector
-from DreamDetector import DreamDetector
-from DreamData import DreamData
+from Detector_Classes.M3RefTracking import M3RefTracking
+from Detector_Classes.DetectorConfigLoader import DetectorConfigLoader
+from Detector_Classes.Detector import Detector
+from Detector_Classes.DreamDetector import DreamDetector
+from Detector_Classes.DreamData import DreamData
 
 from det_classes_test import plot_ray_hits_2d
 

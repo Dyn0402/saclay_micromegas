@@ -14,7 +14,7 @@ import json
 
 import awkward as ak
 
-from M3RefTracking import M3RefTracking
+from Detector_Classes.M3RefTracking import M3RefTracking
 
 
 def main():
