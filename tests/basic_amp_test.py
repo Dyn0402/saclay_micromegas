@@ -17,17 +17,18 @@ from DreamData import DreamData
 
 
 def main():
-    fdf_path = '/local/home/banco/dylan/tests/audrey_test/'  # If going from fdf, set path here and make root_path None
-    root_path = None  # If going from root, set path here and make fdf_path None
+    fdf_dir = '/local/home/banco/dylan/tests/audrey_test/'  # If going from fdf, set path here and make root_path None
+    root_path = None  # If going from root, set path here and make fdf_dir None
     decode_exe_path = '/local/home/banco/dylan/decode/decode'
     convert_exe_path = '/local/home/banco/dylan/decode/convert_vec_tree_to_array'
     feu_number = 5
     feu_connectors = [1, 2, 3, 4, 5, 6, 7, 8]
 
-    if fdf_path is not None:
-        os.chdir(os.path.dirname(fdf_path))
-        for file in os.listdir(os.path.dirname(fdf_path)):
+    if fdf_dir is not None:
+        os.chdir(os.path.dirname(fdf_dir))
+        for file in os.listdir(os.path.dirname(fdf_dir)):
             if file.endswith('.fdf'):
+                fdf_path = fdf_dir + file
                 root_path = decode_fdf(fdf_path, decode_exe_path)
                 root_path = convert_to_array(root_path, convert_exe_path)
 
@@ -37,6 +38,8 @@ def main():
     data.read_data()
     data.plot_hits_vs_strip()
     data.plot_amplitudes_vs_strip()
+
+    plt.show()
 
     print('donzo')
 
