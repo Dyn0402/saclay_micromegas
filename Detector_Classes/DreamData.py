@@ -142,8 +142,11 @@ class DreamData:
                 mask = np.isin(data_event_nums, select_triggers)
                 data_raw, data_event_nums, data_ft_stamp = data_raw[mask], data_event_nums[mask], data_ft_stamp[mask]
             data_raw = self.split_det_data(data_raw, self.feu_connectors, starting_connector=1, to_connectors=False)
-            data = self.subtract_common_noise(data_raw, self.ped_means)
-            data = subtract_pedestal(data, self.ped_means)
+            if self.ped_means is not None:
+                data = self.subtract_common_noise(data_raw, self.ped_means)
+                data = subtract_pedestal(data, self.ped_means)
+            else:
+                data = data_raw
             return data, data_raw, data_event_nums, data_ft_stamp
 
         print('Reading in data...')
