@@ -17,7 +17,7 @@ from DreamData import DreamData
 
 
 def main():
-    fdf_path = '/local/home/banco/dylan/tests/audrey_test/selfTPOTFe_testrdmKel_datrun_250129_17H08_000_05.fdf'  # If going from fdf, set path here and make root_path None
+    fdf_path = '/local/home/banco/dylan/tests/audrey_test/'  # If going from fdf, set path here and make root_path None
     root_path = None  # If going from root, set path here and make fdf_path None
     decode_exe_path = '/local/home/banco/dylan/decode/decode'
     convert_exe_path = '/local/home/banco/dylan/decode/convert_vec_tree_to_array'
@@ -26,12 +26,14 @@ def main():
 
     if fdf_path is not None:
         os.chdir(os.path.dirname(fdf_path))
-        root_path = decode_fdf(fdf_path, decode_exe_path)
-        root_path = convert_to_array(root_path, convert_exe_path)
+        for file in os.listdir(os.path.dirname(fdf_path)):
+            if file.endswith('.fdf'):
+                root_path = decode_fdf(fdf_path, decode_exe_path)
+                root_path = convert_to_array(root_path, convert_exe_path)
 
     os.chdir(os.path.dirname(root_path))
     root_dir = os.path.dirname(root_path)
-    data = DreamData(root_dir, feu_number, feu_connectors)
+    data = DreamData(root_dir, feu_number, feu_connectors, ped_dir=root_dir)
     data.read_data()
     data.plot_hits_vs_strip()
     data.plot_amplitudes_vs_strip()
