@@ -8,7 +8,10 @@ Created as saclay_micromegas/basic_amp_test
 @author: Dylan Neff, dn277127
 """
 
+import sys
 import os
+
+sys.path.append(os.path.abspath("../Detector_Classes"))
 
 from Detector_Classes.DreamData import DreamData
 
