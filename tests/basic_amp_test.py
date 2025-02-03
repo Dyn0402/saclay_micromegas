@@ -13,7 +13,7 @@ import os
 
 sys.path.append(os.path.abspath("../Detector_Classes"))
 
-from Detector_Classes.DreamData import DreamData
+from DreamData import DreamData
 
 
 def main():
