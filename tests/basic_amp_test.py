@@ -38,6 +38,7 @@ def main():
     root_dir = os.path.dirname(root_path)
     data = DreamData(root_dir, feu_number, feu_connectors, ped_dir=root_dir)
     data.read_data()
+    data.plot_pedestals()
     data.plot_hits_vs_strip()
     data.plot_amplitudes_vs_strip()
 
