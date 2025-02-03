@@ -11,6 +11,8 @@ Created as saclay_micromegas/basic_amp_test
 import sys
 import os
 
+import matplotlib.pyplot as plt
+
 sys.path.append(os.path.abspath("../Detector_Classes"))
 
 from DreamData import DreamData
