@@ -17,7 +17,7 @@ from DreamData import DreamData
 
 
 def main():
-    fdf_path = '/local/home/banco/dylan/tests/audrey_test/'  # If going from fdf, set path here and make root_path None
+    fdf_path = '/local/home/banco/dylan/tests/audrey_test/selfTPOTFe_testrdmKel_datrun_250129_17H05_000_05.fdf'  # If going from fdf, set path here and make root_path None
     root_path = None  # If going from root, set path here and make fdf_path None
     decode_exe_path = '/local/home/banco/dylan/decode/decode'
     convert_exe_path = '/local/home/banco/dylan/decode/convert_vec_tree_to_array'
