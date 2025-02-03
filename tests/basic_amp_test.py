@@ -32,6 +32,8 @@ def main():
     os.chdir(os.path.dirname(root_path))
     root_dir = os.path.dirname(root_path)
     data = DreamData(root_dir, feu_number, feu_connectors)
+    data.read_data()
+    data.plot_hits_vs_strip()
     data.plot_amplitudes_vs_strip()
 
     print('donzo')
