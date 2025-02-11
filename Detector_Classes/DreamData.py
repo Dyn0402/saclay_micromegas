@@ -169,10 +169,7 @@ class DreamData:
                     self.fine_time_stamps.append(ft_stamps)
                     if hist_raw_amps:
                         n_events, n_channels, n_samples = data_raw_i.shape
-                        print(f'data_raw_i shape: {data_raw_i.shape}')
                         data_raw_i = data_raw_i.transpose(1, 0, 2).reshape(n_channels, n_events * n_samples)
-                        print(f'data_raw_i shape: {data_raw_i.shape}')
-                        print(f'data_raw_i[0:, 0].shape: {data_raw_i[:, 0].shape}')
                         bins_y = np.arange(-0.5, 4096.5, 50)
                         bins_x = np.arange(-0.5, n_channels + 0.5, 1)
 

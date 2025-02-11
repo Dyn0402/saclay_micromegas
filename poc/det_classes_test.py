@@ -727,6 +727,13 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
                     detector_y_hits[event_num_indices[0]] = True
 
     if plot:
+        # Get corners of active area
+        corners = [[0, 0, 0], [0, det.active_size[1], 0], [det.active_size[0], det.active_size[1], 0],
+                   [det.active_size[0], 0, 0], [0, 0, 0]]
+        corners = det.convert_coords_to_global(corners)
+        x_min, x_max = min([corner[0] for corner in corners]), max([corner[0] for corner in corners])
+        y_min, y_max = min([corner[1] for corner in corners]), max([corner[1] for corner in corners])
+
         # Plot blue circles for hits, red for misses. Split into two lists for hits and misses
         x_hits, y_hits, x_misses, y_misses = [], [], [], []
         x_1d_hits, y_1d_hits, x_1d_misses, y_1d_misses = [], [], [], []
@@ -737,19 +744,16 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
             else:
                 x_misses.append(x_ray)
                 y_misses.append(y_ray)
-            if hit_x:
-                x_1d_hits.append(x_ray)
-            else:
-                x_1d_misses.append(x_ray)
-            if hit_y:
-                y_1d_hits.append(y_ray)
-            else:
-                y_1d_misses.append(y_ray)
-
-        # Get corners of active area
-        corners = [[0, 0, 0], [0, det.active_size[1], 0], [det.active_size[0], det.active_size[1], 0],
-                   [det.active_size[0], 0, 0], [0, 0, 0]]
-        corners = det.convert_coords_to_global(corners)
+            if x_min <= x_ray <= x_max:
+                if hit_x:
+                    x_1d_hits.append(x_ray)
+                else:
+                    x_1d_misses.append(x_ray)
+            if y_min <= y_ray <= y_max:
+                if hit_y:
+                    y_1d_hits.append(y_ray)
+                else:
+                    y_1d_misses.append(y_ray)
 
         fig, ax = plt.subplots()
         ax.scatter(x_misses, y_misses, color='red', label='Misses', marker='.', alpha=0.2)
