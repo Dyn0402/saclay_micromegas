@@ -675,6 +675,7 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         x_rays_all, y_rays_all = x_rays_all[trigger_indices], y_rays_all[trigger_indices]
     print(f'All rays: {len(x_rays_all)}')
     detector_hits = [False] * len(x_rays_all)
+    detector_x_hits, detector_y_hits = [False] * len(x_rays_all), [False] * len(x_rays_all)
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
@@ -705,24 +706,45 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         r_res_i = np.sqrt(x_res_i ** 2 + y_res_i ** 2)
 
         # For each r_res_i, if r_res_i < hit_dist, it is a hit. Update detector_hits for this trigger
-        for i, r_res in enumerate(r_res_i):
+        for i, (r_res, x_res, y_res) in enumerate(zip(r_res_i, x_res_i, y_res_i)):
             if r_res < hit_dist:
                 event_num_indices = np.where(event_num_rays_all == event_num_rays[i])[0]
                 if len(event_num_indices) != 1:
                     print(f'Bad event num indices: {event_num_indices}')
                 else:
                     detector_hits[event_num_indices[0]] = True
+            if x_res < hit_dist:
+                event_num_indices = np.where(event_num_rays_all == event_num_rays[i])[0]
+                if len(event_num_indices) != 1:
+                    print(f'Bad event num indices: {event_num_indices}')
+                else:
+                    detector_x_hits[event_num_indices[0]] = True
+            if y_res < hit_dist:
+                event_num_indices = np.where(event_num_rays_all == event_num_rays[i])[0]
+                if len(event_num_indices) != 1:
+                    print(f'Bad event num indices: {event_num_indices}')
+                else:
+                    detector_y_hits[event_num_indices[0]] = True
 
     if plot:
         # Plot blue circles for hits, red for misses. Split into two lists for hits and misses
         x_hits, y_hits, x_misses, y_misses = [], [], [], []
-        for x_ray, y_ray, hit in zip(x_rays_all, y_rays_all, detector_hits):
+        x_1d_hits, y_1d_hits, x_1d_misses, y_1d_misses = [], [], [], []
+        for x_ray, y_ray, hit, hit_x, hit_y in zip(x_rays_all, y_rays_all, detector_hits, detector_x_hits, detector_y_hits):
             if hit:
                 x_hits.append(x_ray)
                 y_hits.append(y_ray)
             else:
                 x_misses.append(x_ray)
                 y_misses.append(y_ray)
+            if hit_x:
+                x_1d_hits.append(x_ray)
+            else:
+                x_1d_misses.append(x_ray)
+            if hit_y:
+                y_1d_hits.append(y_ray)
+            else:
+                y_1d_misses.append(y_ray)
 
         # Get corners of active area
         corners = [[0, 0, 0], [0, det.active_size[1], 0], [det.active_size[0], det.active_size[1], 0],
@@ -743,6 +765,9 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         # Combine hits and misses to find the grid boundaries
         x_all = np.array(x_hits + x_misses)
         y_all = np.array(y_hits + y_misses)
+
+        x_1d_all = np.array(x_1d_hits + x_1d_misses)
+        y_1d_all = np.array(y_1d_hits + y_1d_misses)
 
         # Define grid resolution
         grid_x_bins = np.arange(x_all.min(), x_all.max() + grid_size, grid_size)
@@ -778,6 +803,46 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         ax.set_ylabel('y (mm)')
         ax.set_title('Ray Statistics Map')
         fig.tight_layout()
+
+        # Histogram 1D hits/misses with numpy then plot
+        histx_1d_hits, x_bins = np.histogram(x_1d_hits, bins=grid_x_bins)
+        histx_1d_total, _ = np.histogram(x_1d_all, bins=grid_x_bins)
+        histy_1d_hits, y_bins = np.histogram(y_1d_hits, bins=grid_y_bins)
+        histy_1d_total, _ = np.histogram(y_1d_all, bins=grid_y_bins)
+
+        efficiencyx_1d = np.divide(histx_1d_hits, histx_1d_total, out=np.zeros_like(histx_1d_hits, dtype=float), where=histx_1d_total > 0)
+        efficiencyy_1d = np.divide(histy_1d_hits, histy_1d_total, out=np.zeros_like(histy_1d_hits, dtype=float), where=histy_1d_total > 0)
+
+        fig, ax = plt.subplots()
+        ax.plot(x_bins[:-1], efficiencyx_1d, color='blue', label='Efficiency X')
+        ax.set_xlabel('Position (mm)')
+        ax.set_ylabel('Efficiency')
+        ax.legend()
+        ax.set_title('1D Efficiency X')
+
+        fig, ax = plt.subplots()
+        ax.plot(y_bins[:-1], efficiencyy_1d, color='red', label='Efficiency Y')
+        ax.set_xlabel('Position (mm)')
+        ax.set_ylabel('Efficiency')
+        ax.legend()
+        ax.set_title('1D Efficiency Y')
+
+        # Plot 1D histograms of hits and total
+        fig, ax = plt.subplots()
+        ax.plot(x_bins[:-1], histx_1d_hits, color='blue', label='Hits X')
+        ax.plot(x_bins[:-1], histx_1d_total, color='blue', linestyle='--', label='Total X')
+        ax.set_xlabel('Position (mm)')
+        ax.set_ylabel('Counts')
+        ax.legend()
+        ax.set_title('1D Hits X')
+
+        fig, ax = plt.subplots()
+        ax.plot(y_bins[:-1], histy_1d_hits, color='red', label='Hits Y')
+        ax.plot(y_bins[:-1], histy_1d_total, color='red', linestyle='--', label='Total Y')
+        ax.set_xlabel('Position (mm)')
+        ax.set_ylabel('Counts')
+        ax.legend()
+        ax.set_title('1D Hits Y')
 
 
 def fit_residuals(x_res, y_res, n_bins=200):
