@@ -736,7 +736,8 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
 
         # Plot blue circles for hits, red for misses. Split into two lists for hits and misses
         x_hits, y_hits, x_misses, y_misses = [], [], [], []
-        x_1d_hits, y_1d_hits, x_1d_misses, y_1d_misses = [], [], [], []
+        x_hits_xs, y_hits_ys, x_misses_xs, y_misses_ys = [], [], [], []
+        x_hits_ys, y_hits_xs, x_misses_ys, y_misses_xs = [], [], [], []
         for x_ray, y_ray, hit, hit_x, hit_y in zip(x_rays_all, y_rays_all, detector_hits, detector_x_hits, detector_y_hits):
             if hit:
                 x_hits.append(x_ray)
@@ -746,14 +747,18 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
                 y_misses.append(y_ray)
             if x_min <= x_ray <= x_max:
                 if hit_x:
-                    x_1d_hits.append(x_ray)
+                    x_hits_xs.append(x_ray)
+                    x_hits_ys.append(y_ray)
                 else:
-                    x_1d_misses.append(x_ray)
+                    x_misses_xs.append(x_ray)
+                    x_misses_ys.append(y_ray)
             if y_min <= y_ray <= y_max:
                 if hit_y:
-                    y_1d_hits.append(y_ray)
+                    y_hits_ys.append(y_ray)
+                    y_hits_xs.append(x_ray)
                 else:
-                    y_1d_misses.append(y_ray)
+                    y_misses_ys.append(y_ray)
+                    y_misses_xs.append(x_ray)
 
         fig, ax = plt.subplots()
         ax.scatter(x_misses, y_misses, color='red', label='Misses', marker='.', alpha=0.2)
@@ -770,8 +775,8 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         x_all = np.array(x_hits + x_misses)
         y_all = np.array(y_hits + y_misses)
 
-        x_1d_all = np.array(x_1d_hits + x_1d_misses)
-        y_1d_all = np.array(y_1d_hits + y_1d_misses)
+        x_1d_all = np.array(x_hits_xs + x_misses_xs)
+        y_1d_all = np.array(y_hits_ys + y_misses_ys)
 
         # Define grid resolution
         grid_x_bins = np.arange(x_all.min(), x_all.max() + grid_size, grid_size)
@@ -809,9 +814,9 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         fig.tight_layout()
 
         # Histogram 1D hits/misses with numpy then plot
-        histx_1d_hits, x_bins = np.histogram(x_1d_hits, bins=grid_x_bins)
+        histx_1d_hits, x_bins = np.histogram(x_hits_xs, bins=grid_x_bins)
         histx_1d_total, _ = np.histogram(x_1d_all, bins=grid_x_bins)
-        histy_1d_hits, y_bins = np.histogram(y_1d_hits, bins=grid_y_bins)
+        histy_1d_hits, y_bins = np.histogram(y_hits_ys, bins=grid_y_bins)
         histy_1d_total, _ = np.histogram(y_1d_all, bins=grid_y_bins)
 
         efficiencyx_1d = np.divide(histx_1d_hits, histx_1d_total, out=np.zeros_like(histx_1d_hits, dtype=float), where=histx_1d_total > 0)
@@ -847,6 +852,59 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
         ax.set_ylabel('Counts')
         ax.legend()
         ax.set_title('1D Hits Y')
+
+        # Plot hit/miss scatter plots for x/y 1d hits
+        fig_x_hits_misses, ax_x_hit_misses = plt.subplots()
+        ax_x_hit_misses.scatter(x_misses_xs, x_misses_ys, color='red', label='Misses', marker='.', alpha=0.2)
+        ax_x_hit_misses.scatter(x_hits_xs, x_hits_ys, color='blue', label='Hits', marker='.', alpha=0.2)
+        ax_x_hit_misses.set_xlabel('x (mm)')
+        ax_x_hit_misses.set_ylabel('y (mm)')
+        ax_x_hit_misses.legend()
+        ax_x_hit_misses.set_title('X Strips Hits and Misses')
+        fig_x_hits_misses.tight_layout()
+
+        fig_y_hits_misses, ax_y_hit_misses = plt.subplots()
+        ax_y_hit_misses.scatter(y_misses_xs, y_misses_ys, color='red', label='Misses', marker='.', alpha=0.2)
+        ax_y_hit_misses.scatter(y_hits_xs, y_hits_ys, color='blue', label='Hits', marker='.', alpha=0.2)
+        ax_y_hit_misses.set_xlabel('x (mm)')
+        ax_y_hit_misses.set_ylabel('y (mm)')
+        ax_y_hit_misses.legend()
+        ax_y_hit_misses.set_title('Y Strips Hits and Misses')
+        fig_y_hits_misses.tight_layout()
+
+        # Now make (2) 2D histograms of the X and Y hits and misses
+        print(f'len(x_hits_xs): {len(x_hits_xs)}, len(x_hits_ys): {len(x_hits_ys)}, '
+              f'len(grid_x_bins): {len(grid_x_bins)}, len(grid_y_bins): {len(grid_y_bins)}')
+        hist_x_hits, x_edges, y_edges = np.histogram2d(x_hits_xs, x_hits_ys, bins=[grid_x_bins, grid_y_bins],
+                                                     range=[[x_all.min(), x_all.max()], [y_all.min(), y_all.max()]])
+        hist_x_total, _, _ = np.histogram2d(x_1d_all, y_1d_all, bins=[grid_x_bins, grid_y_bins],
+                                            range=[[x_all.min(), x_all.max()], [y_all.min(), y_all.max()]])
+        efficiency_x = np.divide(hist_x_hits, hist_x_total, out=np.zeros_like(hist_x_hits, dtype=float), where=hist_x_total > 0)
+
+        hist_y_hits, x_edges, y_edges = np.histogram2d(y_hits_xs, y_hits_ys, bins=[grid_x_bins, grid_y_bins],
+                                                        range=[[x_all.min(), x_all.max()], [y_all.min(), y_all.max()]])
+        hist_y_total, _, _ = np.histogram2d(x_1d_all, y_1d_all, bins=[grid_x_bins, grid_y_bins],
+                                            range=[[x_all.min(), x_all.max()], [y_all.min(), y_all.max()]])
+        efficiency_y = np.divide(hist_y_hits, hist_y_total, out=np.zeros_like(hist_y_hits, dtype=float), where=hist_y_total > 0)
+
+        fig, ax = plt.subplots()
+        c = ax.pcolormesh(x_edges, y_edges, efficiency_x.T, cmap='jet', shading='auto')
+        ax.plot([corner[0] for corner in corners], [corner[1] for corner in corners], color='white', linewidth=0.5)
+        fig.colorbar(c, ax=ax, label='Efficiency')
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+        ax.set_title('X Strip Efficiency Map')
+        fig.tight_layout()
+
+        fig, ax = plt.subplots()
+        c = ax.pcolormesh(x_edges, y_edges, efficiency_y.T, cmap='jet', shading='auto')
+        ax.plot([corner[0] for corner in corners], [corner[1] for corner in corners], color='white', linewidth=0.5)
+        fig.colorbar(c, ax=ax, label='Efficiency')
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+        ax.set_title('Y Strip Efficiency Map')
+        fig.tight_layout()
+
 
 
 def fit_residuals(x_res, y_res, n_bins=200):
