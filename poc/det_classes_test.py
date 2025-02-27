@@ -962,6 +962,35 @@ def fit_residuals_return_err(x_res, y_res, n_bins=200):
         return [np.max(x_counts), np.mean(x_res), np.std(x_res)], [np.max(y_counts), np.mean(y_res), np.std(y_res)], None, None
 
 
+def get_efficiency_1d(det, ray_data, hit_dist=1000, plot=False, in_det=False, tolerance=0.0, grid_size=5):
+    """
+    Get 1D efficiency from detector hits rather than sub-detector clusters
+    Args:
+        det:
+        ray_data:
+        hit_dist:
+        plot:
+        in_det:
+        tolerance:
+        grid_size:
+
+    Returns:
+
+    """
+    x_rays_all, y_rays_all, event_num_rays_all = ray_data.get_xy_positions(det.center[2])
+    print(f'Pre-filtered rays: {len(x_rays_all)}')
+    if in_det:
+        x_bnds = det.center[0] - det.size[0] / 2, det.center[0] + det.size[0] / 2
+        y_bnds = det.center[1] - det.size[1] / 2, det.center[1] + det.size[1] / 2
+        ray_traversing_triggers = ray_data.get_traversing_triggers(det.center[2], x_bnds, y_bnds, expansion_factor=0.1)
+        trigger_indices = np.in1d(np.array(event_num_rays_all), np.array(ray_traversing_triggers)).nonzero()[0]
+        event_num_rays_all = event_num_rays_all[trigger_indices]
+        x_rays_all, y_rays_all = x_rays_all[trigger_indices], y_rays_all[trigger_indices]
+    print(f'All rays: {len(x_rays_all)}')
+    detector_x_hits, detector_y_hits = [False] * len(x_rays_all), [False] * len(x_rays_all)
+    largest_x_cluster_centroids, largest_y_cluster_centroids = det.
+
+
 def get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance=0.0):
     """
     Get rays that are within the sub-detector.
