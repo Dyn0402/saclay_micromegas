@@ -37,6 +37,7 @@ class DreamDetector(Detector):
 
         self.x_hits, self.y_hits = None, None
         self.x_clusters, self.y_clusters = None, None
+        self.x_cluster_triggers, self.y_cluster_triggers = None, None
         self.x_cluster_centroids, self.y_cluster_centroids = None, None
         self.x_largest_clusters, self.y_largest_clusters = None, None
         self.x_largest_cluster_centroids, self.y_largest_cluster_centroids = None, None
@@ -46,6 +47,8 @@ class DreamDetector(Detector):
         self.sub_triggers = None
         self.sub_det_corners_local = None
         self.sub_det_corners_global = None
+        self.det_corners_local = None
+        self.det_corners_global = None
 
     def copy(self):
         return copy.deepcopy(self)
@@ -217,6 +220,46 @@ class DreamDetector(Detector):
             corners_global = self.convert_coords_to_global(corners)
             self.sub_det_corners_global.append(corners_global)
 
+    def get_det_corners(self):
+       x_min, x_max = self.center[0] - self.size[0] / 2, self.center[0] + self.size[0] / 2
+       y_min, y_max = self.center[1] - self.size[1] / 2, self.center[1] + self.size[1] / 2
+       corners = np.array([[x_min, y_min, 0], [x_min, y_max, 0], [x_max, y_min, 0], [x_max, y_max, 0]])
+       self.det_corners_local = corners
+       self.det_corners_global = self.convert_coords_to_global(corners)
+
+    def get_det_clusters(self):
+        """
+        Get clusters for the whole detector, without splitting into sub-detectors.
+        :return:
+        """
+        xs_gerber, x_amps = [], []
+        for row_i, x_group in self.det_map[self.det_map['axis'] == 'y'].iterrows():
+            x_connector, x_channels = x_group['connector'], x_group['channels']
+            x_amps.append(self.dream_data.get_channels_amps(x_connector, x_channels))
+            xs_gerber.extend(x_group['xs_gerber'])
+        xs_gerber = np.array(xs_gerber)
+        x_amps = np.concatenate(x_amps, axis=1)
+
+        self.x_clusters, x_cluster_indices = find_clusters_all_events(self.x_hits)
+        self.x_cluster_centroids = get_cluster_centroids_all_events(self.x_clusters, x_cluster_indices, xs_gerber, x_amps)
+        large_clust = get_largest_clusters_all_events(self.x_clusters, x_cluster_indices,self.x_cluster_centroids, x_amps)
+        self.x_largest_clusters, self.x_largest_cluster_centroids = large_clust
+        self.x_cluster_triggers = self.dream_data.event_nums[x_cluster_indices]
+
+        ys_gerber, y_amps = [], []
+        for row_i, y_group in self.det_map[self.det_map['axis'] == 'x'].iterrows():
+            y_connector, y_channels = y_group['connector'], y_group['channels']
+            y_amps.append(self.dream_data.get_channels_amps(y_connector, y_channels))
+            ys_gerber.extend(y_group['ys_gerber'])
+        ys_gerber = np.array(ys_gerber)
+        y_amps = np.concatenate(y_amps, axis=1)
+
+        self.y_clusters, y_cluster_indices = find_clusters_all_events(self.y_hits)
+        self.y_cluster_centroids = get_cluster_centroids_all_events(self.y_clusters, y_cluster_indices, ys_gerber, y_amps)
+        large_clust = get_largest_clusters_all_events(self.y_clusters, y_cluster_indices, self.y_cluster_centroids, y_amps)
+        self.y_largest_clusters, self.y_largest_cluster_centroids = large_clust
+        self.y_cluster_triggers = self.dream_data.event_nums[y_cluster_indices]
+
     def in_sub_det(self, sub_det_i, x, y, z, tolerance=0):
         """
         Check if a point is within a sub-detector x-y area using the sub-detector corners. Add tolerance to bounds.
@@ -234,6 +277,24 @@ class DreamDetector(Detector):
         x_min, x_max = np.min(corners[:, 0]) - tolerance, np.max(corners[:, 0]) + tolerance
         y_min, y_max = np.min(corners[:, 1]) - tolerance, np.max(corners[:, 1]) + tolerance
         return x_min < local_coords[0] < x_max and y_min < local_coords[1] < y_max
+
+    def in_det(self, x, y, z, tolerance=0.0):
+        """
+        Check if a point is within the detector x-y area using the detector corners. Add tolerance to bounds.
+        :param x:
+        :param y:
+        :param z:
+        :param tolerance:
+        :return:
+        """
+        self.get_det_corners()
+        coords = np.array([x, y, z])
+        local_coords = self.convert_global_coords_to_local(coords)
+        corners = self.det_corners_local
+        x_min, x_max = np.min(corners[:, 0]) - tolerance, np.max(corners[:, 0]) + tolerance
+        y_min, y_max = np.min(corners[:, 1]) - tolerance, np.max(corners[:, 1]) + tolerance
+        return x_min < local_coords[0] < x_max and y_min < local_coords[1] < y_max
+
 
     def plot_event_1d(self, event_id):
         """
