@@ -101,6 +101,7 @@ class DreamDetector(Detector):
             x_clusters, x_cluster_indices = find_clusters_all_events(x_hits)
             x_cluster_sizes = get_cluster_sizes(x_clusters)
             x_cluster_triggers = self.dream_data.event_nums[x_cluster_indices]
+            x_cluster_timestamps = self.dream_data.timestamps[x_cluster_indices]
             x_cluster_centroids = get_cluster_centroids_all_events(x_clusters, x_cluster_indices,
                                                                    x_group['xs_gerber'], x_amps)
             xlarge_clusts = get_largest_clusters_all_events(x_clusters, x_cluster_indices, x_cluster_centroids, x_amps)
@@ -110,6 +111,7 @@ class DreamDetector(Detector):
                                   'clusters': x_clusters,
                                   'cluster_sizes': x_cluster_sizes,
                                   'cluster_triggers': np.array(x_cluster_triggers),
+                                  'cluster_timestamps': np.array(x_cluster_timestamps),
                                   'cluster_centroids': x_cluster_centroids,
                                   'largest_clusters': x_largest_clusters,
                                   'largest_cluster_sizes': x_largest_cluster_sizes,
@@ -132,6 +134,7 @@ class DreamDetector(Detector):
             y_clusters, y_cluster_indices = find_clusters_all_events(y_hits)
             y_cluster_sizes = get_cluster_sizes(y_clusters)
             y_cluster_triggers = self.dream_data.event_nums[y_cluster_indices]
+            y_cluster_timestamps = self.dream_data.timestamps[y_cluster_indices]
             y_cluster_centroids = get_cluster_centroids_all_events(y_clusters, y_cluster_indices,
                                                                    y_group['ys_gerber'], y_amps)
             ylarge_clusts = get_largest_clusters_all_events(y_clusters, y_cluster_indices, y_cluster_centroids, y_amps)
@@ -141,6 +144,7 @@ class DreamDetector(Detector):
                                   'clusters': y_clusters,
                                   'cluster_sizes': y_cluster_sizes,
                                   'cluster_triggers': np.array(y_cluster_triggers),
+                                  'cluster_timestamps': np.array(y_cluster_timestamps),
                                   'cluster_centroids': y_cluster_centroids,
                                   'largest_clusters': y_largest_clusters,
                                   'largest_cluster_sizes': y_largest_cluster_sizes,
@@ -528,10 +532,17 @@ class DreamDetector(Detector):
 
         for x_group in self.x_groups:
             x_amps = np.sum(x_group['amps'], axis=1)
-            ax.plot(x_amps, label=f'x: {x_group["df"]["pitch(mm)"]}, {x_group["df"]["interpitch(mm)"]}')
+            event_nums = self.dream_data.event_nums
+            # Sort x_amps and event_nums by event_nums
+            x_amps = x_amps[event_nums.argsort()]
+            event_nums = np.sort(event_nums)
+            ax.plot(event_nums, x_amps, label=f'x: {x_group["df"]["pitch(mm)"]}, {x_group["df"]["interpitch(mm)"]}')
         for y_group in self.y_groups:
             y_amps = np.sum(y_group['amps'], axis=1)
-            ax.plot(y_amps, label=f'y: {y_group["df"]["pitch(mm)"]}, {y_group["df"]["interpitch(mm)"]}')
+            event_nums = self.dream_data.event_nums
+            # Sort y_amps and event_nums by event_nums
+            y_amps = y_amps[event_nums.argsort()]
+            ax.plot(event_nums,y_amps, label=f'y: {y_group["df"]["pitch(mm)"]}, {y_group["df"]["interpitch(mm)"]}')
         ax.legend()
         fig.tight_layout()
 
@@ -553,6 +564,38 @@ class DreamDetector(Detector):
                         event_nums.append(i)
             if return_events:
                 return event_nums
+
+    def plot_xy_amp_sum_vs_timestamp(self, x_range=None):
+        """
+        Plot the sum of the amplitudes in each event from x and y groups.
+        :return:
+        """
+        fig, ax = plt.subplots()
+        ax.set_title(f'{self.name} Event Amplitudes')
+        ax.set_xlabel('Timestamp')
+        ax.set_ylabel('Amplitude Sum')
+
+        for x_group in self.x_groups:
+            x_amps = np.sum(x_group['amps'], axis=1)
+            timestamps = self.dream_data.timestamps
+            event_nums = self.dream_data.event_nums
+            # Sort x_amps, event_nums, and timestamps by event_nums
+            x_amps = x_amps[event_nums.argsort()]
+            event_nums = np.sort(event_nums)
+            timestamps = timestamps[event_nums.argsort()]
+            ax.plot(timestamps, x_amps, label=f'x: {x_group["df"]["pitch(mm)"]}, {x_group["df"]["interpitch(mm)"]}')
+        for y_group in self.y_groups:
+            y_amps = np.sum(y_group['amps'], axis=1)
+            timestamps = self.dream_data.timestamps
+            event_nums = self.dream_data.event_nums
+            # Sort y_amps, event_nums, and timestamps by event_nums
+            y_amps = y_amps[event_nums.argsort()]
+            timestamps = timestamps[event_nums.argsort()]
+            ax.plot(timestamps, y_amps, label=f'y: {y_group["df"]["pitch(mm)"]}, {y_group["df"]["interpitch(mm)"]}')
+        ax.legend()
+        if x_range is not None:
+            ax.set_xlim(x_range)
+        fig.tight_layout()
 
     def plot_num_hit_xy_hist(self):
         """
