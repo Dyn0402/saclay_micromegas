@@ -50,6 +50,7 @@ class DreamData:
         self.noise_thresh_sigmas = 4
 
         self.fine_timestamp_constant = 1.0 / 6
+        self.timestamp_frequency = 100e6  # Hz
         self.sample_period = 60  # ns
 
         self.channels_per_connector = 64
@@ -202,6 +203,7 @@ class DreamData:
 
         self.event_nums = np.concatenate(self.event_nums)
         self.timestamps = np.concatenate(self.timestamps)
+        self.timestamps = self.timestamps / self.timestamp_frequency  # Convert to seconds
         self.fine_time_stamps = np.concatenate(self.fine_time_stamps)
         # self.correct_for_fine_timestamps()
         print('Getting hits...')

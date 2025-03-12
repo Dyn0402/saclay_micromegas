@@ -11,6 +11,7 @@ Created as saclay_micromegas/DreamDetector.py
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from collections import Counter
 import copy
 
@@ -565,12 +566,12 @@ class DreamDetector(Detector):
             if return_events:
                 return event_nums
 
-    def plot_xy_amp_sum_vs_timestamp(self, x_range=None):
+    def plot_xy_amp_sum_vs_timestamp(self, x_range=None, t_start=None, fix=False):
         """
         Plot the sum of the amplitudes in each event from x and y groups.
         :return:
         """
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(12, 6))
         ax.set_title(f'{self.name} Event Amplitudes')
         ax.set_xlabel('Timestamp')
         ax.set_ylabel('Amplitude Sum')
@@ -579,19 +580,43 @@ class DreamDetector(Detector):
             x_amps = np.sum(x_group['amps'], axis=1)
             timestamps = self.dream_data.timestamps
             event_nums = self.dream_data.event_nums
+
             # Sort x_amps, event_nums, and timestamps by event_nums
             x_amps = x_amps[event_nums.argsort()]
-            event_nums = np.sort(event_nums)
             timestamps = timestamps[event_nums.argsort()]
-            ax.plot(timestamps, x_amps, label=f'x: {x_group["df"]["pitch(mm)"]}, {x_group["df"]["interpitch(mm)"]}')
+
+            if t_start is not None:  # t_start is a datetime, convert timestamp from seconds to datetimes
+                t_start = np.datetime64(t_start)
+                if fix:
+                    timestamps = np.where(timestamps < 260000, timestamps, 0)
+                timestamps = t_start + timestamps.astype('timedelta64[s]')
+
+            ax.scatter(timestamps, x_amps, alpha=0.2, s=3, label=f'x: {x_group["df"]["pitch(mm)"]}, {x_group["df"]["interpitch(mm)"]}')
+
+
         for y_group in self.y_groups:
             y_amps = np.sum(y_group['amps'], axis=1)
             timestamps = self.dream_data.timestamps
             event_nums = self.dream_data.event_nums
+
             # Sort y_amps, event_nums, and timestamps by event_nums
             y_amps = y_amps[event_nums.argsort()]
             timestamps = timestamps[event_nums.argsort()]
-            ax.plot(timestamps, y_amps, label=f'y: {y_group["df"]["pitch(mm)"]}, {y_group["df"]["interpitch(mm)"]}')
+
+            if t_start is not None:  # t_start is a datetime, convert timestamp from seconds to datetimes
+                t_start = np.datetime64(t_start)
+                if fix:
+                    timestamps = np.where(timestamps < 260000, timestamps, 0)
+                timestamps = t_start + timestamps.astype('timedelta64[s]')
+
+            ax.scatter(timestamps, y_amps, alpha=0.2, s=3, label=f'y: {y_group["df"]["pitch(mm)"]}, {y_group["df"]["interpitch(mm)"]}')
+
+        if t_start is not None:
+            # Format x-axis as datetime
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d %H:%M'))  # Customize format as needed
+            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+            ax.tick_params(axis='x', rotation=45)
+
         ax.legend()
         if x_range is not None:
             ax.set_xlim(x_range)
