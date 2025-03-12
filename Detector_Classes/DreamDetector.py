@@ -38,9 +38,12 @@ class DreamDetector(Detector):
 
         self.x_hits, self.y_hits = None, None
         self.x_clusters, self.y_clusters = None, None
+        self.x_clustr_sizes, self.y_cluster_sizes = None, None
         self.x_cluster_triggers, self.y_cluster_triggers = None, None
         self.x_cluster_centroids, self.y_cluster_centroids = None, None
         self.x_largest_clusters, self.y_largest_clusters = None, None
+        self.x_largest_cluster_sizes, self.y_largest_cluster_sizes = None, None
+        self.x_largest_cluster_amp_sums, self.y_largest_cluster_amp_sums = None, None
         self.x_largest_cluster_centroids, self.y_largest_cluster_centroids = None, None
 
         self.local_sub_centroids = None
@@ -246,10 +249,13 @@ class DreamDetector(Detector):
         x_amps = np.concatenate(x_amps, axis=1)
 
         self.x_clusters, x_cluster_indices = find_clusters_all_events(self.x_hits)
+        self.x_cluster_sizes = get_cluster_sizes(self.x_clusters)
         self.x_cluster_centroids = get_cluster_centroids_all_events(self.x_clusters, x_cluster_indices, xs_gerber, x_amps)
         large_clust = get_largest_clusters_all_events(self.x_clusters, x_cluster_indices,self.x_cluster_centroids, x_amps)
         self.x_largest_clusters, self.x_largest_cluster_centroids = large_clust
+        self.x_largest_cluster_sizes = get_cluster_sizes(self.x_largest_clusters)
         self.x_cluster_triggers = self.dream_data.event_nums[x_cluster_indices]
+        self.x_largest_cluster_amp_sums = get_cluster_amp_sums(self.x_largest_clusters, x_amps)
 
         ys_gerber, y_amps = [], []
         for row_i, y_group in self.det_map[self.det_map['axis'] == 'x'].iterrows():
@@ -260,10 +266,13 @@ class DreamDetector(Detector):
         y_amps = np.concatenate(y_amps, axis=1)
 
         self.y_clusters, y_cluster_indices = find_clusters_all_events(self.y_hits)
+        self.y_cluster_sizes = get_cluster_sizes(self.y_clusters)
         self.y_cluster_centroids = get_cluster_centroids_all_events(self.y_clusters, y_cluster_indices, ys_gerber, y_amps)
         large_clust = get_largest_clusters_all_events(self.y_clusters, y_cluster_indices, self.y_cluster_centroids, y_amps)
         self.y_largest_clusters, self.y_largest_cluster_centroids = large_clust
+        self.y_largest_cluster_sizes = get_cluster_sizes(self.y_largest_clusters)
         self.y_cluster_triggers = self.dream_data.event_nums[y_cluster_indices]
+        self.y_largest_cluster_amp_sums = get_cluster_amp_sums(self.y_largest_clusters, y_amps)
 
     def in_sub_det(self, sub_det_i, x, y, z, tolerance=0):
         """
@@ -643,6 +652,38 @@ class DreamDetector(Detector):
         axs[1].hist(y_hit_nums, bins=range(0, 125, 1))
         fig.tight_layout()
 
+    def plot_cluster_sizes(self):
+        """
+        Plot the distribution of the sizes of the clusters in the detector.
+        :return:
+        """
+        fig, ax = plt.subplots()
+        fig.suptitle(f'{self.name} Cluster Sizes')
+        ax.set_xlabel('Cluster Size')
+        ax.set_ylabel('Counts')
+
+        ax.hist(self.x_cluster_sizes, bins=range(0, 125, 1), alpha=0.5, label='X Clusters')
+        ax.hist(self.y_cluster_sizes, bins=range(0, 125, 1), alpha=0.5, label='Y Clusters')
+
+        ax.legend()
+        fig.tight_layout()
+
+    def plot_cluster_amps(self):
+        """
+        Plot the distribution of the amplitudes in the largest clusters in the detector.
+        :return:
+        """
+        fig, ax = plt.subplots()
+        fig.suptitle(f'{self.name} Largest Cluster Amplitudes')
+        ax.set_xlabel('Amplitude')
+        ax.set_ylabel('Counts')
+
+        ax.hist(self.x_largest_cluster_amp_sums, bins=100, alpha=0.5, label='X Clusters')
+        ax.hist(self.y_largest_cluster_amp_sums, bins=100, alpha=0.5, label='Y Clusters')
+
+        ax.legend()
+        fig.tight_layout()
+
 
 def split_neighbors(df, starting_connector=0):
     """
@@ -750,6 +791,21 @@ def get_cluster_sizes(clusters):
     else:  # Single cluster in each event
         return [len(cluster) for cluster in clusters]
 
+
+def get_cluster_amp_sums(clusters, amp_array):
+    """
+    Get the sum of the amplitudes in each cluster in all events.
+    :param clusters: List of clusters.
+    :param amp_array: Array of amplitudes for each channel in the event.
+    :return: Sum of the amplitudes in each cluster.
+    """
+    cluster_amp_sums = []
+    for event_clusters, event_amps in zip(clusters, amp_array):
+        event_cluster_amp_sums = []
+        for cluster in event_clusters:
+            event_cluster_amp_sums.append(np.sum(event_amps[cluster]))
+        cluster_amp_sums.append(event_cluster_amp_sums)
+    return cluster_amp_sums
 
 
 def get_cluster_centroids_all_events(clusters, cluster_indices, pos_array, amp_array):
