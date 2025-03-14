@@ -662,8 +662,8 @@ class DreamDetector(Detector):
         ax.set_xlabel('Cluster Size')
         ax.set_ylabel('Counts')
 
-        ax.hist(self.x_cluster_sizes, bins=range(0, 125, 1), alpha=0.5, label='X Clusters')
-        ax.hist(self.y_cluster_sizes, bins=range(0, 125, 1), alpha=0.5, label='Y Clusters')
+        ax.hist(self.x_largest_cluster_sizes, bins=range(0, 125, 1), alpha=0.5, label='X Clusters')
+        ax.hist(self.y_largest_cluster_sizes, bins=range(0, 125, 1), alpha=0.5, label='Y Clusters')
 
         ax.legend()
         fig.tight_layout()
