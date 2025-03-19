@@ -45,6 +45,7 @@ class DreamDetector(Detector):
         self.x_largest_cluster_sizes, self.y_largest_cluster_sizes = None, None
         self.x_largest_cluster_amp_sums, self.y_largest_cluster_amp_sums = None, None
         self.x_largest_cluster_centroids, self.y_largest_cluster_centroids = None, None
+        self.xy_largest_cluster_sums = None
 
         self.local_sub_centroids = None
         self.sub_centroids = None
@@ -256,6 +257,7 @@ class DreamDetector(Detector):
         self.x_largest_cluster_sizes = get_cluster_sizes(self.x_largest_clusters)
         self.x_cluster_triggers = self.dream_data.event_nums[x_cluster_indices]
         self.x_largest_cluster_amp_sums = get_cluster_amp_sums(self.x_largest_clusters, x_amps)
+        self.x_largest_cluster_amp_sums = [cluster_sum[0] for cluster_sum in self.x_largest_cluster_amp_sums]
 
         ys_gerber, y_amps = [], []
         for row_i, y_group in self.det_map[self.det_map['axis'] == 'x'].iterrows():
@@ -273,6 +275,23 @@ class DreamDetector(Detector):
         self.y_largest_cluster_sizes = get_cluster_sizes(self.y_largest_clusters)
         self.y_cluster_triggers = self.dream_data.event_nums[y_cluster_indices]
         self.y_largest_cluster_amp_sums = get_cluster_amp_sums(self.y_largest_clusters, y_amps)
+        self.y_largest_cluster_amp_sums = [cluster_sum[0] for cluster_sum in self.y_largest_cluster_amp_sums]
+
+        # For each event, sum the amplitudes of the largest cluster in x and y
+        # Convert x and y triggers to sets to find common events
+        common_events = set(self.x_cluster_triggers) & set(self.y_cluster_triggers)
+
+        # Create mappings from event number to sum
+        x_sums = dict(zip(self.x_cluster_triggers, self.x_largest_cluster_amp_sums))
+        y_sums = dict(zip(self.y_cluster_triggers, self.y_largest_cluster_amp_sums))
+
+        # Sum the x and y values for common events
+        result = {event: x_sums[event] + y_sums[event] for event in common_events}
+
+        # Convert to lists if needed
+        common_events_list = list(result.keys())
+        self.xy_largest_cluster_sums = list(result.values())
+
 
     def in_sub_det(self, sub_det_i, x, y, z, tolerance=0):
         """
@@ -662,8 +681,9 @@ class DreamDetector(Detector):
         ax.set_xlabel('Cluster Size')
         ax.set_ylabel('Counts')
 
-        ax.hist(self.x_largest_cluster_sizes, bins=range(0, 125, 1), alpha=0.5, label='X Clusters')
-        ax.hist(self.y_largest_cluster_sizes, bins=range(0, 125, 1), alpha=0.5, label='Y Clusters')
+        max_x, max_y = np.max(self.x_largest_cluster_sizes), np.max(self.y_largest_cluster_sizes)
+        ax.hist(self.x_largest_cluster_sizes, bins=range(0, max_x + 1, 1), alpha=0.5, label='X Clusters')
+        ax.hist(self.y_largest_cluster_sizes, bins=range(0, max_y + 1, 1), alpha=0.5, label='Y Clusters')
 
         ax.legend()
         fig.tight_layout()
@@ -678,9 +698,25 @@ class DreamDetector(Detector):
         ax.set_xlabel('Amplitude')
         ax.set_ylabel('Counts')
 
-        ax.hist(self.x_largest_cluster_amp_sums, bins=100, alpha=0.5, label='X Clusters')
-        ax.hist(self.y_largest_cluster_amp_sums, bins=100, alpha=0.5, label='Y Clusters')
+        x_largest_cluster_amp_sums = np.array(self.x_largest_cluster_amp_sums)
+        y_largest_cluster_amp_sums = np.array(self.y_largest_cluster_amp_sums)
 
+        print(x_largest_cluster_amp_sums.shape)
+
+        ax.hist(x_largest_cluster_amp_sums, bins=100, alpha=0.5, label='X Clusters')
+        ax.hist(y_largest_cluster_amp_sums, bins=100, alpha=0.5, label='Y Clusters')
+
+        ax.set_yscale('log')
+        ax.legend()
+        fig.tight_layout()
+
+        # Add x and y cluster sums together
+        fig, ax = plt.subplots()
+        fig.suptitle(f'{self.name} Largest Cluster Amplitudes')
+        ax.set_xlabel('Amplitude')
+        ax.set_ylabel('Counts')
+        ax.hist(self.xy_largest_cluster_sums, bins=100, alpha=0.5, label='X+Y Clusters')
+        ax.set_yscale('log')
         ax.legend()
         fig.tight_layout()
 
