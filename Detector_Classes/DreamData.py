@@ -160,13 +160,13 @@ class DreamData:
         for chunk_idx in range(0, len(data_files), chunk_size):
             chunk_files = data_files[chunk_idx:chunk_idx + chunk_size]
 
-            n_events = get_tree_entries(f'{self.data_dir}{chunk_files[0]}')
+            n_tree_events = get_tree_entries(f'{self.data_dir}{chunk_files[0]}')  # Only matters if only 1 file, so get first
             for sub_chunk_i in range(n_sub_chunks):
                 if n_sub_chunks == 1:
                     event_range_i = None
                 else:
-                    event_range_i = (sub_chunk_i * n_events // n_sub_chunks, (sub_chunk_i + 1) * n_events // n_sub_chunks)
-                    print(f'Getting sub chunk {sub_chunk_i + 1}/{n_sub_chunks}, events: {event_range_i[0]}-{event_range_i[1]}')
+                    event_range_i = (int(sub_chunk_i * n_tree_events / n_sub_chunks), int((sub_chunk_i + 1) * n_tree_events / n_sub_chunks))
+                    print(f'Getting sub chunk {sub_chunk_i + 1}/{n_sub_chunks}, events: {event_range_i[0]}-{event_range_i[1]} of {n_tree_events}')
 
                 self.data = []
                 if self.event_nums is None:
@@ -209,7 +209,8 @@ class DreamData:
 
                 # Clear self.data to free up memory
                 self.data = None
-                print(f'Processed chunk {chunk_idx // chunk_size + 1}/{(len(data_files) + chunk_size - 1) // chunk_size}')
+                print(f'Processed sub-chunk {sub_chunk_i + 1}/{n_sub_chunks}')
+            print(f'Processed chunk {chunk_idx // chunk_size + 1}/{(len(data_files) + chunk_size - 1) // chunk_size}')
 
         self.event_nums = np.concatenate(self.event_nums)
         self.timestamps = np.concatenate(self.timestamps)

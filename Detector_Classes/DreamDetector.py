@@ -46,6 +46,8 @@ class DreamDetector(Detector):
         self.x_largest_cluster_amp_sums, self.y_largest_cluster_amp_sums = None, None
         self.x_largest_cluster_centroids, self.y_largest_cluster_centroids = None, None
         self.xy_largest_cluster_sums = None
+        self.x_det_sum, self.y_det_sum, self.xy_det_sum = None, None, None
+        self.x_largest_amp, self.y_largest_amp = None, None
 
         self.local_sub_centroids = None
         self.sub_centroids = None
@@ -258,6 +260,8 @@ class DreamDetector(Detector):
         self.x_cluster_triggers = self.dream_data.event_nums[x_cluster_indices]
         self.x_largest_cluster_amp_sums = get_cluster_amp_sums(self.x_largest_clusters, x_amps)
         self.x_largest_cluster_amp_sums = [cluster_sum[0] for cluster_sum in self.x_largest_cluster_amp_sums]
+        self.x_det_sum = get_det_amp_sums(x_amps)
+        self.x_largest_amp = get_det_largest_amp(x_amps)
 
         ys_gerber, y_amps = [], []
         for row_i, y_group in self.det_map[self.det_map['axis'] == 'x'].iterrows():
@@ -276,6 +280,10 @@ class DreamDetector(Detector):
         self.y_cluster_triggers = self.dream_data.event_nums[y_cluster_indices]
         self.y_largest_cluster_amp_sums = get_cluster_amp_sums(self.y_largest_clusters, y_amps)
         self.y_largest_cluster_amp_sums = [cluster_sum[0] for cluster_sum in self.y_largest_cluster_amp_sums]
+        self.y_det_sum = get_det_amp_sums(y_amps)
+        self.y_largest_amp = get_det_largest_amp(y_amps)
+
+        self.xy_det_sum = self.x_det_sum + self.y_det_sum
 
         # For each event, sum the amplitudes of the largest cluster in x and y
         # Convert x and y triggers to sets to find common events
@@ -720,6 +728,66 @@ class DreamDetector(Detector):
         ax.legend()
         fig.tight_layout()
 
+    def plot_det_amp_sums(self):
+        """
+        Plot amplitude sums for the whole detector for x, y and x+y
+        Returns:
+        """
+        # Plot for x and y separately
+        fig, ax = plt.subplots()
+        fig.suptitle(f'{self.name} Detector Amplitude Sums (X and Y)')
+        ax.set_xlabel('Amplitude Sum')
+        ax.set_ylabel('Counts')
+
+        x_det_sum = np.array(self.x_det_sum)
+        y_det_sum = np.array(self.y_det_sum)
+
+        ax.hist(x_det_sum, bins=500, alpha=0.5, label='X Detector')
+        ax.hist(y_det_sum, bins=500, alpha=0.5, label='Y Detector')
+
+        ax.legend()
+        fig.tight_layout()
+
+        # Plot for x+y sum
+        fig, ax = plt.subplots()
+        fig.suptitle(f'{self.name} Detector Amplitude Sums (X+Y)')
+        ax.set_xlabel('Amplitude Sum')
+        ax.set_ylabel('Counts')
+
+        xy_det_sum = np.array(self.xy_det_sum)
+        ax.hist(xy_det_sum, bins=500, alpha=0.5, label='X+Y Detector')
+
+        ax.legend()
+        fig.tight_layout()
+
+
+    def plot_det_largest_amp_vs_amp_sums(self):
+        """
+        Plot a 2D histogram of the largest amplitude strip per event vs the sum of all amplitudes in the event.
+        For x and y separately.
+        Returns:
+
+        """
+        fig, axs = plt.subplots(2, 1, figsize=(8, 10))
+        fig.suptitle(f'{self.name} Largest Amplitude vs Amplitude Sum')
+        axs[0].set_title('X Detector')
+        axs[0].set_xlabel('Amplitude Sum')
+        axs[0].set_ylabel('Largest Amplitude')
+        axs[1].set_title('Y Detector')
+        axs[1].set_xlabel('Amplitude Sum')
+        axs[1].set_ylabel('Largest Amplitude')
+
+        x_largest_amp = np.array(self.x_largest_amp)
+        x_det_sum = np.array(self.x_det_sum)
+        y_largest_amp = np.array(self.y_largest_amp)
+        y_det_sum = np.array(self.y_det_sum)
+
+        axs[0].hist2d(x_det_sum, x_largest_amp, bins=30, cmin=1, cmap='jet')
+        axs[1].hist2d(y_det_sum, y_largest_amp, bins=30, cmin=1, cmap='jet')
+        fig.colorbar(axs[0].collections[0], ax=axs[0], label='Counts')
+        fig.colorbar(axs[1].collections[0], ax=axs[1], label='Counts')
+        fig.tight_layout()
+
 
 def split_neighbors(df, starting_connector=0):
     """
@@ -842,6 +910,30 @@ def get_cluster_amp_sums(clusters, amp_array):
             event_cluster_amp_sums.append(np.sum(event_amps[cluster]))
         cluster_amp_sums.append(event_cluster_amp_sums)
     return cluster_amp_sums
+
+
+def get_det_amp_sums(amp_array):
+    """
+    Get sum of all channels in each event.
+    Args:
+        amp_array:
+
+    Returns:
+
+    """
+    return np.sum(amp_array, axis=1)
+
+
+def get_det_largest_amp(amp_array):
+    """
+    Get largest amplitude strip in each event.
+    Args:
+        amp_array:
+
+    Returns:
+
+    """
+    return np.max(amp_array, axis=1)
 
 
 def get_cluster_centroids_all_events(clusters, cluster_indices, pos_array, amp_array):
