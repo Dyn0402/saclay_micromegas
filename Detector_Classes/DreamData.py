@@ -134,11 +134,11 @@ class DreamData:
             print('Error: No data files found.')
             return None
 
-        def read_file(data_file, select_triggers=None):
+        def read_file(data_file, select_triggers=None, event_range=None):
             data_file_path = f'{self.data_dir}{data_file}'
             # data = read_det_data(data_file_path)
             # data_event_nums = read_det_data(data_file_path, tree_name='nt', variable_name='eventId')
-            all_data = read_det_data_vars(data_file_path, ['amplitude', 'eventId', 'timestamp', 'ftst'])
+            all_data = read_det_data_vars(data_file_path, ['amplitude', 'eventId', 'timestamp', 'ftst'], event_range=event_range)
             data_raw, data_event_nums = all_data['amplitude'], all_data['eventId']
             data_ft_stamp, data_timestamp = all_data['ftst'], all_data['timestamp']
             if select_triggers is not None:
@@ -155,51 +155,61 @@ class DreamData:
 
         print('Reading in data...')
 
+        n_sub_chunks = max(1, int(1 / chunk_size + 1))
+        chunk_size = max(chunk_size, 1)
         for chunk_idx in range(0, len(data_files), chunk_size):
             chunk_files = data_files[chunk_idx:chunk_idx + chunk_size]
 
-            self.data = []
-            if self.event_nums is None:
-                self.event_nums = []
-            if self.timestamps is None:
-                self.timestamps = []
-            if self.fine_time_stamps is None:
-                self.fine_time_stamps = []
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                read_file_partial = partial(read_file, select_triggers=trigger_list)
-                for data_i, data_raw_i, event_nums, timestamps, ft_stamps in tqdm(executor.map(
-                        read_file_partial, chunk_files), total=len(chunk_files)):
-                    if self.connector_channels is not None:
-                        data_i = self.get_connector_channels(data_i)
-                    self.data.append(data_i)
-                    self.event_nums.append(event_nums)
-                    self.timestamps.append(timestamps)
-                    self.fine_time_stamps.append(ft_stamps)
-                    if hist_raw_amps:
-                        n_events, n_channels, n_samples = data_raw_i.shape
-                        data_raw_i = data_raw_i.transpose(1, 0, 2).reshape(n_channels, n_events * n_samples)
-                        bins_y = np.arange(-0.5, 4096.5, 50)
-                        bins_x = np.arange(-0.5, n_channels + 0.5, 1)
+            n_events = get_tree_entries(f'{self.data_dir}{chunk_files[0]}')
+            for sub_chunk_i in range(n_sub_chunks):
+                if n_sub_chunks == 1:
+                    event_range_i = None
+                else:
+                    event_range_i = (sub_chunk_i * n_events // n_sub_chunks, (sub_chunk_i + 1) * n_events // n_sub_chunks)
+                    print(f'Getting sub chunk {sub_chunk_i + 1}/{n_sub_chunks}, events: {event_range_i[0]}-{event_range_i[1]}')
 
-                        histograms = np.array([np.histogram(data_raw_i[i], bins=bins_y)[0] for i in range(n_channels)])
+                self.data = []
+                if self.event_nums is None:
+                    self.event_nums = []
+                if self.timestamps is None:
+                    self.timestamps = []
+                if self.fine_time_stamps is None:
+                    self.fine_time_stamps = []
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    read_file_partial = partial(read_file, select_triggers=trigger_list, event_range=event_range_i)
+                    for data_i, data_raw_i, event_nums, timestamps, ft_stamps in tqdm(executor.map(
+                            read_file_partial, chunk_files), total=len(chunk_files)):
+                        if self.connector_channels is not None:
+                            data_i = self.get_connector_channels(data_i)
+                        self.data.append(data_i)
+                        self.event_nums.append(event_nums)
+                        self.timestamps.append(timestamps)
+                        self.fine_time_stamps.append(ft_stamps)
+                        if hist_raw_amps:
+                            n_events, n_channels, n_samples = data_raw_i.shape
+                            data_raw_i = data_raw_i.transpose(1, 0, 2).reshape(n_channels, n_events * n_samples)
+                            bins_y = np.arange(-0.5, 4096.5, 50)
+                            bins_x = np.arange(-0.5, n_channels + 0.5, 1)
 
-                        if self.raw_amp_hist is None:
-                            self.raw_amp_hist = histograms
-                        else:
-                            self.raw_amp_hist += histograms
+                            histograms = np.array([np.histogram(data_raw_i[i], bins=bins_y)[0] for i in range(n_channels)])
 
-            self.data = np.concatenate(self.data)
+                            if self.raw_amp_hist is None:
+                                self.raw_amp_hist = histograms
+                            else:
+                                self.raw_amp_hist += histograms
 
-            print(f'Read in data shape: {self.data.shape}')
-            print('Getting amplitudes...')
-            self.get_event_amplitudes()
+                self.data = np.concatenate(self.data)
 
-            if save_waveforms:
-                self.waveforms = self.data.copy()
+                print(f'Read in data shape: {self.data.shape}')
+                print('Getting amplitudes...')
+                self.get_event_amplitudes()
 
-            # Clear self.data to free up memory
-            self.data = None
-            print(f'Processed chunk {chunk_idx // chunk_size + 1}/{(len(data_files) + chunk_size - 1) // chunk_size}')
+                if save_waveforms:
+                    self.waveforms = self.data.copy()
+
+                # Clear self.data to free up memory
+                self.data = None
+                print(f'Processed chunk {chunk_idx // chunk_size + 1}/{(len(data_files) + chunk_size - 1) // chunk_size}')
 
         self.event_nums = np.concatenate(self.event_nums)
         self.timestamps = np.concatenate(self.timestamps)
@@ -946,7 +956,7 @@ def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):
     return variable_data
 
 
-def read_det_data_vars(file_path, variables, tree_name='nt'):
+def read_det_data_vars(file_path, variables, tree_name='nt', event_range=None):
     vector.register_awkward()
     # Open the ROOT file with uproot
     root_file = uproot.open(file_path)
@@ -955,11 +965,27 @@ def read_det_data_vars(file_path, variables, tree_name='nt'):
     tree = root_file[tree_name]
 
     # Get the variable data from the tree
-    variable_data = tree.arrays(variables, library='np')
+    if event_range is None:
+        variable_data = tree.arrays(variables, library='np')
+    else:
+        variable_data = tree.arrays(variables, library='np', entry_start=event_range[0], entry_stop=event_range[-1])
     variable_data = {key: val.astype(np.float32) for key, val in variable_data.items()}
     root_file.close()
 
     return variable_data
+
+
+def get_tree_entries(file_path, tree_name='nt'):
+    # Open the ROOT file with uproot
+    root_file = uproot.open(file_path)
+
+    # Access the tree in the file
+    tree = root_file[tree_name]
+
+    # Get the number of entries in the tree
+    num_entries = tree.num_entries
+
+    return num_entries
 
 
 # Pedestal and Noise Functions
