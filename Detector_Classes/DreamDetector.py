@@ -761,7 +761,7 @@ class DreamDetector(Detector):
         fig.tight_layout()
 
 
-    def plot_det_largest_amp_vs_amp_sums(self, bins=50, x_min=None, x_max=None, y_min=None, y_max=None):
+    def plot_det_largest_amp_vs_amp_sums(self, bins=50, norm_per_strip=False, x_min=None, x_max=None, y_min=None, y_max=None):
         """
         Plot a 2D histogram of the largest amplitude strip per event vs the sum of all amplitudes in the event.
         For x and y separately.
@@ -781,6 +781,14 @@ class DreamDetector(Detector):
         x_det_sum = np.array(self.x_det_sum)
         y_largest_amp = np.array(self.y_largest_amp)
         y_det_sum = np.array(self.y_det_sum)
+
+        if norm_per_strip:
+            n_x_strips = self.x_hits.shape[1]
+            x_det_sum = self.x_det_sum / n_x_strips
+            n_y_strips = self.y_hits.shape[1]
+            y_det_sum = self.y_det_sum / n_y_strips
+            axs[0].set_xlabel('Average Amplitude per Strip')
+            axs[1].set_xlabel('Average Amplitude per Strip')
 
         axs[0].hist2d(x_det_sum, x_largest_amp, bins=bins, cmin=1, cmap='jet')
         axs[1].hist2d(y_det_sum, y_largest_amp, bins=bins, cmin=1, cmap='jet')
