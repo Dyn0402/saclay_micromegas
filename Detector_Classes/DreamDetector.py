@@ -761,7 +761,7 @@ class DreamDetector(Detector):
         fig.tight_layout()
 
 
-    def plot_det_largest_amp_vs_amp_sums(self):
+    def plot_det_largest_amp_vs_amp_sums(self, bins=50, x_min=None, x_max=None, y_min=None, y_max=None):
         """
         Plot a 2D histogram of the largest amplitude strip per event vs the sum of all amplitudes in the event.
         For x and y separately.
@@ -782,10 +782,20 @@ class DreamDetector(Detector):
         y_largest_amp = np.array(self.y_largest_amp)
         y_det_sum = np.array(self.y_det_sum)
 
-        axs[0].hist2d(x_det_sum, x_largest_amp, bins=30, cmin=1, cmap='jet')
-        axs[1].hist2d(y_det_sum, y_largest_amp, bins=30, cmin=1, cmap='jet')
+        axs[0].hist2d(x_det_sum, x_largest_amp, bins=bins, cmin=1, cmap='jet')
+        axs[1].hist2d(y_det_sum, y_largest_amp, bins=bins, cmin=1, cmap='jet')
         fig.colorbar(axs[0].collections[0], ax=axs[0], label='Counts')
         fig.colorbar(axs[1].collections[0], ax=axs[1], label='Counts')
+        axs[0].set_xlim(x_min if x_min is not None else np.min(x_det_sum),
+                        x_max if x_max is not None else np.max(x_det_sum))
+        axs[0].set_ylim(y_min if y_min is not None else np.min(x_largest_amp),
+                        y_max if y_max is not None else np.max(x_largest_amp))
+
+        axs[1].set_xlim(x_min if x_min is not None else np.min(y_det_sum),
+                        x_max if x_max is not None else np.max(y_det_sum))
+        axs[1].set_ylim(y_min if y_min is not None else np.min(y_largest_amp),
+                        y_max if y_max is not None else np.max(y_largest_amp))
+
         fig.tight_layout()
 
 
