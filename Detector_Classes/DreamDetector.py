@@ -38,7 +38,7 @@ class DreamDetector(Detector):
 
         self.x_hits, self.y_hits = None, None
         self.x_clusters, self.y_clusters = None, None
-        self.x_clustr_sizes, self.y_cluster_sizes = None, None
+        self.x_cluster_sizes, self.y_cluster_sizes = None, None
         self.x_cluster_triggers, self.y_cluster_triggers = None, None
         self.x_cluster_centroids, self.y_cluster_centroids = None, None
         self.x_largest_clusters, self.y_largest_clusters = None, None
@@ -711,8 +711,8 @@ class DreamDetector(Detector):
 
         print(x_largest_cluster_amp_sums.shape)
 
-        ax.hist(x_largest_cluster_amp_sums, bins=100, alpha=0.5, label='X Clusters')
-        ax.hist(y_largest_cluster_amp_sums, bins=100, alpha=0.5, label='Y Clusters')
+        ax.hist(x_largest_cluster_amp_sums, bins=500, alpha=0.5, label='X Clusters')
+        ax.hist(y_largest_cluster_amp_sums, bins=500, alpha=0.5, label='Y Clusters')
 
         ax.set_yscale('log')
         ax.legend()
@@ -723,12 +723,12 @@ class DreamDetector(Detector):
         fig.suptitle(f'{self.name} Largest Cluster Amplitudes')
         ax.set_xlabel('Amplitude')
         ax.set_ylabel('Counts')
-        ax.hist(self.xy_largest_cluster_sums, bins=100, alpha=0.5, label='X+Y Clusters')
+        ax.hist(self.xy_largest_cluster_sums, bins=500, alpha=0.5, label='X+Y Clusters')
         ax.set_yscale('log')
         ax.legend()
         fig.tight_layout()
 
-    def plot_det_amp_sums(self):
+    def plot_det_amp_sums(self, fit=False):
         """
         Plot amplitude sums for the whole detector for x, y and x+y
         Returns:
@@ -924,8 +924,11 @@ def get_cluster_amp_sums(clusters, amp_array):
     cluster_amp_sums = []
     for event_clusters, event_amps in zip(clusters, amp_array):
         event_cluster_amp_sums = []
-        for cluster in event_clusters:
-            event_cluster_amp_sums.append(np.sum(event_amps[cluster]))
+        if isinstance(event_clusters, list):  # List of clusters
+            for cluster in event_clusters:
+                event_cluster_amp_sums.append(np.sum(event_amps[cluster]))
+        else:  # Single cluster from largest clusters
+            event_cluster_amp_sums.append(np.sum(event_amps[event_clusters]))
         cluster_amp_sums.append(event_cluster_amp_sums)
     return cluster_amp_sums
 
