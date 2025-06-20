@@ -908,8 +908,10 @@ def get_efficiency_1d(det, ray_data, hit_dist=1000, plot=False, in_det=False, to
         y_min, y_max = min([corner[1] for corner in corners]), max([corner[1] for corner in corners])
 
         # Plot blue circles for hits, red for misses. Split into two lists for hits and misses
-        x_hits_xs, y_hits_ys, x_misses_xs, y_misses_ys = [], [], [], []
-        x_hits_ys, y_hits_xs, x_misses_ys, y_misses_xs = [], [], [], []
+        # x_hits_xs, y_hits_ys, x_misses_xs, y_misses_ys = [], [], [], []
+        # x_hits_ys, y_hits_xs, x_misses_ys, y_misses_xs = [], [], [], []
+        x_hits_xs, x_hits_ys, y_hits_xs, y_hits_ys, xy_hits_xs, xy_hits_ys = [], [], [], [], [], []
+        x_misses_xs, y_misses_ys, x_misses_ys, y_misses_xs, xy_misses_xs, xy_misses_ys = [], [], [], [], [], []
         for x_ray, y_ray, hit_x, hit_y in zip(x_rays_all, y_rays_all, detector_x_hits, detector_y_hits):
             if x_min <= x_ray <= x_max and y_min <= y_ray <= y_max:
                 if hit_x:
@@ -924,6 +926,12 @@ def get_efficiency_1d(det, ray_data, hit_dist=1000, plot=False, in_det=False, to
                 else:
                     y_misses_ys.append(y_ray)
                     y_misses_xs.append(x_ray)
+                if hit_x and hit_y:
+                    xy_hits_xs.append(x_ray)
+                    xy_hits_ys.append(y_ray)
+                else:
+                    xy_misses_xs.append(x_ray)
+                    xy_misses_ys.append(y_ray)
 
         fig_x_hits_misses, ax_x_hit_misses = plt.subplots()
         ax_x_hit_misses.scatter(x_misses_xs, x_misses_ys, color='red', label='Misses', marker='.', alpha=0.2)
@@ -1004,6 +1012,12 @@ def get_efficiency_1d(det, ray_data, hit_dist=1000, plot=False, in_det=False, to
                                             range=[[x_rays_all.min(), x_rays_all.max()], [y_rays_all.min(), y_rays_all.max()]])
         efficiency_y = np.divide(hist_y_hits, hist_y_total, out=np.zeros_like(hist_y_hits, dtype=float), where=hist_y_total > 0)
 
+        hist_xy_hits, x_edges, y_edges = np.histogram2d(xy_hits_xs, xy_hits_ys, bins=[grid_x_bins, grid_y_bins],
+                                                        range=[[x_rays_all.min(), x_rays_all.max()], [y_rays_all.min(), y_rays_all.max()]])
+        hist_xy_total, _, _ = np.histogram2d(xy_misses_xs, xy_misses_ys, bins=[grid_x_bins, grid_y_bins],
+                                            range=[[x_rays_all.min(), x_rays_all.max()], [y_rays_all.min(), y_rays_all.max()]])
+        efficiency_xy = np.divide(hist_xy_hits, hist_xy_total, out=np.zeros_like(hist_xy_hits, dtype=float), where=hist_xy_total > 0)
+
         fig, ax = plt.subplots()
         c = ax.pcolormesh(x_edges, y_edges, efficiency_x.T, cmap='jet', shading='auto')
         ax.plot([corner[0] for corner in corners], [corner[1] for corner in corners], color='white', linewidth=0.5)
@@ -1020,6 +1034,15 @@ def get_efficiency_1d(det, ray_data, hit_dist=1000, plot=False, in_det=False, to
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.set_title('Y Strip Efficiency Map')
+        fig.tight_layout()
+
+        fig, ax = plt.subplots()
+        c = ax.pcolormesh(x_edges, y_edges, efficiency_xy.T, cmap='jet', shading='auto')
+        ax.plot([corner[0] for corner in corners], [corner[1] for corner in corners], color='white', linewidth=0.5)
+        fig.colorbar(c, ax=ax, label='Efficiency')
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+        ax.set_title('XY Strip Efficiency Map')
         fig.tight_layout()
 
     return efficiencyx_1d, efficiencyy_1d
