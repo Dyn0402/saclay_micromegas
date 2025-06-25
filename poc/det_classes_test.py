@@ -431,7 +431,7 @@ def align_dream(det, ray_data, z_range=None, z_rot_range=None):
     det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
 
 
-def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tolerance=0.0):
+def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tolerance=0.0, sub_reses_err=False):
     x_res, y_res, = [], []
     x_subs_mean, x_subs_std, y_subs_mean, y_subs_std = [], [], [], []
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
@@ -488,6 +488,47 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
     x_res_i_mean, y_res_i_mean = x_popt[1], y_popt[1]
     x_res_i_std, y_res_i_std = x_popt[2], y_popt[2]
     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
+
+
+def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0):
+    resid_df = []
+    subs_centroids, subs_triggers = det.get_sub_centroids_coords()
+    for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
+        x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
+        if in_det:
+            x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+
+        if event_num_rays is None or len(event_num_rays) == 0:
+            continue
+
+        # Sort sub_triggers and sub_centroids together by sub_trigger
+        sub_triggers, sub_centroids = zip(*sorted(zip(sub_triggers, sub_centroids)))
+        sub_centroids, sub_triggers = np.array(sub_centroids), np.array(sub_triggers)
+
+        # Sort x_rays, y_rays, and event_num_rays by event_num_rays
+        event_num_rays, x_rays, y_rays = zip(*sorted(zip(event_num_rays, x_rays, y_rays)))
+        event_num_rays, x_rays, y_rays = np.array(event_num_rays), np.array(x_rays), np.array(y_rays)
+
+        # Find indices of sub_triggers in event_num_rays
+        matched_indices = np.in1d(np.array(sub_triggers), np.array(event_num_rays)).nonzero()[0]
+
+        if len(matched_indices) == 0:
+            continue
+
+        centroids_i_matched = sub_centroids[matched_indices]
+
+        x_res_i = centroids_i_matched[:, 0] - x_rays
+        y_res_i = centroids_i_matched[:, 1] - y_rays
+
+        x_popt_i, y_popt_i, x_perr_i, y_perr_i = fit_residuals_return_err(x_res_i, y_res_i)
+        resid_df.append({'pitch_x': sub_det.x_pitch, 'pitch_y': sub_det.y_pitch,
+                         'interpitch_x': sub_det.x_interpitch, 'interpitch_y': sub_det.y_interpitch,
+                         'x_mean': x_popt_i[1], 'x_mean_err': x_perr_i[1],
+                         'y_mean': y_popt_i[2], 'y_mean_err': y_perr_i[2],
+                         'x_std': x_popt_i[2], 'x_std_err': x_perr_i[2],
+                         'y_std': y_popt_i[2], 'y_std_err': y_perr_i[2]})
+
+    return resid_df  # Not a dataframe, but a list of dictionaries to avoid pandas dependency!
 
 
 def get_residuals_align(det, ray_data, triggers, sub_reses=False, plot=False):

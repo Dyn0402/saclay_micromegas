@@ -189,6 +189,20 @@ class DreamDetector(Detector):
                 x_pitch, y_pitch = x_group_df['pitch(mm)'], y_group_df['pitch(mm)']
                 x_interpitch, y_interpitch = x_group_df['interpitch(mm)'], y_group_df['interpitch(mm)']
 
+                if 'inter' in self.config['det_type'].split('_'):  # Get correct x_interpitch
+                    x_interpitches = x_interpitch.split(':')
+                    all_y_gerbers = []
+                    for y_group_i in self.y_groups:
+                        y_group_i_df = y_group_i['df'].to_dict()
+                        all_y_gerbers.extend(y_group_i_df['ys_gerber'])
+                    avg_y_gerbers = np.mean(all_y_gerbers)
+
+                    sub_group_y_avg = np.mean(y_group_df['ys_gerber'])
+                    if sub_group_y_avg < avg_y_gerbers:
+                        x_interpitch = x_interpitches[0]
+                    else:
+                        x_interpitch = x_interpitches[1]
+
                 sub_det = DreamSubDetector(sub_index=len(self.sub_detectors))
                 sub_det.set_x(x_pos, x_group['amps'], x_group['hits'], x_group['times'], x_pitch, x_interpitch,
                               x_connector, x_group['cluster_triggers'], x_group['clusters'], x_group['cluster_sizes'],
