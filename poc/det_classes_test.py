@@ -490,7 +490,7 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
 
 
-def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0, max_r=None):
+def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0, max_r=None, n_bins=200):
     resid_df = []
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
@@ -526,7 +526,7 @@ def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0, m
             x_res_i = x_res_i[valid_indices]
             y_res_i = y_res_i[valid_indices]
 
-        x_popt_i, y_popt_i, x_perr_i, y_perr_i = fit_residuals_return_err(x_res_i, y_res_i)
+        x_popt_i, y_popt_i, x_perr_i, y_perr_i = fit_residuals_return_err(x_res_i, y_res_i, n_bins=n_bins)
         resid_df.append({'pitch_x': sub_det.x_pitch, 'pitch_y': sub_det.y_pitch,
                          'interpitch_x': sub_det.x_interpitch, 'interpitch_y': sub_det.y_interpitch,
                          'x_mean': x_popt_i[1], 'x_mean_err': x_perr_i[1],

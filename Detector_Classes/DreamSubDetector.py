@@ -43,8 +43,8 @@ class DreamSubDetector:
         self.x_amps = amps
         self.x_hits = hits
         self.x_times = times
-        self.x_pitch = pitch
-        self.x_interpitch = interpitch
+        self.x_pitch = float(pitch)
+        self.x_interpitch = float(interpitch)
         self.x_connector = connector
         self.x_cluster_triggers = cluster_triggers
         self.x_clusters = clusters
@@ -65,8 +65,8 @@ class DreamSubDetector:
         self.y_amps = amps
         self.y_hits = hits
         self.y_times = times
-        self.y_pitch = pitch
-        self.y_interpitch = interpitch
+        self.y_pitch = float(pitch)
+        self.y_interpitch = float(interpitch)
         self.y_connector = connector
         self.y_cluster_triggers = cluster_triggers
         self.y_clusters = clusters
@@ -112,23 +112,37 @@ class DreamSubDetector:
             centroids.append(np.array([x_centroid, y_centroid]))
         return np.array(triggers), np.array(centroids)
 
-    def plot_cluster_sizes(self, largest=True):
+    def plot_cluster_sizes(self, largest=True, event_nums=None):
         """
         Plot a histogram of cluster sizes for x and y.
         :return:
         """
         if largest:
-            x_sizes = self.x_largest_cluster_sizes
-            y_sizes = self.y_largest_cluster_sizes
+            x_sizes = np.array(self.x_largest_cluster_sizes)
+            y_sizes = np.array(self.y_largest_cluster_sizes)
         else:
-            x_sizes = self.x_cluster_sizes
-            y_sizes = self.y_cluster_sizes
+            x_sizes = np.array([cluster for event_clusters in self.x_cluster_sizes for cluster in event_clusters])
+            y_sizes = np.array([cluster for event_clusters in self.y_cluster_sizes for cluster in event_clusters])
+
+        if event_nums is not None:
+            event_mask_x = np.isin(self.x_cluster_triggers, event_nums) & np.isin(self.x_cluster_triggers, self.y_cluster_triggers)
+            event_mask_y = np.isin(self.y_cluster_triggers, event_nums) & np.isin(self.y_cluster_triggers, self.x_cluster_triggers)
+            x_sizes = x_sizes[event_mask_x]
+            y_sizes = y_sizes[event_mask_y]
 
         fig, ax = plt.subplots()
         ax.hist(x_sizes, bins=np.arange(0.5, max(x_sizes) + 1.5, 1), histtype='step', label='X Clusters')
         ax.hist(y_sizes, bins=np.arange(0.5, max(y_sizes) + 1.5, 1), histtype='step', label='Y Clusters')
+        x_mean, x_err = np.mean(x_sizes), np.std(x_sizes) / np.sqrt(len(x_sizes))
+        y_mean, y_err = np.mean(y_sizes), np.std(y_sizes) / np.sqrt(len(y_sizes))
+        ax.annotate(f'X Average Size: {x_mean:.2f}\nY Average Size: {y_mean:.2f}',
+                    xy=(0.5, 0.95), xycoords='axes fraction', fontsize=10,
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.5),
+                    ha='center', va='top')
         ax.set_xlabel('Cluster Size')
         ax.set_ylabel('Count')
         ax.set_title(f'Cluster Size Distribution {self.description}')
         ax.legend()
         fig.tight_layout()
+
+        return x_mean, y_mean, x_err, y_err
