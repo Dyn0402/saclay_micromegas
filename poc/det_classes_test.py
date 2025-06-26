@@ -431,7 +431,7 @@ def align_dream(det, ray_data, z_range=None, z_rot_range=None):
     det.set_center(x=det.center[0] - x_res_i_mean, y=det.center[1] - y_res_i_mean)
 
 
-def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tolerance=0.0, sub_reses_err=False):
+def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tolerance=0.0):
     x_res, y_res, = [], []
     x_subs_mean, x_subs_std, y_subs_mean, y_subs_std = [], [], [], []
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
@@ -490,7 +490,7 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
 
 
-def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0):
+def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0, max_r=None):
     resid_df = []
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
@@ -519,6 +519,12 @@ def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0):
 
         x_res_i = centroids_i_matched[:, 0] - x_rays
         y_res_i = centroids_i_matched[:, 1] - y_rays
+
+        if max_r is not None:
+            r_i = np.sqrt(x_res_i**2 + y_res_i**2)
+            valid_indices = r_i < max_r
+            x_res_i = x_res_i[valid_indices]
+            y_res_i = y_res_i[valid_indices]
 
         x_popt_i, y_popt_i, x_perr_i, y_perr_i = fit_residuals_return_err(x_res_i, y_res_i)
         resid_df.append({'pitch_x': sub_det.x_pitch, 'pitch_y': sub_det.y_pitch,
