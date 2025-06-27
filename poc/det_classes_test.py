@@ -490,6 +490,46 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
 
 
+def get_raw_residuals(det, ray_data, in_det=False, tolerance=0.0):
+    x_res, y_res, x_rays, y_rays = [], [], [], []
+    subs_centroids, subs_triggers = det.get_sub_centroids_coords()
+    for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
+        x_rays_i, y_rays_i, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
+        if in_det:
+            x_rays_i, y_rays_i, event_num_rays = get_rays_in_sub_det_vectorized(det, sub_det, x_rays_i, y_rays_i, event_num_rays, tolerance)
+
+        if event_num_rays is None or len(event_num_rays) == 0:
+            continue
+
+        # Sort sub_triggers and sub_centroids together by sub_trigger
+        sub_triggers, sub_centroids = zip(*sorted(zip(sub_triggers, sub_centroids)))
+        sub_centroids, sub_triggers = np.array(sub_centroids), np.array(sub_triggers)
+
+        # Sort x_rays, y_rays, and event_num_rays by event_num_rays
+        event_num_rays, x_rays_i, y_rays_i = zip(*sorted(zip(event_num_rays, x_rays_i, y_rays_i)))
+        event_num_rays, x_rays_i, y_rays_i = np.array(event_num_rays), np.array(x_rays_i), np.array(y_rays_i)
+
+        # Find indices of sub_triggers in event_num_rays
+        matched_indices = np.in1d(np.array(sub_triggers), np.array(event_num_rays)).nonzero()[0]
+
+        if len(matched_indices) == 0:
+            x_res.extend(None)
+            y_res.extend(None)
+            continue
+
+        centroids_i_matched = sub_centroids[matched_indices]
+
+        x_res_i = centroids_i_matched[:, 0] - x_rays_i
+        y_res_i = centroids_i_matched[:, 1] - y_rays_i
+
+        x_res.extend(x_res_i)
+        y_res.extend(y_res_i)
+        x_rays.extend(x_rays_i)
+        y_rays.extend(y_rays_i)
+
+    return x_res, y_res, x_rays, y_rays
+
+
 def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0, max_r=None, n_bins=200):
     resid_df = []
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
@@ -619,6 +659,207 @@ def get_residuals_align(det, ray_data, triggers, sub_reses=False, plot=False):
 #     x_res_i_mean, y_res_i_mean = x_popt[1], y_popt[1]
 #     x_res_i_std, y_res_i_std = x_popt[2], y_popt[2]
 #     return x_res_i_mean, y_res_i_mean, x_res_i_std, y_res_i_std
+
+
+def fit_time_diffs(time_diffs, n_bins=100, min_events=100, nsigma_filter=None, return_hist=False):
+    time_diffs = np.array(time_diffs)
+    time_diffs = time_diffs[~np.isnan(time_diffs)]
+
+    if nsigma_filter is not None:
+        median = np.median(time_diffs)
+        std = np.std(time_diffs)
+        mask = (time_diffs > median - nsigma_filter * std) & (time_diffs < median + nsigma_filter * std)
+        time_diffs = time_diffs[mask]
+
+    meases = [Measure(np.nan, np.nan) for _ in range(3)]
+
+    n_events = time_diffs.size
+    if n_events < min_events:
+        if return_hist:
+            return meases, None, None, None
+        return meases
+
+    hist, bin_edges = np.histogram(time_diffs, bins=n_bins)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    hist_err = np.where(hist > 0, np.sqrt(hist), 1)  # Assume not negative!
+
+    try:
+        p0 = [np.max(hist), np.mean(time_diffs), np.std(time_diffs)]
+        popt, pcov = cf(gaus, bin_centers, hist, p0=p0, sigma=hist_err, absolute_sigma=True)
+        popt[2] = abs(popt[2])  # Ensure sigma is positive
+
+        if nsigma_filter is not None:  # Refit after filtering on nsigma
+            mask = (time_diffs > popt[1] - nsigma_filter * popt[2]) & (time_diffs < popt[1] + nsigma_filter * popt[2])
+            time_diffs = time_diffs[mask]
+            hist, bin_edges = np.histogram(time_diffs, bins=n_bins)
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+            hist_err = np.where(hist > 0, np.sqrt(hist), 1)  # Assume not negative!
+            p0 = [np.max(hist), np.mean(time_diffs), np.std(time_diffs)]
+            popt, pcov = cf(gaus, bin_centers, hist, p0=p0, sigma=hist_err, absolute_sigma=True)
+
+        popt[2] = abs(popt[2])  # Ensure sigma is positive
+        perr = np.sqrt(np.diag(pcov))
+        meases = [Measure(val, err) for val, err in zip(popt, perr)]
+
+        if return_hist:
+            return meases, hist, bin_centers, hist_err
+        return meases
+    except RuntimeError:
+        if return_hist:
+            return meases, hist, bin_centers, hist_err
+        return meases
+
+
+def make_percentile_cuts(data, percentile_cuts=(None,None), return_what='data'):
+    if len(data) == 0:
+        return data
+
+    if percentile_cuts[0] is not None and percentile_cuts[1] is not None:
+        low_percentile = np.nanpercentile(data, percentile_cuts[0])
+        high_percentile = np.nanpercentile(data, percentile_cuts[1])
+        percentile_filter = (data > low_percentile) & (data < high_percentile)
+    elif percentile_cuts[0] is not None:
+        low_percentile = np.nanpercentile(data, percentile_cuts[0])
+        percentile_filter = data > low_percentile
+    elif percentile_cuts[1] is not None:
+        high_percentile = np.nanpercentile(data, percentile_cuts[1])
+        percentile_filter = data < high_percentile
+    else:
+        return data
+
+    if return_what == 'filter':
+        return percentile_filter
+    else:
+        return data[percentile_filter]
+
+
+def get_circle_scan(resids, xs, ys, xy_pairs, radius=1, resid_lims=None, min_events=100, nbins=100, percentile_cuts=(None, None), nsigma_filter=None, shape='circle', plot=False):
+    if resid_lims is not None:
+        resids[(resids < resid_lims[0]) | (resids > resid_lims[1])] = np.nan
+
+    resolutions, means, events = [], [], []
+    for x, y in xy_pairs:
+        # print(f'Circle Scan: ({x}, {y})')
+        if shape == 'circle':
+            rs = np.sqrt((xs - x) ** 2 + (ys - y) ** 2)
+            mask = rs < radius
+        elif shape == 'square':
+            mask = (xs > x - radius) & (xs < x + radius) & (ys > y - radius) & (ys < y + radius)
+        else:
+            print(f"Invalid shape: {shape}")
+            return
+        time_diffs_bin = resids[mask]
+        time_diffs_bin = np.array(time_diffs_bin[~np.isnan(time_diffs_bin)])
+
+        time_diffs_bin = make_percentile_cuts(time_diffs_bin, percentile_cuts)
+
+        n_events = time_diffs_bin.size
+
+
+        fit_meases, hist_bin, bin_centers, hist_err = fit_time_diffs(time_diffs_bin, n_bins=nbins, min_events=min_events,
+                                                                     nsigma_filter=nsigma_filter, return_hist=True)
+
+        resolutions.append(fit_meases[2])
+        means.append(fit_meases[1])
+        events.append(n_events)
+
+        # hist_bin, bin_edges = np.histogram(time_diffs_bin, bins=100)
+        # bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        if plot:
+            fig, ax = plt.subplots()
+            # ax.bar(bin_centers, hist_bin, width=bin_edges[1] - bin_edges[0], align='center', alpha=0.5)
+            # hist_err = np.where(hist_bin > 0, np.sqrt(hist_bin), 1)
+            ax.errorbar(bin_centers, hist_bin, yerr=hist_err, fmt='o', color='black', ls='none', zorder=2)
+            x_plt = np.linspace(bin_centers[0], bin_centers[-1], 200)
+            ax.plot(x_plt, gaus(x_plt, *[par.val for par in fit_meases]), color='red', zorder=4)
+            ax.axhline(0, color='black', alpha=0.5, zorder=0)
+            ax.set_title(f'x={x} mm, y={y}, radius={radius} mm')
+            ax.set_xlabel('SAT [ps]')
+            ax.set_ylabel('Events')
+            time_unit = 'ps'
+            fit_str = f'Events={n_events}\nA={fit_meases[0]}\nμ={fit_meases[1]} {time_unit}\nσ={fit_meases[2]} {time_unit}'
+            ax.annotate(fit_str, xy=(0.05, 0.95), xycoords='axes fraction', ha='left', va='top',
+                        bbox=dict(boxstyle='round,pad=0.5', edgecolor='black', facecolor='lightyellow'))
+            fig.tight_layout()
+
+    return resolutions, means, events
+
+
+def plot_2D_circle_scan(scan_resolutions, scan_means, xs, ys, scan_events=None, radius=None, percentile_filter=(0, 100)):
+    radius_str = f' radius={radius:.1f} mm' if radius is not None else ''
+
+    scan_resolution_vals = [res.val for res in scan_resolutions]
+    scan_mean_val = [mean.val for mean in scan_means]
+
+    x_mesh, y_mesh = np.meshgrid(xs, ys)
+
+    # Convert to 2D arrays
+    scan_resolutions_2d = np.array(scan_resolution_vals).reshape(len(ys), len(xs))
+    scan_means_2d = np.array(scan_mean_val).reshape(len(ys), len(xs))
+    print(f'scan_res min: {np.nanmin(scan_resolution_vals)}, max: {np.nanmax(scan_resolution_vals)}')
+    res_vmin, res_vmax = np.nanmin(scan_resolution_vals), np.nanpercentile(scan_resolution_vals, percentile_filter[1])
+    print(f'res_vmax: {res_vmax}')
+    mean_vmin, mean_vmax = np.nanpercentile(scan_mean_val, 100 - percentile_filter[1]), np.nanpercentile(scan_mean_val, 100 - percentile_filter[0])
+    print(f'mean_vmin: {mean_vmin}, mean_vmax: {mean_vmax}')
+
+    # Plot results
+    fig, ax = plt.subplots(figsize=(8, 6))
+    c = ax.imshow(scan_resolutions_2d, extent=[xs.min(), xs.max(), ys.min(), ys.max()], origin="lower", aspect="auto",
+                  cmap="jet", vmin=res_vmin, vmax=res_vmax)
+    plt.colorbar(c, label="Spatial Resolution [ps]")
+    ax.set_xlabel("X Position [mm]")
+    ax.set_ylabel("Y Position [mm]")
+    ax.set_title(f"Spatial Resolution Heatmap{radius_str}")
+
+    # Create the contour plot
+    fig, ax = plt.subplots(figsize=(8, 6))
+    levels = np.linspace(res_vmin, res_vmax, 50)
+    contour = ax.contourf(x_mesh, y_mesh, scan_resolutions_2d, levels=levels, cmap="jet")
+
+    # Add color bar
+    cbar = plt.colorbar(contour)
+    cbar.set_label("Timing Resolution [ps]")
+
+    # Labels and title
+    ax.set_xlabel("X Position [mm]")
+    ax.set_ylabel("Y Position [mm]")
+    ax.set_title(f"Timing Resolution Contour Plot{radius_str}")
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    c = ax.imshow(scan_means_2d, extent=[xs.min(), xs.max(), ys.min(), ys.max()], origin="lower", aspect="auto",
+                  cmap="jet", vmin=mean_vmin, vmax=mean_vmax)
+    plt.colorbar(c, label="SAT [ps]")
+    ax.set_xlabel("X Position [mm]")
+    ax.set_ylabel("Y Position [mm]")
+    ax.set_title(f"SAT Heatmap{radius_str}")
+
+    # Create the contour plot
+    fig, ax = plt.subplots(figsize=(8, 6))
+    levels = np.linspace(mean_vmin, mean_vmax, 50)
+    contour = ax.contourf(x_mesh, y_mesh, scan_means_2d, levels=levels, cmap="jet")
+
+    # Add color bar
+    cbar = plt.colorbar(contour)
+    cbar.set_label("SAT [ps]")
+
+    # Labels and title
+    ax.set_xlabel("X Position [mm]")
+    ax.set_ylabel("Y Position [mm]")
+    ax.set_title(f"SAT Contour Plot{radius_str}")
+
+    if scan_events is not None:
+        scan_events_2d = np.array(scan_events).reshape(len(ys), len(xs))
+        masked_scan_events_2d = np.ma.masked_equal(scan_events_2d, 0)
+        fig, ax = plt.subplots(figsize=(8, 6))
+        c = ax.imshow(masked_scan_events_2d, extent=[xs.min(), xs.max(), ys.min(), ys.max()], origin="lower",
+                      aspect="auto", cmap="jet")
+        plt.colorbar(c, label="Number of Events")
+        ax.set_xlabel("X Position [mm]")
+        ax.set_ylabel("Y Position [mm]")
+        ax.set_title(f"Event Statistics Heatmap{radius_str}")
 
 
 def get_banco_telescope_residuals(det, banco_telescope, banco_triggers=None, plot=False):
@@ -1168,6 +1409,12 @@ def get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance=
             y_rays_sub.append(y_ray)
             event_num_rays_sub.append(event_num_ray)
     return x_rays_sub, y_rays_sub, event_num_rays_sub
+
+
+def get_rays_in_sub_det_vectorized(det, sub_det, x_rays, y_rays, event_num_rays, tolerance=0.0):
+    z = np.full_like(x_rays, det.center[2])
+    mask = det.in_sub_det_mask(sub_det.sub_index, x_rays, y_rays, z, tolerance)
+    return x_rays[mask], y_rays[mask], event_num_rays[mask]
 
 
 def get_rays_in_det(det, x_rays, y_rays, event_num_rays, tolerance=0.0):

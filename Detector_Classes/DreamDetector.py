@@ -314,7 +314,6 @@ class DreamDetector(Detector):
         common_events_list = list(result.keys())
         self.xy_largest_cluster_sums = list(result.values())
 
-
     def in_sub_det(self, sub_det_i, x, y, z, tolerance=0):
         """
         Check if a point is within a sub-detector x-y area using the sub-detector corners. Add tolerance to bounds.
@@ -332,6 +331,24 @@ class DreamDetector(Detector):
         x_min, x_max = np.min(corners[:, 0]) - tolerance, np.max(corners[:, 0]) + tolerance
         y_min, y_max = np.min(corners[:, 1]) - tolerance, np.max(corners[:, 1]) + tolerance
         return x_min < local_coords[0] < x_max and y_min < local_coords[1] < y_max
+
+    def in_sub_det_mask(self, sub_det_i, x, y, z, tolerance=0):
+        """
+        Return a boolean mask of which points are inside the sub-detector.
+        x, y, z: arrays of same shape (N,)
+        """
+        self.get_sub_det_corners()
+        coords = np.stack([x, y, z], axis=1)  # shape (N, 3)
+        local_coords = self.convert_global_coords_to_local(coords)
+
+        corners = self.sub_det_corners_local[sub_det_i]
+        x_min, x_max = np.min(corners[:, 0]) - tolerance, np.max(corners[:, 0]) + tolerance
+        y_min, y_max = np.min(corners[:, 1]) - tolerance, np.max(corners[:, 1]) + tolerance
+
+        x_local = local_coords[:, 0]
+        y_local = local_coords[:, 1]
+
+        return (x_min < x_local) & (x_local < x_max) & (y_min < y_local) & (y_local < y_max)
 
     def in_det(self, x, y, z, tolerance=0.0):
         """
