@@ -112,10 +112,14 @@ class DreamSubDetector:
             centroids.append(np.array([x_centroid, y_centroid]))
         return np.array(triggers), np.array(centroids)
 
-    def plot_cluster_sizes(self, largest=True, event_nums=None):
+    def get_cluster_sizes(self, largest=True, event_nums=None, return_ray_mask=False):
         """
-        Plot a histogram of cluster sizes for x and y.
-        :return:
+        Get cluster sizes for x and y. If largest is True, return only the largest cluster sizes.
+        If event_nums is provided, filter clusters by these event numbers.
+        :param largest: bool, whether to return only the largest clusters
+        :param event_nums: list or array of event numbers to filter by
+        :param return_ray_mask: bool, whether to return mask for the events
+        :return: tuple of x and y cluster sizes
         """
         if largest:
             x_sizes = np.array(self.x_largest_cluster_sizes)
@@ -129,6 +133,19 @@ class DreamSubDetector:
             event_mask_y = np.isin(self.y_cluster_triggers, event_nums) & np.isin(self.y_cluster_triggers, self.x_cluster_triggers)
             x_sizes = x_sizes[event_mask_x]
             y_sizes = y_sizes[event_mask_y]
+
+        if return_ray_mask:
+            ray_mask = np.isin(event_nums, self.x_cluster_triggers) & np.isin(event_nums, self.y_cluster_triggers)
+            return x_sizes, y_sizes, ray_mask
+
+        return x_sizes, y_sizes
+
+    def plot_cluster_sizes(self, largest=True, event_nums=None):
+        """
+        Plot a histogram of cluster sizes for x and y.
+        :return:
+        """
+        x_sizes, y_sizes = self.get_cluster_sizes(largest=largest, event_nums=event_nums)
 
         fig, ax = plt.subplots()
         ax.hist(x_sizes, bins=np.arange(0.5, max(x_sizes) + 1.5, 1), histtype='step', label='X Clusters')

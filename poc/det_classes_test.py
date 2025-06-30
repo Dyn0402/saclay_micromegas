@@ -438,7 +438,8 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
         if in_det:
-            x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+            # x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+            x_rays, y_rays, event_num_rays = get_rays_in_sub_det_vectorized(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
 
         if event_num_rays is None or len(event_num_rays) == 0:
             continue
@@ -536,7 +537,8 @@ def get_residuals_subdets_with_err(det, ray_data, in_det=False, tolerance=0.0, m
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
         if in_det:
-            x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+            # x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+            x_rays, y_rays, event_num_rays = get_rays_in_sub_det_vectorized(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
 
         if event_num_rays is None or len(event_num_rays) == 0:
             continue
@@ -735,7 +737,8 @@ def make_percentile_cuts(data, percentile_cuts=(None,None), return_what='data'):
         return data[percentile_filter]
 
 
-def get_circle_scan(resids, xs, ys, xy_pairs, radius=1, resid_lims=None, min_events=100, nbins=100, percentile_cuts=(None, None), nsigma_filter=None, shape='circle', plot=False):
+def get_circle_scan(resids, xs, ys, xy_pairs, radius=1, resid_lims=None, min_events=100, nbins=100,
+                    percentile_cuts=(None, None), nsigma_filter=None, shape='circle', gaus_fit=True, plot=False):
     if resid_lims is not None:
         resids[(resids < resid_lims[0]) | (resids > resid_lims[1])] = np.nan
 
@@ -757,7 +760,13 @@ def get_circle_scan(resids, xs, ys, xy_pairs, radius=1, resid_lims=None, min_eve
 
         n_events = time_diffs_bin.size
 
-
+        if not gaus_fit:
+            resolutions.append(Measure(np.nansum(time_diffs_bin), 0))
+            means.append(Measure(np.nanmean(time_diffs_bin), 0))
+            events.append(n_events)
+            if plot:
+                print(f'Skipping Gaussian fit for ({x}, {y}) due to gaus_fit=False')
+            continue
         fit_meases, hist_bin, bin_centers, hist_err = fit_time_diffs(time_diffs_bin, n_bins=nbins, min_events=min_events,
                                                                      nsigma_filter=nsigma_filter, return_hist=True)
 
@@ -788,11 +797,17 @@ def get_circle_scan(resids, xs, ys, xy_pairs, radius=1, resid_lims=None, min_eve
     return resolutions, means, events
 
 
-def plot_2D_circle_scan(scan_resolutions, scan_means, xs, ys, scan_events=None, radius=None, percentile_filter=(0, 100)):
+def plot_2D_circle_scan(scan_resolutions, scan_means, xs, ys, scan_events=None, radius=None, percentile_filter=(0, 100),
+                        plot='both', conversion_factor=1, unit_str='mm',
+                        res_title='Spatial Resolution', mean_title='Mean Residual',
+                        res_range=None, mean_range=None):
     radius_str = f' radius={radius:.1f} mm' if radius is not None else ''
 
     scan_resolution_vals = [res.val for res in scan_resolutions]
     scan_mean_val = [mean.val for mean in scan_means]
+
+    scan_resolution_vals = [res * conversion_factor for res in scan_resolution_vals]
+    scan_mean_val = [mean * conversion_factor for mean in scan_mean_val]  # Convert to micron
 
     x_mesh, y_mesh = np.meshgrid(xs, ys)
 
@@ -805,50 +820,57 @@ def plot_2D_circle_scan(scan_resolutions, scan_means, xs, ys, scan_events=None, 
     mean_vmin, mean_vmax = np.nanpercentile(scan_mean_val, 100 - percentile_filter[1]), np.nanpercentile(scan_mean_val, 100 - percentile_filter[0])
     print(f'mean_vmin: {mean_vmin}, mean_vmax: {mean_vmax}')
 
+    if res_range is not None:
+        res_vmin, res_vmax = res_range
+    if mean_range is not None:
+        mean_vmin, mean_vmax = mean_range
+
     # Plot results
-    fig, ax = plt.subplots(figsize=(8, 6))
-    c = ax.imshow(scan_resolutions_2d, extent=[xs.min(), xs.max(), ys.min(), ys.max()], origin="lower", aspect="auto",
-                  cmap="jet", vmin=res_vmin, vmax=res_vmax)
-    plt.colorbar(c, label="Spatial Resolution [ps]")
-    ax.set_xlabel("X Position [mm]")
-    ax.set_ylabel("Y Position [mm]")
-    ax.set_title(f"Spatial Resolution Heatmap{radius_str}")
+    if plot == 'both' or 'resolution' in plot:
+        fig, ax = plt.subplots(figsize=(8, 6))
+        c = ax.imshow(scan_resolutions_2d, extent=[xs.min(), xs.max(), ys.min(), ys.max()], origin="lower", aspect="auto",
+                      cmap="jet", vmin=res_vmin, vmax=res_vmax)
+        plt.colorbar(c, label=f"{res_title} [{unit_str}]")
+        ax.set_xlabel("X Position [mm]")
+        ax.set_ylabel("Y Position [mm]")
+        ax.set_title(f"{res_title} Heatmap{radius_str}")
 
-    # Create the contour plot
-    fig, ax = plt.subplots(figsize=(8, 6))
-    levels = np.linspace(res_vmin, res_vmax, 50)
-    contour = ax.contourf(x_mesh, y_mesh, scan_resolutions_2d, levels=levels, cmap="jet")
+        # Create the contour plot
+        fig, ax = plt.subplots(figsize=(8, 6))
+        levels = np.linspace(res_vmin, res_vmax, 50)
+        contour = ax.contourf(x_mesh, y_mesh, scan_resolutions_2d, levels=levels, cmap="jet")
 
-    # Add color bar
-    cbar = plt.colorbar(contour)
-    cbar.set_label("Timing Resolution [ps]")
+        # Add color bar
+        cbar = plt.colorbar(contour)
+        cbar.set_label(f"{res_title} [{unit_str}]")
 
-    # Labels and title
-    ax.set_xlabel("X Position [mm]")
-    ax.set_ylabel("Y Position [mm]")
-    ax.set_title(f"Timing Resolution Contour Plot{radius_str}")
+        # Labels and title
+        ax.set_xlabel("X Position [mm]")
+        ax.set_ylabel("Y Position [mm]")
+        ax.set_title(f"{res_title} Contour Plot{radius_str}")
 
-    fig, ax = plt.subplots(figsize=(8, 6))
-    c = ax.imshow(scan_means_2d, extent=[xs.min(), xs.max(), ys.min(), ys.max()], origin="lower", aspect="auto",
-                  cmap="jet", vmin=mean_vmin, vmax=mean_vmax)
-    plt.colorbar(c, label="SAT [ps]")
-    ax.set_xlabel("X Position [mm]")
-    ax.set_ylabel("Y Position [mm]")
-    ax.set_title(f"SAT Heatmap{radius_str}")
+    if plot == 'both' or 'mean' in plot:
+        fig, ax = plt.subplots(figsize=(8, 6))
+        c = ax.imshow(scan_means_2d, extent=[xs.min(), xs.max(), ys.min(), ys.max()], origin="lower", aspect="auto",
+                      cmap="jet", vmin=mean_vmin, vmax=mean_vmax)
+        plt.colorbar(c, label=f"{mean_title} [{unit_str}]")
+        ax.set_xlabel("X Position [mm]")
+        ax.set_ylabel("Y Position [mm]")
+        ax.set_title(f"{mean_title} Heatmap{radius_str}")
 
-    # Create the contour plot
-    fig, ax = plt.subplots(figsize=(8, 6))
-    levels = np.linspace(mean_vmin, mean_vmax, 50)
-    contour = ax.contourf(x_mesh, y_mesh, scan_means_2d, levels=levels, cmap="jet")
+        # Create the contour plot
+        fig, ax = plt.subplots(figsize=(8, 6))
+        levels = np.linspace(mean_vmin, mean_vmax, 50)
+        contour = ax.contourf(x_mesh, y_mesh, scan_means_2d, levels=levels, cmap="jet")
 
-    # Add color bar
-    cbar = plt.colorbar(contour)
-    cbar.set_label("SAT [ps]")
+        # Add color bar
+        cbar = plt.colorbar(contour)
+        cbar.set_label(f"{mean_title} [{unit_str}]")
 
-    # Labels and title
-    ax.set_xlabel("X Position [mm]")
-    ax.set_ylabel("Y Position [mm]")
-    ax.set_title(f"SAT Contour Plot{radius_str}")
+        # Labels and title
+        ax.set_xlabel("X Position [mm]")
+        ax.set_ylabel("Y Position [mm]")
+        ax.set_title(f"{mean_title} Contour Plot{radius_str}")
 
     if scan_events is not None:
         scan_events_2d = np.array(scan_events).reshape(len(ys), len(xs))
@@ -967,7 +989,8 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
         if in_det:
-            x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+            # x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
+            x_rays, y_rays, event_num_rays = get_rays_in_sub_det_vectorized(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
 
         if event_num_rays is None or len(event_num_rays) == 0:
             continue

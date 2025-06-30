@@ -599,14 +599,14 @@ class DreamDetector(Detector):
         ax.set_ylabel('Amplitude Sum')
 
         for x_group in self.x_groups:
-            x_amps = np.sum(x_group['amps'], axis=1)
+            x_amps = np.nansum(x_group['amps'], axis=1)
             event_nums = self.dream_data.event_nums
             # Sort x_amps and event_nums by event_nums
             x_amps = x_amps[event_nums.argsort()]
             event_nums = np.sort(event_nums)
             ax.plot(event_nums, x_amps, label=f'x: {x_group["df"]["pitch(mm)"]}, {x_group["df"]["interpitch(mm)"]}')
         for y_group in self.y_groups:
-            y_amps = np.sum(y_group['amps'], axis=1)
+            y_amps = np.nansum(y_group['amps'], axis=1)
             event_nums = self.dream_data.event_nums
             # Sort y_amps and event_nums by event_nums
             y_amps = y_amps[event_nums.argsort()]
@@ -617,13 +617,13 @@ class DreamDetector(Detector):
         if (return_events or print) and threshold is not None:
             if print:
                 print(f'Events with sum greater than {threshold}:')
-            x_amp_sums = np.sum([np.sum(x_group['amps'], axis=1) for x_group in self.x_groups], axis=0)
-            y_amp_sums = np.sum([np.sum(y_group['amps'], axis=1) for y_group in self.y_groups], axis=0)
+            x_amp_sums = np.nansum([np.sum(x_group['amps'], axis=1) for x_group in self.x_groups], axis=0)
+            y_amp_sums = np.nansum([np.sum(y_group['amps'], axis=1) for y_group in self.y_groups], axis=0)
             event_nums = []
             for i, (x_amp_sum, y_amp_sum) in enumerate(zip(x_amp_sums, y_amp_sums)):
                 if x_amp_sum > threshold and y_amp_sum > threshold:
                     if hit_threshold is not None:
-                        if np.sum(self.x_hits[i]) < hit_threshold and np.sum(self.y_hits[i]) < hit_threshold:
+                        if np.nansum(self.x_hits[i]) < hit_threshold and np.nansum(self.y_hits[i]) < hit_threshold:
                             if print:
                                 print(f'Event {i}: x: {x_amp_sum}, y: {y_amp_sum}')
                             event_nums.append(i)

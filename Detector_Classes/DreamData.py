@@ -501,7 +501,7 @@ class DreamData:
             ax.set_xlabel('Amplitude')
             fig.tight_layout()
 
-    def plot_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, plot=True):
+    def get_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, filter_times=True):
         if channels is not None:
             time_maxes = self.data_time_of_max[:, channels]
             amps = self.data_amps[:, channels]
@@ -520,26 +520,100 @@ class DreamData:
 
         if max_channel:
             # Filter out events where all amplitudes are nan
-            time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
-            amps = amps[~np.all(np.isnan(amps), axis=1)]
+            # time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
+            # amps = amps[~np.all(np.isnan(amps), axis=1)]
+            amps_no_nan = np.where(np.isnan(amps), -np.inf, amps)
 
             # Get amp and time_max of the channel with the max amplitude in each event
-            max_amp_channels = np.nanargmax(amps, axis=1)
+            # max_amp_channels = np.nanargmax(amps, axis=1)
+            max_amp_channels = np.nanargmax(amps_no_nan, axis=1)
             time_maxes = time_maxes[np.arange(len(time_maxes)), max_amp_channels]
         elif channel is not None:
             time_maxes = time_maxes[:, channel]
         else:
             time_maxes = np.ravel(time_maxes)
 
-        time_maxes = time_maxes[~np.isnan(time_maxes)]
+        return np.ravel(time_maxes)
 
-        time_of_max = np.ravel(time_maxes)
-        time_of_max = time_of_max[(time_of_max > -1) & (time_of_max < 40)] * self.sample_period
-        original_num = len(time_of_max)
-        time_of_max = time_of_max[(time_of_max > 3 * self.sample_period) & (time_of_max < 15 * self.sample_period)]
+        # if filter_times:
+        #     time_maxes = time_maxes[~np.isnan(time_maxes)]
+        #
+        #     time_of_max = np.ravel(time_maxes)
+        #     time_of_max = time_of_max[(time_of_max > -1) & (time_of_max < 40)] * self.sample_period
+        #     original_num = len(time_of_max)
+        #     time_of_max = time_of_max[(time_of_max > 3 * self.sample_period) & (time_of_max < 15 * self.sample_period)]
+        #     cut_num = len(time_of_max)
+        #     if cut_num / original_num < 0.9:
+        #         print(f'Warning: Cut {1 - cut_num / original_num * 100:.2f}% of events.')
+        #
+        #     return time_of_max
+        # else:
+        #     return np.ravel(time_maxes)
+
+    def filter_time_maxes(self, time_of_max, return_mask=False):
+        # time_of_max = time_of_max[(time_of_max > -1) & (time_of_max < 40)] * self.sample_period
+        # original_num = len(time_of_max)
+        # time_of_max = time_of_max[(time_of_max > 3 * self.sample_period) & (time_of_max < 15 * self.sample_period)]
+        # cut_num = len(time_of_max)
+        # if cut_num / original_num < 0.9:
+        #     print(f'Warning: Cut {1 - cut_num / original_num * 100:.2f}% of events.')
+
+        time_of_max = np.where(np.isnan(time_of_max), -np.inf, time_of_max)
+        loose_sample_mask = (time_of_max > -1) & (time_of_max < 40)
+        original_num = len(time_of_max[loose_sample_mask])
+        tight_sample_mask = (time_of_max > 3) & (time_of_max < 15)
+        time_of_max = time_of_max[tight_sample_mask] * self.sample_period
         cut_num = len(time_of_max)
         if cut_num / original_num < 0.9:
             print(f'Warning: Cut {1 - cut_num / original_num * 100:.2f}% of events.')
+
+        if return_mask:
+            return time_of_max, tight_sample_mask
+
+        return time_of_max
+
+    def plot_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, plot=True):
+        # if channels is not None:
+        #     time_maxes = self.data_time_of_max[:, channels]
+        #     amps = self.data_amps[:, channels]
+        # else:
+        #     time_maxes = self.data_time_of_max
+        #     amps = self.data_amps
+        #
+        # if min_amp is not None:
+        #     # Filter out events where all amplitudes are nan
+        #     time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
+        #     amps = amps[~np.all(np.isnan(amps), axis=1)]
+        #
+        #     min_amp_mask = np.nanmax(amps, axis=1) > min_amp
+        #     time_maxes = time_maxes[min_amp_mask]
+        #     amps = amps[min_amp_mask]
+        #
+        # if max_channel:
+        #     # Filter out events where all amplitudes are nan
+        #     time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
+        #     amps = amps[~np.all(np.isnan(amps), axis=1)]
+        #
+        #     # Get amp and time_max of the channel with the max amplitude in each event
+        #     max_amp_channels = np.nanargmax(amps, axis=1)
+        #     time_maxes = time_maxes[np.arange(len(time_maxes)), max_amp_channels]
+        # elif channel is not None:
+        #     time_maxes = time_maxes[:, channel]
+        # else:
+        #     time_maxes = np.ravel(time_maxes)
+        #
+        # time_maxes = time_maxes[~np.isnan(time_maxes)]
+
+        # time_of_max = np.ravel(time_maxes)
+        # time_of_max = time_of_max[(time_of_max > -1) & (time_of_max < 40)] * self.sample_period
+        # original_num = len(time_of_max)
+        # time_of_max = time_of_max[(time_of_max > 3 * self.sample_period) & (time_of_max < 15 * self.sample_period)]
+        # cut_num = len(time_of_max)
+        # if cut_num / original_num < 0.9:
+        #     print(f'Warning: Cut {1 - cut_num / original_num * 100:.2f}% of events.')
+
+        time_of_max = self.get_event_time_maxes(channel=channel, channels=channels, max_channel=max_channel, min_amp=min_amp)
+        time_of_max = self.filter_time_maxes(time_of_max)
 
         # Make numpy histogram and fit to gaussian
         hist, bins = np.histogram(time_of_max, bins=100)
@@ -658,7 +732,14 @@ class DreamData:
         Plot metric for noise in data.
         :return:
         """
-        event_amp_sums = np.sum(self.data_amps, axis=1)
+        event_amp_sums = np.nansum(self.data_amps, axis=1)
+        event_hits = np.nansum(self.hits, axis=1)
+        event_max_amps = np.nanmax(self.data_amps, axis=1)
+        nan_mask = np.isnan(event_amp_sums) | np.isnan(event_hits) | np.isnan(event_max_amps)
+        event_amp_sums = event_amp_sums[~nan_mask]
+        event_hits = event_hits[~nan_mask]
+        event_max_amps = event_max_amps[~nan_mask]
+
         fig, ax = plt.subplots()
         ax.plot(event_amp_sums)
         ax.set_title('Event Amplitude Sums')
@@ -673,7 +754,6 @@ class DreamData:
         ax.set_ylabel('Events')
         fig.tight_layout()
 
-        event_hits = np.sum(self.hits, axis=1)
         fig, ax = plt.subplots()
         ax.scatter(event_hits, event_amp_sums, alpha=0.5)
         ax.set_title('Event Amplitude Sums vs Hits')
@@ -681,7 +761,7 @@ class DreamData:
         ax.set_ylabel('Amplitude Sum')
         fig.tight_layout()
 
-        event_max_amps = np.max(self.data_amps, axis=1)
+
         fig, ax = plt.subplots()
         ax.scatter(event_max_amps, event_amp_sums, alpha=0.5)
         ax.set_title('Event Amplitude Sums vs Max Amplitudes')
