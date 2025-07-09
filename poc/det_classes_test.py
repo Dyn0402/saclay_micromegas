@@ -761,9 +761,14 @@ def get_circle_scan(resids, xs, ys, xy_pairs, radius=1, resid_lims=None, min_eve
         n_events = time_diffs_bin.size
 
         if not gaus_fit:
-            resolutions.append(Measure(np.nansum(time_diffs_bin), 0))
-            means.append(Measure(np.nanmean(time_diffs_bin), 0))
-            events.append(n_events)
+            if n_events < min_events:
+                resolutions.append(Measure(np.nan, np.nan))
+                means.append(Measure(np.nan, np.nan))
+                events.append(n_events)
+            else:
+                resolutions.append(Measure(np.nansum(time_diffs_bin), 0))
+                means.append(Measure(np.nanmean(time_diffs_bin), 0))
+                events.append(n_events)
             if plot:
                 print(f'Skipping Gaussian fit for ({x}, {y}) due to gaus_fit=False')
             continue
