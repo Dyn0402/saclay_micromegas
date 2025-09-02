@@ -330,6 +330,28 @@ def configuration_optimization():
                 ]
         },
         {
+            'name': r'Sandwiched 150$\mu$m (uRW) Resolution 150 GeV Muons',
+            'banco_res': 150 / 10000,  # um to cm
+            'incident_energy': 150e3,  # MeV
+            'scattering_objects':
+                [
+                    {'material': 'air', 'thickness': 13, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 1.58e-2, 'type': 'test_det'},  # Ballpark
+                    {'material': 'air', 'thickness': 8, 'type': 'air'},  # cm
+                    {'x0': 0.003, 'thickness': 150 / 10000, 'type': 'banco'},  # Guess, same as test
+                ]
+        },
+        {
             'name': r'2023 Test Beam Config 10$\mu$m Resolution 80 GeV Muons',
             'banco_res': 10 / 10000,  # um to cm
             'incident_energy': 80e3,  # MeV
