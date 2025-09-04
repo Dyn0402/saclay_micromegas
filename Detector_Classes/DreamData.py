@@ -1404,6 +1404,7 @@ def get_good_files(file_list, flags=None, feu_num=None, file_ext=None, file_nums
     good_files = []
     file_nums = None if file_nums == 'all' else file_nums
     for file in file_list:
+        print(f'Checking file: {file}')
         if file_ext is not None and not file.endswith(file_ext):
             continue
         if file_nums is not None and get_num_from_fdf_file_name(file, -2) not in file_nums:

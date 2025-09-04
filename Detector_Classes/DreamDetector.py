@@ -93,7 +93,8 @@ class DreamDetector(Detector):
         self.dream_data.connector_channels = connector_channels
         if noise_threshold_sigmas is not None:
             self.dream_data.noise_thresh_sigmas = noise_threshold_sigmas
-        self.dream_data.read_ped_data()
+        if ped_dir:
+            self.dream_data.read_ped_data()
         self.dream_data.read_data(file_nums, chunk_size=chunk_size, trigger_list=trigger_list,
                                   hist_raw_amps=hist_raw_amps, save_waveforms=save_waveforms)
 
