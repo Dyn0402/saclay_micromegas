@@ -45,6 +45,9 @@ class M3RefTracking:
         else:
             return get_xy_positions(self.ray_data, z, event_list)
 
+    def get_xy_angles(self, event_list=None):
+        return get_xy_angles(self.ray_data, event_list)
+
     def get_traversing_triggers(self, z, x_bounds, y_bounds, expansion_factor=1):
         """
         Get the event numbers of events that traverse the detector, given by the x and y bounds at altitude z.
@@ -222,3 +225,28 @@ def get_xy_positions(ray_data, z, event_list=None):
     y_positions = y_up + t * (y_down - y_up)
 
     return x_positions, y_positions, event_nums
+
+
+def get_xy_angles(ray_data, event_list=None):
+    if isinstance(ray_data, ak.highlevel.Array):  # If ray data is awkward array, convert relevant entries to dict of
+        variables = ['evn', 'Z_Up', 'Z_Down', 'X_Up', 'X_Down', 'Y_Up', 'Y_Down']  # numpy arrays
+        ray_data_hold = ray_data
+        ray_data = {}
+        for var in variables:
+            ray_data[var] = ak.to_numpy(ray_data_hold[var])
+
+    mask = np.full(ray_data['evn'].size, True)
+    if event_list is not None:
+        mask = np.isin(ray_data['evn'], event_list)
+
+    z_up, z_down = ray_data['Z_Up'][mask], ray_data['Z_Down'][mask]
+    x_up, x_down = ray_data['X_Up'][mask], ray_data['X_Down'][mask]
+    y_up, y_down = ray_data['Y_Up'][mask], ray_data['Y_Down'][mask]
+    event_nums = ray_data['evn'][mask]
+
+    # Calculate the angles
+    delta_z = z_down - z_up
+    x_angles = np.arctan((x_down - x_up) / delta_z)
+    y_angles = np.arctan((y_down - y_up) / delta_z)
+
+    return x_angles, y_angles, event_nums

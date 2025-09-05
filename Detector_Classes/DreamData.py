@@ -253,6 +253,36 @@ class DreamData:
 
         print(f'Fitting time: {time() - start} s')
 
+    def get_tpc_event_amplitudes(self):
+        start = time()
+
+        num_chunks = max(os.cpu_count() - 1, 1)
+        data_chunks = np.array_split(self.data, num_chunks, axis=0)
+
+        def process_chunk(chunk):
+            return get_waveform_fits(chunk, self.noise_thresholds, self.waveform_fit_func)
+
+        fits_list = []
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for fits in tqdm(executor.map(process_chunk, data_chunks), total=num_chunks):
+                fits_list.append(fits)
+
+        fit_params = {key: np.concatenate([fits[key] for fits in fits_list], axis=0) for key in fits_list[0].keys()}
+
+        if self.data_amps is None:
+            self.fit_params = fit_params
+            self.data_amps = fit_params['amplitude']
+            self.data_time_of_max = fit_params['time_max']
+            self.data_fit_success = fit_params['success'] != 0
+        else:
+            for key in fit_params.keys():
+                self.fit_params[key] = np.concatenate([self.fit_params[key], fit_params[key]], axis=0)
+            self.data_amps = np.concatenate([self.data_amps, fit_params['amplitude']], axis=0)
+            self.data_time_of_max = np.concatenate([self.data_time_of_max, fit_params['time_max']], axis=0)
+            self.data_fit_success = np.concatenate([self.data_fit_success, fit_params['success'] != 0], axis=0)
+
+        print(f'Fitting time: {time() - start} s')
+
     def correct_for_fine_timestamps(self):
         """
         Correct data_time_of_max and fit_params['time_max'] for fine timestamps.
@@ -1171,8 +1201,7 @@ def get_waveform_fits(data, noise_thresholds=None, func='gaus'):
     elif func == 'waveform_func':
         fits = np.apply_along_axis(fit_waveform_func, -1, data)
         param_names = ['amplitude', 'time_max', 'time_shift', 'q', 'amplitude_err', 'time_max_err', 'time_shift_err',
-                       'q_err',
-                       'success']
+                       'q_err', 'success']
     elif func == 'parabola':
         fits = np.apply_along_axis(fit_waveform_parabola, -1, data)
         param_names = ['amplitude', 'time_max', 'success']
@@ -1404,7 +1433,6 @@ def get_good_files(file_list, flags=None, feu_num=None, file_ext=None, file_nums
     good_files = []
     file_nums = None if file_nums == 'all' else file_nums
     for file in file_list:
-        print(f'Checking file: {file}')
         if file_ext is not None and not file.endswith(file_ext):
             continue
         if file_nums is not None and get_num_from_fdf_file_name(file, -2) not in file_nums:
