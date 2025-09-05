@@ -253,36 +253,6 @@ class DreamData:
 
         print(f'Fitting time: {time() - start} s')
 
-    def get_tpc_event_amplitudes(self):
-        start = time()
-
-        num_chunks = max(os.cpu_count() - 1, 1)
-        data_chunks = np.array_split(self.data, num_chunks, axis=0)
-
-        def process_chunk(chunk):
-            return get_waveform_fits(chunk, self.noise_thresholds, self.waveform_fit_func)
-
-        fits_list = []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            for fits in tqdm(executor.map(process_chunk, data_chunks), total=num_chunks):
-                fits_list.append(fits)
-
-        fit_params = {key: np.concatenate([fits[key] for fits in fits_list], axis=0) for key in fits_list[0].keys()}
-
-        if self.data_amps is None:
-            self.fit_params = fit_params
-            self.data_amps = fit_params['amplitude']
-            self.data_time_of_max = fit_params['time_max']
-            self.data_fit_success = fit_params['success'] != 0
-        else:
-            for key in fit_params.keys():
-                self.fit_params[key] = np.concatenate([self.fit_params[key], fit_params[key]], axis=0)
-            self.data_amps = np.concatenate([self.data_amps, fit_params['amplitude']], axis=0)
-            self.data_time_of_max = np.concatenate([self.data_time_of_max, fit_params['time_max']], axis=0)
-            self.data_fit_success = np.concatenate([self.data_fit_success, fit_params['success'] != 0], axis=0)
-
-        print(f'Fitting time: {time() - start} s')
-
     def correct_for_fine_timestamps(self):
         """
         Correct data_time_of_max and fit_params['time_max'] for fine timestamps.
@@ -531,13 +501,17 @@ class DreamData:
             ax.set_xlabel('Amplitude')
             fig.tight_layout()
 
-    def get_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, filter_times=True):
+    def get_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, filter_times=True, event_filter=None):
         if channels is not None:
             time_maxes = self.data_time_of_max[:, channels]
             amps = self.data_amps[:, channels]
         else:
             time_maxes = self.data_time_of_max
             amps = self.data_amps
+
+        if event_filter is not None:
+            time_maxes = time_maxes[event_filter]
+            amps = amps[event_filter]
 
         if min_amp is not None:
             # Filter out events where all amplitudes are nan
@@ -602,7 +576,7 @@ class DreamData:
 
         return time_of_max
 
-    def plot_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, plot=True):
+    def plot_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, event_filter=None, plot=True):
         # if channels is not None:
         #     time_maxes = self.data_time_of_max[:, channels]
         #     amps = self.data_amps[:, channels]
@@ -642,7 +616,7 @@ class DreamData:
         # if cut_num / original_num < 0.9:
         #     print(f'Warning: Cut {1 - cut_num / original_num * 100:.2f}% of events.')
 
-        time_of_max = self.get_event_time_maxes(channel=channel, channels=channels, max_channel=max_channel, min_amp=min_amp)
+        time_of_max = self.get_event_time_maxes(channel=channel, channels=channels, max_channel=max_channel, min_amp=min_amp, event_filter=event_filter)
         time_of_max = self.filter_time_maxes(time_of_max)
 
         # Make numpy histogram and fit to gaussian

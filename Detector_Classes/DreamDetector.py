@@ -368,6 +368,24 @@ class DreamDetector(Detector):
         y_min, y_max = np.min(corners[:, 1]) - tolerance, np.max(corners[:, 1]) + tolerance
         return x_min < local_coords[0] < x_max and y_min < local_coords[1] < y_max
 
+    def in_det_mask(self, x, y, z, tolerance=0.0):
+        """
+        Return a boolean mask of which points are inside the detector.
+        x, y, z: arrays of same shape (N,)
+        """
+        self.get_det_corners()
+        coords = np.stack([x, y, z], axis=1)  # shape (N, 3)
+        local_coords = self.convert_global_coords_to_local(coords)
+
+        corners = self.det_corners_local
+        x_min, x_max = np.min(corners[:, 0]) - tolerance, np.max(corners[:, 0]) + tolerance
+        y_min, y_max = np.min(corners[:, 1]) - tolerance, np.max(corners[:, 1]) + tolerance
+
+        x_local = local_coords[:, 0]
+        y_local = local_coords[:, 1]
+
+        return (x_min < x_local) & (x_local < x_max) & (y_min < y_local) & (y_local < y_max)
+
 
     def plot_event_1d(self, event_id):
         """
