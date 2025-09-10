@@ -62,6 +62,7 @@ class DreamData:
         self.event_nums = None
         self.timestamps = None
         self.fine_time_stamps = None
+        self.fine_timestamp_corrected = False
 
         self.ped_means = None
         self.ped_sigmas = None
@@ -253,21 +254,27 @@ class DreamData:
 
         print(f'Fitting time: {time() - start} s')
 
-    def correct_for_fine_timestamps(self):
+    def correct_for_fine_timestamps(self, force=False):
         """
         Correct data_time_of_max and fit_params['time_max'] for fine timestamps.
+        :param force: Force correction even if already corrected.
         :return:
         """
-        self.data_time_of_max = self.data_time_of_max + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
-        self.fit_params['time_max'] = self.fit_params['time_max'] + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+        if force or not self.fine_timestamp_corrected:
+            self.data_time_of_max = self.data_time_of_max + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+            self.fit_params['time_max'] = self.fit_params['time_max'] + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+            self.fine_timestamp_corrected = True
 
-    def uncorrect_for_fine_timestamps(self):
+    def uncorrect_for_fine_timestamps(self, force=False):
         """
         Uncorrect data_time_of_max and fit_params['time_max'] for fine timestamps.
+        :param force: Force uncorrection even if already uncorrected.
         :return:
         """
-        self.data_time_of_max = self.data_time_of_max - self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
-        self.fit_params['time_max'] = self.fit_params['time_max'] - self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+        if force or self.fine_timestamp_corrected:
+            self.data_time_of_max = self.data_time_of_max - self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+            self.fit_params['time_max'] = self.fit_params['time_max'] - self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+            self.fine_timestamp_corrected = False
 
     def get_hits(self, amp_min=0, time_max_range=None):
         """
@@ -501,7 +508,7 @@ class DreamData:
             ax.set_xlabel('Amplitude')
             fig.tight_layout()
 
-    def get_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, filter_times=True, event_filter=None):
+    def get_event_time_maxes(self, channel=None, channels=None, max_channel=False, first_channel=False, min_amp=None, max_amp=None, filter_times=True, event_filter=None):
         if channels is not None:
             time_maxes = self.data_time_of_max[:, channels]
             amps = self.data_amps[:, channels]
@@ -522,6 +529,15 @@ class DreamData:
             time_maxes = time_maxes[min_amp_mask]
             amps = amps[min_amp_mask]
 
+        if max_amp is not None:
+            # Filter out events where all amplitudes are nan
+            time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
+            amps = amps[~np.all(np.isnan(amps), axis=1)]
+
+            max_amp_mask = np.nanmax(amps, axis=1) < max_amp
+            time_maxes = time_maxes[max_amp_mask]
+            amps = amps[max_amp_mask]
+
         if max_channel:
             # Filter out events where all amplitudes are nan
             # time_maxes = time_maxes[~np.all(np.isnan(amps), axis=1)]
@@ -532,6 +548,13 @@ class DreamData:
             # max_amp_channels = np.nanargmax(amps, axis=1)
             max_amp_channels = np.nanargmax(amps_no_nan, axis=1)
             time_maxes = time_maxes[np.arange(len(time_maxes)), max_amp_channels]
+        elif first_channel:
+            # Fileter out events where all times are nan
+            time_maxes = time_maxes[~np.all(np.isnan(time_maxes), axis=1)]
+
+            # Get amp and time_max of the channel with the earliest time_max in each event
+            first_time_channels = np.nanargmin(time_maxes, axis=1)
+            time_maxes = time_maxes[np.arange(len(time_maxes)), first_time_channels]
         elif channel is not None:
             time_maxes = time_maxes[:, channel]
         else:
@@ -576,7 +599,7 @@ class DreamData:
 
         return time_of_max
 
-    def plot_event_time_maxes(self, channel=None, channels=None, max_channel=False, min_amp=None, event_filter=None, plot=True):
+    def plot_event_time_maxes(self, channel=None, channels=None, max_channel=False, first_channel=False, min_amp=None, max_amp=None, event_filter=None, plot=True):
         # if channels is not None:
         #     time_maxes = self.data_time_of_max[:, channels]
         #     amps = self.data_amps[:, channels]
@@ -616,7 +639,7 @@ class DreamData:
         # if cut_num / original_num < 0.9:
         #     print(f'Warning: Cut {1 - cut_num / original_num * 100:.2f}% of events.')
 
-        time_of_max = self.get_event_time_maxes(channel=channel, channels=channels, max_channel=max_channel, min_amp=min_amp, event_filter=event_filter)
+        time_of_max = self.get_event_time_maxes(channel=channel, channels=channels, max_channel=max_channel, first_channel=False, min_amp=min_amp, max_amp=max_amp, event_filter=event_filter)
         time_of_max = self.filter_time_maxes(time_of_max)
 
         # Make numpy histogram and fit to gaussian
