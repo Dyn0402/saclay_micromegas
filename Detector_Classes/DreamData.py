@@ -9,6 +9,7 @@ Created as saclay_micromegas/DreamData.py
 """
 
 import os
+import math
 import concurrent.futures
 from functools import partial
 from tqdm import tqdm
@@ -156,7 +157,7 @@ class DreamData:
 
         print('Reading in data...')
 
-        n_sub_chunks = max(1, int(1 / chunk_size + 1))
+        n_sub_chunks = math.ceil(1 / chunk_size) if chunk_size < 1 else 1
         chunk_size = max(chunk_size, 1)
         for chunk_idx in range(0, len(data_files), chunk_size):
             chunk_files = data_files[chunk_idx:chunk_idx + chunk_size]
@@ -176,6 +177,8 @@ class DreamData:
                     self.timestamps = []
                 if self.fine_time_stamps is None:
                     self.fine_time_stamps = []
+                if save_waveforms and self.waveforms is None:
+                    self.waveforms = []
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     read_file_partial = partial(read_file, select_triggers=trigger_list, event_range=event_range_i)
                     for data_i, data_raw_i, event_nums, timestamps, ft_stamps in tqdm(executor.map(
@@ -186,11 +189,12 @@ class DreamData:
                         self.event_nums.append(event_nums)
                         self.timestamps.append(timestamps)
                         self.fine_time_stamps.append(ft_stamps)
+                        if save_waveforms:
+                            self.waveforms.append(data_raw_i)
                         if hist_raw_amps:
                             n_events, n_channels, n_samples = data_raw_i.shape
                             data_raw_i = data_raw_i.transpose(1, 0, 2).reshape(n_channels, n_events * n_samples)
-                            bins_y = np.arange(-0.5, 4096.5, 50)
-                            bins_x = np.arange(-0.5, n_channels + 0.5, 1)
+                            bins_y = np.arange(-0.5, 4096.5, 1)
 
                             histograms = np.array([np.histogram(data_raw_i[i], bins=bins_y)[0] for i in range(n_channels)])
 
@@ -205,8 +209,8 @@ class DreamData:
                 print('Getting amplitudes...')
                 self.get_event_amplitudes()
 
-                if save_waveforms:
-                    self.waveforms = self.data.copy()
+                # if save_waveforms:
+                #     self.waveforms.append(self.data.copy())
 
                 # Clear self.data to free up memory
                 self.data = None
@@ -217,6 +221,8 @@ class DreamData:
         self.timestamps = np.concatenate(self.timestamps)
         self.timestamps = self.timestamps / self.timestamp_frequency  # Convert to seconds
         self.fine_time_stamps = np.concatenate(self.fine_time_stamps)
+        if save_waveforms:
+            self.waveforms = np.concatenate(self.waveforms)
         # self.correct_for_fine_timestamps()
         print('Getting hits...')
         self.get_hits()
@@ -852,7 +858,7 @@ class DreamData:
         histogram of amplitudes. Bins of 0 counts are removed. Then plot these histograms for each strip on the x-axis.
         :return:
         """
-        bins = np.arange(1, 4101, 20)
+        bins = np.arange(1, 4401, 20)
         amps = np.ravel(self.data_amps)
         strip_nums = np.tile(np.arange(self.data_amps.shape[1]), (self.data_amps.shape[0], 1))
         strip_nums = np.ravel(strip_nums)
@@ -958,25 +964,66 @@ class DreamData:
         ax.set_ylabel('Common Noise')
         fig.tight_layout()
 
-    def plot_raw_amps_2d_hist(self):
+    # def plot_raw_amps_2d_hist(self):
+    #     """
+    #     Plot a 2D histogram of the raw amplitudes for each channel in the detector.
+    #     :return:
+    #     """
+    #     if self.raw_amp_hist is None:
+    #         print('Error: Raw amplitude histogram not created.')
+    #         return
+    #     fig, ax = plt.subplots()
+    #     ax.set_title(f'Raw Amplitudes')
+    #     ax.set_xlabel('Channel')
+    #     ax.set_ylabel('Amplitude')
+    #     # If there are 0 events make the color white
+    #     cmap = plt.cm.jet
+    #     cmap.set_under('w')
+    #     # set log scale on color bar
+    #     n_channels = self.raw_amp_hist.shape[0]
+    #     h = ax.imshow(self.raw_amp_hist.T, origin='lower', aspect='auto', cmap=cmap,
+    #                   extent=[-0.5, n_channels, -0.5, 4096.5], norm=LogNorm(vmin=1))
+    #     cbar = fig.colorbar(h, ax=ax)
+    #     fig.tight_layout()
+
+    def plot_raw_amps_2d_hist(self, combine_y: int = 1):
         """
         Plot a 2D histogram of the raw amplitudes for each channel in the detector.
-        :return:
+
+        :param combine_y: Number of bins to combine along the y-axis (amplitude).
+                          Must be >= 1. Default is 1 (no combining).
         """
         if self.raw_amp_hist is None:
             print('Error: Raw amplitude histogram not created.')
             return
+
+        hist = self.raw_amp_hist
+
+        # --- Rebin along y if requested ---
+        if combine_y > 1:
+            n_channels, n_bins_y = hist.shape
+            new_bins_y = n_bins_y // combine_y
+            hist = hist[:, :new_bins_y * combine_y]  # trim to multiple of combine_y
+            hist = hist.reshape(n_channels, new_bins_y, combine_y).sum(axis=2)
+
         fig, ax = plt.subplots()
         ax.set_title(f'Raw Amplitudes')
         ax.set_xlabel('Channel')
         ax.set_ylabel('Amplitude')
-        # If there are 0 events make the color white
+
         cmap = plt.cm.jet
         cmap.set_under('w')
-        # set log scale on color bar
-        n_channels = self.raw_amp_hist.shape[0]
-        h = ax.imshow(self.raw_amp_hist.T, origin='lower', aspect='auto', cmap=cmap,
-                      extent=[-0.5, n_channels, -0.5, 4096.5], norm=LogNorm(vmin=1))
+
+        n_channels, n_bins_y = hist.shape
+        h = ax.imshow(
+            hist.T,
+            origin='lower',
+            aspect='auto',
+            cmap=cmap,
+            extent=[-0.5, n_channels - 0.5, -0.5, combine_y * n_bins_y - 0.5],
+            norm=LogNorm(vmin=1)
+        )
+
         cbar = fig.colorbar(h, ax=ax)
         fig.tight_layout()
 

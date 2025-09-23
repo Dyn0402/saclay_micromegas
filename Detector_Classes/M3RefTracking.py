@@ -122,14 +122,24 @@ class M3RefTracking:
         for var in self.variables:
             self.ray_data[var] = self.ray_data[var][mask]
 
-    def plot_xy(self, z, event_list=None, multi_track_events=False, one_track=True):
+    def plot_xy(self, z, event_list=None, multi_track_events=False, one_track=True, plt_type='scatter', bins=50):
         x, y, event_nums = self.get_xy_positions(z, event_list, multi_track_events, one_track)
-        fig, ax = plt.subplots()
-        ax.scatter(x, y, alpha=0.5)
-        ax.set_xlabel('x (mm)')
-        ax.set_ylabel('y (mm)')
-        ax.set_title(f'xy Positions at z={z:.2f} mm')
-        fig.tight_layout()
+        if plt_type == 'scatter' or plt_type == 'both':
+            fig, ax = plt.subplots()
+            ax.scatter(x, y, alpha=0.5)
+            ax.set_xlabel('x (mm)')
+            ax.set_ylabel('y (mm)')
+            ax.set_title(f'xy Positions at z={z:.2f} mm')
+            fig.tight_layout()
+        if plt_type == '2D_hist' or plt_type == 'both':
+            fig, ax = plt.subplots()
+            h = ax.hist2d(x, y, bins=bins, range=[self.detector_xy_extent_cuts['x'],
+                                                 self.detector_xy_extent_cuts['y']], cmap='viridis')
+            fig.colorbar(h[3], ax=ax)
+            ax.set_xlabel('x (mm)')
+            ax.set_ylabel('y (mm)')
+            ax.set_title(f'xy Positions at z={z:.2f} mm')
+            fig.tight_layout()
 
 
 def get_ray_data(ray_dir, file_nums='all', variables=None):
