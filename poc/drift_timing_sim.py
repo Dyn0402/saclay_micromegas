@@ -32,6 +32,7 @@ from typing import Optional
 from scipy.signal import fftconvolve
 from scipy.special import gamma
 from scipy.optimize import curve_fit as cf
+from scipy.interpolate import interp1d
 
 from DreamData import fit_waveform_parabola
 
@@ -48,9 +49,64 @@ def main():
         seed=None
     )
     # run_batch(sim)
-    run_event(sim)
-    # run_events(sim, n_events=10000)
+    # run_event(sim)
+    run_events(sim, n_events=10000)
+    # gas_properties_plot()
+
     print('donzo')
+
+
+def gas_properties_plot():
+    # Example usage of GasProperties class
+    gas_type = 'Ar_Iso_95_5'
+    # gas_type = 'Ar_CO2_Iso_90_7_3'
+    # gas_type = 'Ar_Iso_CO2_95_3_2'
+    gas_props = GasProperties(base_path='C:/Users/Dylan/Desktop/gas', gas_type=gas_type, interp_kind='cubic')
+    drift_voltages = np.arange(10, 2000, 20)  # V
+    drift_gap = 0.3  # cm
+    drift_fields = drift_voltages / drift_gap  # V/cm
+
+    min_drift_field = 950  # V/cm
+    min_drift_filter = drift_fields >= min_drift_field
+    drift_fields = drift_fields[min_drift_filter]
+    drift_voltages = drift_voltages[min_drift_filter]
+
+    drift_field_measured = np.arange(1000, np.max(drift_fields), 500)  # V/cm
+
+    b_fields = [0.2, 0.4, 2.0]  # Tesla
+    colors = ['blue', 'orange', 'red']
+    fig, ax = plt.subplots(3, 1, figsize=(10, 8), sharex='all')
+    fig2, ax2 = plt.subplots(figsize=(8, 5))
+    for b, color in zip(b_fields, colors):
+        drift_v_e, drift_v_exb, lorentz_angle = gas_props.get_properties(drift_fields, b_field_tesla=b)
+        d_v_e_m, d_v_exb_m, la_m = gas_props.get_properties(drift_field_measured, b_field_tesla=b)
+
+        ax[0].plot(drift_voltages, drift_v_e, label=f'B={b}T', color=color)
+        ax[0].scatter(drift_field_measured * drift_gap, d_v_e_m, color=color, marker='o', s=20)
+        ax[1].plot(drift_voltages, drift_v_exb, label=f'B={b}T', color=color)
+        ax[1].scatter(drift_field_measured * drift_gap, d_v_exb_m, color=color, marker='o', s=20)
+        ax[2].plot(drift_voltages, lorentz_angle, label=f'B={b}T', color=color)
+        ax[2].scatter(drift_field_measured * drift_gap, la_m, color=color, marker='o', s=20)
+
+        ax2.plot(drift_voltages, drift_v_e, label=f'B={b}T', color=color)
+        ax2.scatter(drift_field_measured * drift_gap, d_v_e_m, color=color, marker='o', s=20, zorder=5)
+
+    ax[0].set_ylabel('Drift Velocity in E (cm/ns)')
+    ax[1].set_ylabel('Drift Velocity in ExB (μm/ns)')
+    ax[2].set_ylabel('Lorentz Angle (degrees)')
+    ax[2].set_xlabel('Drift Voltage (V)')
+    ax[0].legend()
+    fig.tight_layout()
+
+    ax2.set_xlabel('Drift Voltage (V)')
+    ax2.set_ylabel('Drift Velocity in E (μm/ns)')
+    ax2.axvline(800, color='k', linestyle='--', alpha=0.4, label='800 V', zorder=0)
+    ax2.set_title(gas_type)
+    ax2.grid(zorder=0)
+    ax2.legend()
+    fig2.tight_layout()
+
+    plt.show()
 
 
 def run_event(sim):
@@ -89,6 +145,17 @@ def run_events(sim, n_events=1000):
 
     sample_periods = [10, 30, 60]  # ns
     drift_speeds = np.arange(10, 40, 1)  # um/ns
+    gas_props = GasProperties(base_path='C:/Users/Dylan/Desktop/gas', gas_type='Ar_Iso_95_5', interp_kind='cubic')
+    drift_voltages = np.arange(10, 2000, 20)  # V
+    drift_gap = 0.3  # cm
+    drift_fields = drift_voltages / drift_gap  # V/cm
+
+    min_drift_field = 1000  # V/cm
+    min_drift_filter = drift_fields >= min_drift_field
+    drift_fields = drift_fields[min_drift_filter]
+    drift_voltages = drift_voltages[min_drift_filter]
+
+    b_fields = [0.2, 0.4, 2.0]  # Tesla
 
     resolutions = {}
     for sample_period in sample_periods:
@@ -425,6 +492,77 @@ class MicromegasDriftSimulator:
         shaped = fftconvolve(waveform, h, mode='full')[:len(times)]
 
         return times, shaped
+
+class GasProperties:
+    """Class to read and interpolate gas properties from Garfield Magboltz output files."""
+
+    def __init__(self, base_path: str, gas_type: str, interp_kind: str = 'linear'):
+        self.base_path = base_path
+        self.interp_kind = interp_kind
+        self.gas_prop_df = None
+        self.filename = f"{self.base_path}/{gas_type}/out.txt"
+        self.load_data()
+
+    def load_data(self):
+        self.gas_prop_df = import_garfield_output(self.filename)
+
+    def get_properties(self, field_v_per_cm, b_field_tesla=0.2):
+        """Interpolate properties at given electric field."""
+        df_b_field = self.gas_prop_df[self.gas_prop_df['Magnetic Field (Tesla)'] == b_field_tesla]
+        if df_b_field.empty:
+            raise ValueError(f"No data for B={b_field_tesla} Tesla\nAvailable B fields: {self.gas_prop_df['Magnetic Field (Tesla)'].unique()}")
+        electric_fields = df_b_field['Electric field (V/cm)'].values
+        drift_velocity_e = df_b_field['vz (cm/ns)'].values
+        drift_velocity_e_cross_b = df_b_field['vy'].values
+        lorentz_angle = df_b_field['Lorentz Angle (degree)'].values
+
+        dve_interp = interp1d(electric_fields, drift_velocity_e, kind=self.interp_kind, fill_value="extrapolate")
+        dvexb_interp = interp1d(electric_fields, drift_velocity_e_cross_b, kind=self.interp_kind, fill_value="extrapolate")
+        la_interp = interp1d(electric_fields, lorentz_angle, kind=self.interp_kind, fill_value="extrapolate")
+
+        drift_velocity_e = dve_interp(field_v_per_cm) * 1e4  # convert cm/ns to um/ns
+        drift_velocity_e_cross_b = dvexb_interp(field_v_per_cm) * 1e4  # convert cm/ns to um/ns
+        lorentz_angle = la_interp(field_v_per_cm)
+
+        return drift_velocity_e, drift_velocity_e_cross_b, lorentz_angle
+
+def import_garfield_output(filepath: str) -> pd.DataFrame:
+    """
+    Import Garfield++/Magboltz output table into a pandas DataFrame.
+
+    Expected columns:
+    Electric field (V/cm), Magnetic Field (Tesla),
+    vx, vy, vz (cm/ns), Lorentz Angle (degree), Lorentz Angle (radians)
+    """
+    # Find the line where the table starts
+    start_line = None
+    with open(filepath, "r") as f:
+        for i, line in enumerate(f):
+            if "====" in line:  # separator line
+                start_line = i + 1
+                break
+
+    if start_line is None:
+        raise ValueError("Could not find start of table in file.")
+
+    # Load numerical data into DataFrame
+    df = pd.read_csv(
+        filepath,
+        delim_whitespace=True,
+        skiprows=start_line,
+        header=None,
+        names=[
+            "Electric field (V/cm)",
+            "Magnetic Field (Tesla)",
+            "vx",
+            "vy",
+            "vz (cm/ns)",
+            "Lorentz Angle (degree)",
+            "lorentz angle in radians",
+        ],
+    )
+
+    return df
 
 def gaussian_pulse(t, t0, sigma, amplitude):
     """Return Gaussian of given amplitude centered at t0."""
