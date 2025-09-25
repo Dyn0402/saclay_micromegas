@@ -74,6 +74,7 @@ class DreamData:
         self.data_time_of_max = None
         self.data_fit_success = None
         self.fit_params = None
+        self.event_amp_sums = None
 
         self.hits = None
 
@@ -179,6 +180,8 @@ class DreamData:
                     self.fine_time_stamps = []
                 if save_waveforms and self.waveforms is None:
                     self.waveforms = []
+                if self.event_amp_sums is None:
+                    self.event_amp_sums = []
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     read_file_partial = partial(read_file, select_triggers=trigger_list, event_range=event_range_i)
                     for data_i, data_raw_i, event_nums, timestamps, ft_stamps in tqdm(executor.map(
@@ -189,6 +192,7 @@ class DreamData:
                         self.event_nums.append(event_nums)
                         self.timestamps.append(timestamps)
                         self.fine_time_stamps.append(ft_stamps)
+                        self.event_amp_sums.append(np.nansum(data_i, axis=(1, 2)))
                         if save_waveforms:
                             self.waveforms.append(data_raw_i)
                         if hist_raw_amps:
@@ -221,6 +225,7 @@ class DreamData:
         self.timestamps = np.concatenate(self.timestamps)
         self.timestamps = self.timestamps / self.timestamp_frequency  # Convert to seconds
         self.fine_time_stamps = np.concatenate(self.fine_time_stamps)
+        self.event_amp_sums = np.concatenate(self.event_amp_sums)
         if save_waveforms:
             self.waveforms = np.concatenate(self.waveforms)
         # self.correct_for_fine_timestamps()
@@ -373,7 +378,6 @@ class DreamData:
             return np.concatenate(data_channels)
         else:
             return det_data
-
 
     def filter_data(self, data_indices):
         """
