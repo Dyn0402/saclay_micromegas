@@ -315,6 +315,15 @@ class DreamDetector(Detector):
         common_events_list = list(result.keys())
         self.xy_largest_cluster_sums = list(result.values())
 
+    def set_sub_det_event_filters(self, event_nums):
+        """
+        Set event filters for each sub-detector based on a list of event numbers.
+        :param event_nums:
+        :return:
+        """
+        for sub_det in self.sub_detectors:
+            sub_det.set_event_filter(event_nums)
+
     def in_sub_det(self, sub_det_i, x, y, z, tolerance=0):
         """
         Check if a point is within a sub-detector x-y area using the sub-detector corners. Add tolerance to bounds.
@@ -866,7 +875,12 @@ def split_neighbors(df, starting_connector=0):
     :return: DataFrame of groups with columns: axis, pitch, interpitch, connector, channels.
     """
     # Mark rows where group changes
-    df['group'] = ((df['axis'] != df['axis'].shift()) | (df['connector'] != df['connector'].shift()) |
+    # df['group'] = ((df['axis'] != df['axis'].shift()) | (df['connector'] != df['connector'].shift()) |
+    #                (df['pitch(mm)'] != df['pitch(mm)'].shift()) |
+    #                (df['interpitch(mm)'] != df['interpitch(mm)'].shift()))
+
+    # Remove connector from group change condition for RD542 homogeneous detectors, tested and looks ok for old detectors too
+    df['group'] = ((df['axis'] != df['axis'].shift()) |
                    (df['pitch(mm)'] != df['pitch(mm)'].shift()) |
                    (df['interpitch(mm)'] != df['interpitch(mm)'].shift()))
 
@@ -876,9 +890,13 @@ def split_neighbors(df, starting_connector=0):
     # Create a unique name for each group
     df['group_name'] = df.apply(lambda row:
                                 f"{row['axis']}_{row['connector']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
+    # This might break inter detector, need to test
+    # df['group_name'] = df.apply(lambda row:
+    #                             f"{row['axis']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
 
     # Group by the new group_name column
     grouped = df.groupby('group_name')
+    print(f'Found {len(grouped)} groups in detector map')
 
     # Prepare the output dataframe
     result_data = []

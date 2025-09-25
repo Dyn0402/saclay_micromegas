@@ -13,14 +13,16 @@ from Detector_Classes.DreamDetector import split_neighbors
 
 
 def main():
-    # maps_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    maps_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    det_types = ['strip', 'inter', 'asacusa']
+    maps_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # maps_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    det_types = ['strip', 'inter', 'asacusa', 'rd542']
     for det_type in det_types:
         print(det_type)
         det_map = load_det_map(f'{maps_dir}{det_type}_map.txt')
-        print(det_map)
-        print(split_neighbors(det_map))
+        # print(det_map)
+        split_df = split_neighbors(det_map)
+        print(split_df)
+        print(split_df.iloc[0]['channels'])
     print('donzo')
 
 

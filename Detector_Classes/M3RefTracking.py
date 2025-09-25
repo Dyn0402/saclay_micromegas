@@ -19,13 +19,13 @@ import awkward as ak
 
 
 class M3RefTracking:
-    def __init__(self, ray_dir, file_nums='all', variables=None, single_track=True, trigger_list=None):
+    def __init__(self, ray_dir, file_nums='all', variables=None, single_track=True, trigger_list=None, chi2_cut=1.5):
         self.ray_dir = ray_dir
         self.file_nums = file_nums
         self.single_track = single_track
         self.trigger_list = trigger_list
 
-        self.chi2_cut = 1.5
+        self.chi2_cut = chi2_cut
         self.detector_xy_extent_cuts = {'x': [-250, 250], 'y': [-250, 250]}
         if variables is None:
             self.variables = ['evn', 'evttime', 'rayN', 'Z_Up', 'X_Up', 'Y_Up', 'Z_Down', 'X_Down', 'Y_Down', 'Chi2X',
@@ -76,6 +76,7 @@ class M3RefTracking:
         x_min, x_max, y_min, y_max = self.detector_xy_extent_cuts['x'] + self.detector_xy_extent_cuts['y']
         mask = ((x_min < x_up) & (x_up < x_max) & (x_min < x_down) & (x_down < x_max) &
                 (y_min < y_up) & (y_up < y_max) & (y_min < y_down) & (y_down < y_max))
+        print(f'Cutting on detector size: {np.sum(mask)} / {len(mask)} tracks remain, {np.sum(mask) / len(mask) * 100:.2f}%')
         for var in ['X_Up', 'Y_Up', 'X_Down', 'Y_Down', 'Chi2X', 'Chi2Y']:
             self.ray_data[var] = self.ray_data[var][mask]
 
@@ -86,7 +87,15 @@ class M3RefTracking:
         """
         self.cut_on_det_size()
         chi2_x, chi2_y = self.ray_data['Chi2X'], self.ray_data['Chi2Y']
+        num_zero = np.sum(ak.num(self.ray_data['Chi2X'], axis=1) == 0)
+        num_multi = np.sum(ak.num(self.ray_data['Chi2X'], axis=1) > 1)
+        print(f'Pre-chi2 cut, Found {num_zero} events with 0 good tracks ({num_zero / len(self.ray_data["Chi2X"]) * 100:.2f}%), '
+              f'{num_multi} events with >1 good tracks ({num_multi / len(self.ray_data["Chi2X"]) * 100:.2f}%)')
         num_good_tracks = ak.sum((chi2_x < self.chi2_cut) & (chi2_y < self.chi2_cut), axis=1)
+        num_zero = np.sum(num_good_tracks == 0)
+        num_multi = np.sum(num_good_tracks > 1)
+        print(f'Found {num_zero} events with 0 good tracks ({num_zero / len(num_good_tracks) * 100:.2f}%), '
+              f'{num_multi} events with >1 good tracks ({num_multi / len(num_good_tracks) * 100:.2f}%)')
         mask = num_good_tracks == 1
         self.ray_data = self.ray_data[mask]
 

@@ -33,6 +33,8 @@ class DreamSubDetector:
         self.x_connector, self.y_connector = None, None
         self.resist = None
 
+        self.event_filter = None
+
         self.description = None
 
     def set_x(self, pos, amps, hits, times, pitch, interpitch, connector,
@@ -110,7 +112,20 @@ class DreamSubDetector:
 
             triggers.append(x_trigger)
             centroids.append(np.array([x_centroid, y_centroid]))
-        return np.array(triggers), np.array(centroids)
+
+        triggers, centroids = np.array(triggers), np.array(centroids)
+        if self.event_filter is not None:
+            event_filter_mask = np.isin(triggers, self.event_filter)
+            triggers, centroids = triggers[event_filter_mask], centroids[event_filter_mask]
+        return triggers, centroids
+
+    def set_event_filter(self, event_nums):
+        """
+        Set event filter to only include events in event_nums.
+        :param event_nums:
+        :return:
+        """
+        self.event_filter = event_nums
 
     def get_cluster_sizes(self, largest=True, event_nums=None, return_ray_mask=False):
         """
