@@ -502,7 +502,7 @@ class DreamDetector(Detector):
         axs[1].legend()
         fig.tight_layout()
 
-    def plot_centroids_2d(self):
+    def plot_centroids_2d(self, alpha=0.1):
         """
         Plot the centroids of the largest clusters in each sub-detector.
         :return:

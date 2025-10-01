@@ -856,18 +856,21 @@ class DreamData:
                 dead_strips = strip_nums[hit_group < max_hits * percent_max / 100]
                 print(f'Connector {i + self.starting_connector} Dead Strips: {dead_strips}')
 
-    def plot_amplitudes_vs_strip(self):
+    def plot_amplitudes_vs_strip(self, events=None):
         """
         Plot 2D histogram of amplitude (y-axis) vs strip (x-axis), separated by connector. For each strip, make a 1D
         histogram of amplitudes. Bins of 0 counts are removed. Then plot these histograms for each strip on the x-axis.
         :return:
         """
         bins = np.arange(1, 4401, 20)
-        amps = np.ravel(self.data_amps)
-        strip_nums = np.tile(np.arange(self.data_amps.shape[1]), (self.data_amps.shape[0], 1))
+        data_amps = self.data_amps if events is None else self.data_amps[np.isin(self.event_nums, events)]
+        amps = np.ravel(data_amps)
+        strip_nums = np.tile(np.arange(data_amps.shape[1]), (data_amps.shape[0], 1))
         strip_nums = np.ravel(strip_nums)
         fig, ax = plt.subplots(figsize=(10, 5))
-        h = ax.hist2d(strip_nums, amps, bins=[np.arange(-0.5, self.data_amps.shape[1] + 0.5, 1), bins],
+        print(strip_nums.size)
+        print(amps.size)
+        h = ax.hist2d(strip_nums, amps, bins=[np.arange(-0.5, data_amps.shape[1] + 0.5, 1), bins],
                       cmin=1, cmap='jet', norm=LogNorm())
         ax.set_title('Amplitudes vs Strip')
         ax.set_xlabel('Strip')
