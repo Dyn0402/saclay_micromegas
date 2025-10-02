@@ -14,14 +14,11 @@ import pandas as pd
 
 
 def main():
-    file_path = 'F:/Saclay/cosmic_data/rd542_plein_3_first_test_10-2-25/quick_test_450V/hv_monitor.csv'
+    # file_path = 'F:/Saclay/cosmic_data/rd542_plein_3_first_test_10-2-25/quick_test_450V/hv_monitor.csv'
+    file_path = '/local/home/dn277127/Bureau/cosmic_data/rd542_plein_3_first_test_10-2-25/long_test_450V/hv_monitor.csv'
     plot_hv_monitor(file_path)
     plt.show()
     print('donzo')
-
-
-import pandas as pd
-import matplotlib.pyplot as plt
 
 
 def plot_hv_monitor(file_path):
