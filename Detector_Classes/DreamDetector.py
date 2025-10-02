@@ -108,8 +108,8 @@ class DreamDetector(Detector):
             x_times = self.dream_data.get_channels_time_of_max(x_connector, x_channels)
             x_clusters, x_cluster_indices = find_clusters_all_events(x_hits)
             x_cluster_sizes = get_cluster_sizes(x_clusters)
-            x_cluster_triggers = self.dream_data.event_nums[x_cluster_indices]
-            x_cluster_timestamps = self.dream_data.timestamps[x_cluster_indices]
+            x_cluster_triggers = self.dream_data.get_event_nums()[x_cluster_indices]
+            x_cluster_timestamps = self.dream_data.get_timestamps()[x_cluster_indices]
             x_cluster_centroids = get_cluster_centroids_all_events(x_clusters, x_cluster_indices,
                                                                    x_group['xs_gerber'], x_amps)
             xlarge_clusts = get_largest_clusters_all_events(x_clusters, x_cluster_indices, x_cluster_centroids, x_amps)
@@ -141,8 +141,8 @@ class DreamDetector(Detector):
             y_times = self.dream_data.get_channels_time_of_max(y_connector, y_channels)
             y_clusters, y_cluster_indices = find_clusters_all_events(y_hits)
             y_cluster_sizes = get_cluster_sizes(y_clusters)
-            y_cluster_triggers = self.dream_data.event_nums[y_cluster_indices]
-            y_cluster_timestamps = self.dream_data.timestamps[y_cluster_indices]
+            y_cluster_triggers = self.dream_data.get_event_nums()[y_cluster_indices]
+            y_cluster_timestamps = self.dream_data.get_timestamps()[y_cluster_indices]
             y_cluster_centroids = get_cluster_centroids_all_events(y_clusters, y_cluster_indices,
                                                                    y_group['ys_gerber'], y_amps)
             ylarge_clusts = get_largest_clusters_all_events(y_clusters, y_cluster_indices, y_cluster_centroids, y_amps)

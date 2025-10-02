@@ -62,7 +62,7 @@ class DreamData:
         self.data = None
         self.event_nums = None
         self.timestamps = None
-        self.fine_time_stamps = None
+        self.fine_timestamps = None
         self.fine_timestamp_corrected = False
 
         self.ped_means = None
@@ -176,8 +176,8 @@ class DreamData:
                     self.event_nums = []
                 if self.timestamps is None:
                     self.timestamps = []
-                if self.fine_time_stamps is None:
-                    self.fine_time_stamps = []
+                if self.fine_timestamps is None:
+                    self.fine_timestamps = []
                 if save_waveforms and self.waveforms is None:
                     self.waveforms = []
                 if self.event_amp_sums is None:
@@ -191,7 +191,7 @@ class DreamData:
                         self.data.append(data_i)
                         self.event_nums.append(event_nums)
                         self.timestamps.append(timestamps)
-                        self.fine_time_stamps.append(ft_stamps)
+                        self.fine_timestamps.append(ft_stamps)
                         self.event_amp_sums.append(np.nansum(data_i, axis=(1, 2)))
                         if save_waveforms:
                             self.waveforms.append(data_raw_i)
@@ -224,7 +224,7 @@ class DreamData:
         self.event_nums = np.concatenate(self.event_nums)
         self.timestamps = np.concatenate(self.timestamps)
         self.timestamps = self.timestamps / self.timestamp_frequency  # Convert to seconds
-        self.fine_time_stamps = np.concatenate(self.fine_time_stamps)
+        self.fine_timestamps = np.concatenate(self.fine_timestamps)
         self.event_amp_sums = np.concatenate(self.event_amp_sums)
         if save_waveforms:
             self.waveforms = np.concatenate(self.waveforms)
@@ -272,8 +272,8 @@ class DreamData:
         :return:
         """
         if force or not self.fine_timestamp_corrected:
-            self.data_time_of_max = self.data_time_of_max + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
-            self.fit_params['time_max'] = self.fit_params['time_max'] + self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+            self.data_time_of_max = self.data_time_of_max + self.fine_timestamps[:, np.newaxis] * self.fine_timestamp_constant
+            self.fit_params['time_max'] = self.fit_params['time_max'] + self.fine_timestamps[:, np.newaxis] * self.fine_timestamp_constant
             self.fine_timestamp_corrected = True
 
     def uncorrect_for_fine_timestamps(self, force=False):
@@ -283,8 +283,8 @@ class DreamData:
         :return:
         """
         if force or self.fine_timestamp_corrected:
-            self.data_time_of_max = self.data_time_of_max - self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
-            self.fit_params['time_max'] = self.fit_params['time_max'] - self.fine_time_stamps[:, np.newaxis] * self.fine_timestamp_constant
+            self.data_time_of_max = self.data_time_of_max - self.fine_timestamps[:, np.newaxis] * self.fine_timestamp_constant
+            self.fit_params['time_max'] = self.fit_params['time_max'] - self.fine_timestamps[:, np.newaxis] * self.fine_timestamp_constant
             self.fine_timestamp_corrected = False
 
     def get_hits(self, amp_min=0, time_max_range=None):
@@ -379,6 +379,33 @@ class DreamData:
         else:
             return det_data
 
+    def get_event_nums(self):
+        return self.event_nums
+
+    def get_timestamps(self):
+        return self.timestamps
+
+    def filter_sparks(self, spark_filter_sigma=15, plot=True):
+        """
+        Filter sparks, defined as events with more than 10 hits.
+        :param spark_filter_sigma: Number of standard deviations above mean to set spark threshold.
+        :param plot: Whether to plot the spark threshold.
+        :return:
+        """
+        spark_thresh = np.mean(self.event_amp_sums) + spark_filter_sigma * np.std(self.event_amp_sums)
+        event_spark_filter = self.event_amp_sums < spark_thresh
+        if plot:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.hist(self.event_amp_sums, bins=100)
+            ax.axvline(spark_thresh, color='black', ls='--', label='Spark Event Amplitude Sum Threshold')
+            ax.legend()
+            ax.set_yscale('log')
+            ax.set_xlabel('Sum of All Samples of All Channels per Event')
+            ax.set_ylabel('Number of Events')
+            ax.set_title('Spark Metric: Events with large sample:channel sums are probably sparks')
+            fig.tight_layout()
+        self.filter_data(event_spark_filter)
+
     def filter_data(self, data_indices):
         """
         Filter data, keep only data at indices.
@@ -390,6 +417,11 @@ class DreamData:
         self.data_fit_success = self.data_fit_success[data_indices]
         self.event_nums = self.event_nums[data_indices]
         self.hits = self.hits[data_indices]
+        self.event_amp_sums = self.event_amp_sums[data_indices]
+        self.timestamps = self.timestamps[data_indices]
+        self.fine_timestamps = self.fine_timestamps[data_indices]
+        for key in self.fit_params.keys():
+            self.fit_params[key] = self.fit_params[key][data_indices]
         if self.waveforms is not None:
             self.waveforms = self.waveforms[data_indices]
 
@@ -1093,7 +1125,7 @@ class DreamData:
         Plot histogram of fine timestamps.
         :return:
         """
-        fine_time_stamps = np.ravel(self.fine_time_stamps)
+        fine_time_stamps = np.ravel(self.fine_timestamps)
         fig, ax = plt.subplots()
         ax.hist(fine_time_stamps, bins=100)
         ax.set_title('Fine Timestamps')
