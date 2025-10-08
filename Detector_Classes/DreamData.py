@@ -309,7 +309,11 @@ class DreamData:
         :return: Amplitudes for specified channels in each event.
         """
         channels = np.array(channels)
-        channel_amps = self.split_det_data(self.data_amps, [connector], to_connectors=False)[:, channels]
+        if isinstance(connector, int):
+            channel_amps = self.split_det_data(self.data_amps, [connector], to_connectors=False)[:, channels]
+        else:
+            connector = np.array(connector)
+            channel_amps = self.split_det_data_connectors(self.data_amps, connector, channels)
         return channel_amps
 
     def get_channels_hits(self, connector, channels):
@@ -320,7 +324,10 @@ class DreamData:
         :return: Hits for specified channels in each event.
         """
         channels = np.array(channels)
-        channel_hits = self.split_det_data(self.hits, [connector], to_connectors=False)[:, channels]
+        if isinstance(connector, int):
+            channel_hits = self.split_det_data(self.hits, [connector], to_connectors=False)[:, channels]
+        else:
+            channel_hits = self.split_det_data_connectors(self.hits, connector, channels)
         return channel_hits
 
     def get_channels_time_of_max(self, connector, channels):
@@ -331,7 +338,10 @@ class DreamData:
         :return: Time of max for specified channels in each event.
         """
         channels = np.array(channels)
-        channel_time_of_max = self.split_det_data(self.data_time_of_max, [connector], to_connectors=False)[:, channels]
+        if isinstance(connector, int):
+            channel_time_of_max = self.split_det_data(self.data_time_of_max, [connector], to_connectors=False)[:, channels]
+        else:
+            channel_time_of_max = self.split_det_data_connectors(self.data_time_of_max, [connector], channels)
         return channel_time_of_max
 
     def split_det_data(self, det_data, feu_connectors, to_connectors=False, starting_connector=None):
@@ -357,6 +367,24 @@ class DreamData:
             return None
 
         return det_data
+
+    def split_det_data_connectors(self, det_data, connectors, channels):
+        """
+        Given list of connectors and channels, get det_data for these channels.
+        Just add an offset to the channels based on the connector number.
+        :param det_data:
+        :param connectors:
+        :param channels:
+        :return:
+        """
+        channels = (np.array(connectors) - self.starting_connector) * self.channels_per_connector + np.array(channels)
+        if det_data.ndim == 1:
+            return det_data[channels]
+        elif det_data.ndim >= 2:
+            return det_data[:, channels]
+        else:
+            print('Error: Data shape not recognized.')
+            return None
 
     def get_connector_channels(self, det_data):
         """

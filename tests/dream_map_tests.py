@@ -10,6 +10,7 @@ Created as saclay_micromegas/dream_map_tests.py
 
 from Detector_Classes.DetectorConfigLoader import load_det_map
 from Detector_Classes.DreamDetector import split_neighbors
+from Detector_Classes.DreamData import DreamData
 
 
 def main():
@@ -23,6 +24,14 @@ def main():
         split_df = split_neighbors(det_map)
         print(split_df)
         print(split_df.iloc[0]['channels'])
+        print(split_df.iloc[0]['connectors'])
+        connectors = split_df.iloc[0]['connectors']
+        connector_channels = split_df.iloc[0]['channels']
+        channel_per_connector = 64
+        channels = connectors * channel_per_connector + connector_channels
+        print(channels)
+        # test_data = DreamData('', 6, 4)
+        # print(test_data.)
     print('donzo')
 
 

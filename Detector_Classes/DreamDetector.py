@@ -102,10 +102,10 @@ class DreamDetector(Detector):
         x_group_dfs = self.det_map[self.det_map['axis'] == 'y']  # y-going strips give x position
         self.x_groups = []
         for x_index, x_group in x_group_dfs.iterrows():
-            x_connector, x_channels = x_group['connector'], x_group['channels']
-            x_amps = self.dream_data.get_channels_amps(x_connector, x_channels)
-            x_hits = self.dream_data.get_channels_hits(x_connector, x_channels)
-            x_times = self.dream_data.get_channels_time_of_max(x_connector, x_channels)
+            x_connectors, x_channels = x_group['connectors'], x_group['channels']
+            x_amps = self.dream_data.get_channels_amps(x_connectors, x_channels)
+            x_hits = self.dream_data.get_channels_hits(x_connectors, x_channels)
+            x_times = self.dream_data.get_channels_time_of_max(x_connectors, x_channels)
             x_clusters, x_cluster_indices = find_clusters_all_events(x_hits)
             x_cluster_sizes = get_cluster_sizes(x_clusters)
             x_cluster_triggers = self.dream_data.get_event_nums()[x_cluster_indices]
@@ -125,20 +125,15 @@ class DreamDetector(Detector):
                                   'largest_cluster_sizes': x_largest_cluster_sizes,
                                   'largest_cluster_centroids': np.array(x_largest_cluster_centroids)})
 
-        # for x_group in self.x_groups:
-        #     print(x_group['hits'].shape)
         self.x_hits = np.hstack([x_group['hits'] for x_group in self.x_groups])
-        # print(self.x_hits.shape)
-        # print('Hits event 1')
-        # print(self.x_hits[1])
 
         y_group_dfs = self.det_map[self.det_map['axis'] == 'x']  # x-going strips give y position
         self.y_groups = []
         for y_index, y_group in y_group_dfs.iterrows():
-            y_connector, y_channels = y_group['connector'], y_group['channels']
-            y_amps = self.dream_data.get_channels_amps(y_connector, y_channels)
-            y_hits = self.dream_data.get_channels_hits(y_connector, y_channels)
-            y_times = self.dream_data.get_channels_time_of_max(y_connector, y_channels)
+            y_connectors, y_channels = y_group['connectors'], y_group['channels']
+            y_amps = self.dream_data.get_channels_amps(y_connectors, y_channels)
+            y_hits = self.dream_data.get_channels_hits(y_connectors, y_channels)
+            y_times = self.dream_data.get_channels_time_of_max(y_connectors, y_channels)
             y_clusters, y_cluster_indices = find_clusters_all_events(y_hits)
             y_cluster_sizes = get_cluster_sizes(y_clusters)
             y_cluster_triggers = self.dream_data.get_event_nums()[y_cluster_indices]
@@ -162,9 +157,6 @@ class DreamDetector(Detector):
 
         all_cluster_triggers = [x_group['cluster_triggers'] for x_group in self.x_groups] + \
                                [y_group['cluster_triggers'] for y_group in self.y_groups]
-        # print(all_cluster_triggers)
-        # print(np.concatenate(all_cluster_triggers))
-        # print(np.concatenate(all_cluster_triggers).shape)
         all_cluster_triggers = np.unique(np.concatenate(all_cluster_triggers))
         # print(all_cluster_triggers)
         trigger_data = {}
@@ -181,10 +173,11 @@ class DreamDetector(Detector):
             x_group_df = x_group['df'].to_dict()
             for y_group in self.y_groups:
                 if 'asacusa' in self.config['det_type']:  # Hack to only group same connectors.
-                    if x_group_df['connector'] != y_group['df']['connector']:  # Find better way in map file.
+                    input('Changes to connector -> channel mapping probably broke this for asacusa, check. Enter to continue.')
+                    if x_group_df['connectors'] != y_group['df']['connectors']:  # Find better way in map file.
                         continue
                 y_group_df = y_group['df'].to_dict()
-                x_connector, y_connector = x_group_df['connector'], y_group_df['connector']
+                x_connectors, y_connectors = x_group_df['connectors'], y_group_df['connectors']
                 x_channels, y_channels = x_group_df['channels'], y_group_df['channels']
                 x_pos, y_pos = x_group_df['xs_gerber'], y_group_df['ys_gerber']
                 x_pitch, y_pitch = x_group_df['pitch(mm)'], y_group_df['pitch(mm)']
@@ -206,11 +199,11 @@ class DreamDetector(Detector):
 
                 sub_det = DreamSubDetector(sub_index=len(self.sub_detectors))
                 sub_det.set_x(x_pos, x_group['amps'], x_group['hits'], x_group['times'], x_pitch, x_interpitch,
-                              x_connector, x_group['cluster_triggers'], x_group['clusters'], x_group['cluster_sizes'],
+                              x_connectors, x_group['cluster_triggers'], x_group['clusters'], x_group['cluster_sizes'],
                               x_group['cluster_centroids'], x_group['largest_clusters'],
                               x_group['largest_cluster_sizes'], x_group['largest_cluster_centroids'], x_channels)
                 sub_det.set_y(y_pos, y_group['amps'], y_group['hits'], y_group['times'], y_pitch, y_interpitch,
-                              y_connector, y_group['cluster_triggers'], y_group['clusters'], y_group['cluster_sizes'],
+                              y_connectors, y_group['cluster_triggers'], y_group['clusters'], y_group['cluster_sizes'],
                               y_group['cluster_centroids'], y_group['largest_clusters'],
                               y_group['largest_cluster_sizes'], y_group['largest_cluster_centroids'], y_channels)
                 self.sub_detectors.append(sub_det)
@@ -768,8 +761,6 @@ class DreamDetector(Detector):
         x_largest_cluster_amp_sums = np.array(self.x_largest_cluster_amp_sums)
         y_largest_cluster_amp_sums = np.array(self.y_largest_cluster_amp_sums)
 
-        print(x_largest_cluster_amp_sums.shape)
-
         ax.hist(x_largest_cluster_amp_sums, bins=500, alpha=0.5, label='X Clusters')
         ax.hist(y_largest_cluster_amp_sums, bins=500, alpha=0.5, label='Y Clusters')
 
@@ -888,11 +879,11 @@ def split_neighbors(df, starting_connector=0):
     df['group'] = df['group'].cumsum()
 
     # Create a unique name for each group
-    df['group_name'] = df.apply(lambda row:
-                                f"{row['axis']}_{row['connector']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
-    # This might break inter detector, need to test
     # df['group_name'] = df.apply(lambda row:
-    #                             f"{row['axis']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
+    #                             f"{row['axis']}_{row['connector']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
+    # This might break inter detector, need to test
+    df['group_name'] = df.apply(lambda row:
+                                f"{row['axis']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
 
     # Group by the new group_name column
     grouped = df.groupby('group_name')
@@ -905,7 +896,8 @@ def split_neighbors(df, starting_connector=0):
         axis = group_data['axis'].iloc[0]
         pitch = group_data['pitch(mm)'].iloc[0]
         interpitch = group_data['interpitch(mm)'].iloc[0]
-        connector = int(group_data['connector'].iloc[0]) + starting_connector
+        # connector = int(group_data['connector'].iloc[0]) + starting_connector
+        connector = np.array(list(map(int, group_data['connector']))) + starting_connector
         channels = np.array(list(map(int, group_data['connectorChannel'])))
         x_gerber = np.array(list(map(float, group_data['xGerber'])))
         y_gerber = np.array(list(map(float, group_data['yGerber'])))
@@ -914,13 +906,13 @@ def split_neighbors(df, starting_connector=0):
             'axis': axis,
             'pitch(mm)': pitch,
             'interpitch(mm)': interpitch,
-            'connector': connector,
+            'connectors': connector,
             'channels': channels,
             'xs_gerber': x_gerber,
             'ys_gerber': y_gerber
         })
 
-    columns = ['axis', 'pitch(mm)', 'interpitch(mm)', 'connector', 'channels', 'xs_gerber', 'ys_gerber']
+    columns = ['axis', 'pitch(mm)', 'interpitch(mm)', 'connectors', 'channels', 'xs_gerber', 'ys_gerber']
     result_df = pd.DataFrame(result_data, columns=columns)
     return result_df
 

@@ -14,8 +14,10 @@ import pandas as pd
 
 
 def main():
-    # file_path = 'F:/Saclay/cosmic_data/rd542_plein_3_first_test_10-2-25/quick_test_450V/hv_monitor.csv'
-    file_path = '/local/home/dn277127/Bureau/cosmic_data/rd542_plein_3_first_test_10-2-25/long_test_450V/hv_monitor.csv'
+    # file_path = 'F:/Saclay/cosmic_data/rd542_plein_3_first_test_10-2-25/long_test_450V/hv_monitor.csv'
+    # file_path = 'F:/Saclay/cosmic_data/rd542_strip_2_first_test_10-27-25/long_test_450V/hv_monitor.csv'
+    # file_path = '/local/home/dn277127/Bureau/cosmic_data/rd542_plein_3_first_test_10-2-25/long_test_450V/hv_monitor.csv'
+    file_path = 'F:/Saclay/cosmic_data/rd542_plein_3_first_test_10-2-25/long_test_450V/hv_monitor.csv'
     plot_hv_monitor(file_path)
     plt.show()
     print('donzo')
@@ -27,7 +29,6 @@ def plot_hv_monitor(file_path):
 
     # Extract all card:slot identifiers
     card_slots = sorted(set(col.split()[0] for col in df.columns if ":" in col))
-
 
     # --- Voltage plot (v0 and vmon for each channel) ---
     fig_v, ax_v = plt.subplots(figsize=(12, 6))

@@ -30,7 +30,7 @@ class DreamSubDetector:
 
         self.x_pitch, self.y_pitch = None, None
         self.x_interpitch, self.y_interpitch = None, None
-        self.x_connector, self.y_connector = None, None
+        self.x_connectors, self.y_connectors = None, None
         self.resist = None
 
         self.event_filter = None
@@ -47,7 +47,7 @@ class DreamSubDetector:
         self.x_times = times
         self.x_pitch = float(pitch)
         self.x_interpitch = float(interpitch)
-        self.x_connector = connector
+        self.x_connectors = connector
         self.x_cluster_triggers = cluster_triggers
         self.x_clusters = clusters
         self.x_cluster_sizes = cluster_sizes
@@ -69,7 +69,7 @@ class DreamSubDetector:
         self.y_times = times
         self.y_pitch = float(pitch)
         self.y_interpitch = float(interpitch)
-        self.y_connector = connector
+        self.y_connectors = connector
         self.y_cluster_triggers = cluster_triggers
         self.y_clusters = clusters
         self.y_cluster_sizes = cluster_sizes
