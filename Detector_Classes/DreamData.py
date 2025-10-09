@@ -377,7 +377,8 @@ class DreamData:
         :param channels:
         :return:
         """
-        channels = (np.array(connectors) - self.starting_connector) * self.channels_per_connector + np.array(channels)
+        # channels = (np.array(connectors) - self.starting_connector) * self.channels_per_connector + np.array(channels)
+        channels = self.get_flat_channel_nums(connectors, channels)
         if det_data.ndim == 1:
             return det_data[channels]
         elif det_data.ndim >= 2:
@@ -385,6 +386,15 @@ class DreamData:
         else:
             print('Error: Data shape not recognized.')
             return None
+
+    def get_flat_channel_nums(self, connectors, channels):
+        """
+        Given list of connectors and channels, get flat channel numbers (starting at 0 and counting up).
+        :param connectors:
+        :param channels:
+        :return:
+        """
+        return (np.array(connectors) - self.starting_connector) * self.channels_per_connector + np.array(channels)
 
     def get_connector_channels(self, det_data):
         """

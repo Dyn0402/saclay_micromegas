@@ -253,7 +253,7 @@ class DreamDetector(Detector):
         """
         xs_gerber, x_amps = [], []
         for row_i, x_group in self.det_map[self.det_map['axis'] == 'y'].iterrows():
-            x_connector, x_channels = x_group['connector'], x_group['channels']
+            x_connector, x_channels = x_group['connectors'], x_group['channels']
             x_amps.append(self.dream_data.get_channels_amps(x_connector, x_channels))
             xs_gerber.extend(x_group['xs_gerber'])
         xs_gerber = np.array(xs_gerber)
@@ -273,7 +273,7 @@ class DreamDetector(Detector):
 
         ys_gerber, y_amps = [], []
         for row_i, y_group in self.det_map[self.det_map['axis'] == 'x'].iterrows():
-            y_connector, y_channels = y_group['connector'], y_group['channels']
+            y_connector, y_channels = y_group['connectors'], y_group['channels']
             y_amps.append(self.dream_data.get_channels_amps(y_connector, y_channels))
             ys_gerber.extend(y_group['ys_gerber'])
         ys_gerber = np.array(ys_gerber)
@@ -481,7 +481,8 @@ class DreamDetector(Detector):
         for x_group in self.x_groups:
             x_group_df = x_group['df']
             x_hits = np.sum(x_group['hits'], axis=0)
-            axs[0].plot(x_group_df['channels'], x_hits,
+            x_channels = self.dream_data.get_flat_channel_nums(x_group_df['connectors'], x_group_df['channels'])
+            axs[0].plot(x_channels, x_hits,
                         label=f'Pitch: {x_group_df["pitch(mm)"]}, Interpitch: {x_group_df["interpitch(mm)"]}')
         axs[0].set_ylim(bottom=0)
         axs[0].legend()
@@ -489,7 +490,8 @@ class DreamDetector(Detector):
         for y_group in self.y_groups:
             y_group_df = y_group['df']
             y_hits = np.sum(y_group['hits'], axis=0)
-            axs[1].plot(y_group_df['channels'], y_hits,
+            y_channels = self.dream_data.get_flat_channel_nums(y_group_df['connectors'], y_group_df['channels'])
+            axs[1].plot(y_channels, y_hits,
                         label=f'Pitch: {y_group_df["pitch(mm)"]}, Interpitch: {y_group_df["interpitch(mm)"]}')
         axs[1].set_ylim(bottom=0)
         axs[1].legend()

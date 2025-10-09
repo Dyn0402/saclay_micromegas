@@ -1224,8 +1224,6 @@ def get_efficiency_1d(det, ray_data, hit_dist=1000, plot=False, in_det=False, to
         y_min, y_max = min([corner[1] for corner in corners]), max([corner[1] for corner in corners])
 
         # Plot blue circles for hits, red for misses. Split into two lists for hits and misses
-        # x_hits_xs, y_hits_ys, x_misses_xs, y_misses_ys = [], [], [], []
-        # x_hits_ys, y_hits_xs, x_misses_ys, y_misses_xs = [], [], [], []
         x_hits_xs, x_hits_ys, y_hits_xs, y_hits_ys, xy_hits_xs, xy_hits_ys = [], [], [], [], [], []
         x_misses_xs, y_misses_ys, x_misses_ys, y_misses_xs, xy_misses_xs, xy_misses_ys = [], [], [], [], [], []
         for x_ray, y_ray, hit_x, hit_y in zip(x_rays_all, y_rays_all, detector_x_hits, detector_y_hits):
@@ -1274,8 +1272,12 @@ def get_efficiency_1d(det, ray_data, hit_dist=1000, plot=False, in_det=False, to
         y_1d_xs_all = np.array(y_hits_xs + y_misses_xs)
 
         # Define grid resolution
-        grid_x_bins = np.arange(x_rays.min(), x_rays.max() + grid_size, grid_size)
-        grid_y_bins = np.arange(y_rays.min(), y_rays.max() + grid_size, grid_size)
+        # grid_x_bins = np.arange(x_rays.min(), x_rays.max() + grid_size, grid_size)
+        # grid_y_bins = np.arange(y_rays.min(), y_rays.max() + grid_size, grid_size)
+        x_range = x_max - x_min
+        y_range = y_max - y_min
+        grid_x_bins = np.arange(x_min - 0.1 * x_range, x_max + 0.1 * x_range + grid_size, grid_size)
+        grid_y_bins = np.arange(y_min - 0.1 * y_range, y_max + 0.1 * y_range + grid_size, grid_size)
 
         # Histogram 1D hits/misses with numpy then plot
         histx_1d_hits, x_bins = np.histogram(x_hits_xs, bins=grid_x_bins)
@@ -1330,7 +1332,7 @@ def get_efficiency_1d(det, ray_data, hit_dist=1000, plot=False, in_det=False, to
 
         hist_xy_hits, x_edges, y_edges = np.histogram2d(xy_hits_xs, xy_hits_ys, bins=[grid_x_bins, grid_y_bins],
                                                         range=[[x_rays_all.min(), x_rays_all.max()], [y_rays_all.min(), y_rays_all.max()]])
-        hist_xy_total, _, _ = np.histogram2d(xy_misses_xs, xy_misses_ys, bins=[grid_x_bins, grid_y_bins],
+        hist_xy_total, _, _ = np.histogram2d(x_rays_all, y_rays_all, bins=[grid_x_bins, grid_y_bins],
                                             range=[[x_rays_all.min(), x_rays_all.max()], [y_rays_all.min(), y_rays_all.max()]])
         efficiency_xy = np.divide(hist_xy_hits, hist_xy_total, out=np.zeros_like(hist_xy_hits, dtype=float), where=hist_xy_total > 0)
 
