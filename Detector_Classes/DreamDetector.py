@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.colors as mcolors
 from collections import Counter
 import copy
 
@@ -497,97 +498,109 @@ class DreamDetector(Detector):
         axs[1].legend()
         fig.tight_layout()
 
-    def plot_centroids_2d(self, alpha=0.1):
+    def plot_centroids_2d(self, alpha=0.1, bin_size=1):
         """
         Plot the centroids of the largest clusters in each sub-detector.
-        :return:
+        Includes both a scatter plot and a 2D histogram (log scale, white zero bins).
+        :param alpha: Transparency for scatter points.
+        :param bin_size: Bin size in mm for the 2D histogram.
         """
         all_centroids = []
         subs_centroids, subs_triggers = self.get_sub_centroids_coords()
         for sub_centroids, sub_triggers in zip(subs_centroids, subs_triggers):
             all_centroids.extend(list(sub_centroids))
         x_centroids, y_centroids, z_centroids = zip(*all_centroids)
-        fig, ax = plt.subplots()
-        ax.set_title(f'{self.name} Largest Cluster Centroids')
+
+        # --- Scatter plot ---
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.set_title(f'{self.name} Largest Cluster Centroids (Scatter)')
         ax.set_xlabel('X (mm)')
         ax.set_ylabel('Y (mm)')
         ax.set_aspect('equal')
-        ax.scatter(x_centroids, y_centroids, alpha=0.5)
+        # ax.scatter(x_centroids, y_centroids, alpha=alpha)
+        ax.scatter(x_centroids, y_centroids, alpha=alpha, color='red', s=5, edgecolor='none')
         fig.tight_layout()
 
-    def plot_centroids_2d_heatmap(self):
-        """
-        Plot the centroids of the largest clusters in each sub-detector as a 2D heatmap.
-        :return:
-        """
-        all_centroids = []
-        subs_centroids, subs_triggers = self.get_sub_centroids_coords()
-        for sub_centroids, sub_triggers in zip(subs_centroids, subs_triggers):
-            all_centroids.extend(list(sub_centroids))
-
-        x_centroids, y_centroids, z_centroids = zip(*all_centroids)
-
-        # Define the binning for the 2D histogram
-        bins = 100  # You can adjust the number of bins to your needs
-
-        # Create the 2D histogram
-        heatmap, xedges, yedges = np.histogram2d(x_centroids, y_centroids, bins=bins)
-
-        # Plot the heatmap
-        fig, ax = plt.subplots()
-        ax.set_title(f'{self.name} Largest Cluster Centroids')
+        # --- 2D histogram plot ---
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.set_title(f'{self.name} Largest Cluster Centroids (2D Histogram)')
         ax.set_xlabel('X (mm)')
         ax.set_ylabel('Y (mm)')
         ax.set_aspect('equal')
 
-        # The origin parameter is set to 'lower' so that the origin of the plot is at the bottom left
-        cax = ax.imshow(heatmap.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], origin='lower', cmap='hot',
-                        interpolation='nearest')
+        # Determine bin edges based on bin_size
+        x_min, x_max = min(x_centroids), max(x_centroids)
+        y_min, y_max = min(y_centroids), max(y_centroids)
 
-        # Add a colorbar to indicate the density scale
-        fig.colorbar(cax, ax=ax, label='Density')
+        x_bins = np.arange(x_min, x_max + bin_size, bin_size)
+        y_bins = np.arange(y_min, y_max + bin_size, bin_size)
+
+        # Prepare colormap with white for zero counts
+        cmap = plt.cm.jet.copy()
+        cmap.set_under('white')
+
+        # 2D histogram with log scale
+        h = ax.hist2d(
+            x_centroids,
+            y_centroids,
+            bins=[x_bins, y_bins],
+            cmap=cmap,
+            norm=mcolors.LogNorm(vmin=1, vmax=None)
+        )
+
+        plt.colorbar(h[3], ax=ax, label='Counts (log scale)')
+
+        # Scatter overlay for clarity
+        # ax.scatter(x_centroids, y_centroids, alpha=alpha, color='white', s=5, edgecolor='none')
 
         fig.tight_layout()
 
-    def plot_centroids_2d_scatter_heat(self):
+    def plot_xy_hit_map(self, log_scale=True):
         """
-        Plot the centroids of the largest clusters in each sub-detector.
-        :return:
+        Create a 2D histogram of coincident x-y strip hits.
+        X and Y axes correspond to strip numbers (0–127).
         """
-        all_centroids = []
-        subs_centroids, subs_triggers = self.get_sub_centroids_coords()
-        for sub_centroids, sub_triggers in zip(subs_centroids, subs_triggers):
-            all_centroids.extend(list(sub_centroids))
+        x_hits = self.x_hits  # shape (n_events, 128), boolean
+        y_hits = self.y_hits  # shape (n_events, 128), boolean
+        n_strips = x_hits.shape[1]
 
-        # Extract x and y coordinates
-        x_centroids, y_centroids, _ = zip(*all_centroids)
+        # Initialize hit map
+        hit_map = np.zeros((n_strips, n_strips), dtype=int)
 
-        # Count occurrences of each unique x-y pair
-        xy_pairs = list(zip(x_centroids, y_centroids))
-        pair_counts = Counter(xy_pairs)
+        # Fill coincidence map efficiently
+        for x_event, y_event in zip(x_hits, y_hits):
+            x_indices = np.where(x_event)[0]
+            y_indices = np.where(y_event)[0]
+            hit_map[np.ix_(x_indices, y_indices)] += 1
 
-        # Get unique pairs and their counts
-        unique_pairs, counts = zip(*pair_counts.items())
-        unique_x, unique_y = zip(*unique_pairs)
-
-        # Apply log scaling to the counts for coloring
-        log_counts = np.log(np.array(counts) + 1)  # Adding 1 to avoid log(0)
-
-        # Create the plot
+        # --- Plot ---
         fig, ax = plt.subplots()
-        ax.set_title(f'{self.name} Largest Cluster Centroids')
-        ax.set_xlabel('X (mm)')
-        ax.set_ylabel('Y (mm)')
-        ax.set_aspect('equal')
+        ax.set_title(f'{self.name} X-Y Strip Hit Map')
+        ax.set_xlabel('X strip number')
+        ax.set_ylabel('Y strip number')
 
-        # Scatter plot with color based on log-scaled counts
-        scatter = ax.scatter(unique_x, unique_y, c=log_counts, cmap='viridis', alpha=0.5)
+        cmap = plt.cm.jet.copy()
+        cmap.set_under('white')
 
-        # Add a colorbar to show the log-scaled counts
-        colorbar = fig.colorbar(scatter, ax=ax)
-        colorbar.set_label('Log(Count + 1)')
+        if log_scale:
+            norm = mcolors.LogNorm(vmin=1, vmax=None)
+            label = 'Counts (log scale)'
+        else:
+            norm = None
+            label = 'Counts'
 
+        im = ax.imshow(
+            hit_map.T,  # transpose so y is vertical
+            origin='lower',
+            cmap=cmap,
+            norm=norm,
+            interpolation='nearest',
+            aspect='auto'
+        )
+
+        plt.colorbar(im, ax=ax, label=label)
         fig.tight_layout()
+
 
     def plot_amplitude_sum_vs_event_num(self, print_threshold=None):
         """
