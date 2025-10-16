@@ -57,7 +57,15 @@ def main():
     print('donzo')
 
 
+def drift_speed_vs_b():
+    base_path = '/local/home/dn277127/Bureau/'
+    b_fields = [0.2, 0.4, 2.0]
+    gas = 'Ar_Iso_95_5'
+
+
+
 def gas_comparison_plot():
+    base_path = '/local/home/dn277127/Bureau/'
     gases = ['Ar_Iso_95_5', 'Ar_CO2_Iso_90_7_3', 'Ar_Iso_CO2_95_3_2', 'Ar_CO2_CF4_45_10_45']
     gas_colors = ['blue', 'orange', 'green', 'black']
 
@@ -76,7 +84,7 @@ def gas_comparison_plot():
     for b_field in b_fields:
         fig, ax = plt.subplots(figsize=(10, 5))
         for gas, color in zip(gases, gas_colors):
-            gas_props = GasProperties(base_path='C:/Users/Dylan/Desktop/gas', gas_type=gas, interp_kind='cubic')
+            gas_props = GasProperties(base_path=f'{base_path}gas', gas_type=gas, interp_kind='cubic')
             drift_v_e, drift_v_exb, lorentz_angle = gas_props.get_properties(drift_fields, b_field_tesla=b_field)
             d_v_e_m, d_v_exb_m, la_m = gas_props.get_properties(drift_field_measured, b_field_tesla=b_field)
 
