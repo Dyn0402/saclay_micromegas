@@ -21,7 +21,7 @@ class DetectorConfigLoader:
         self.sub_run_names = [sub_run['sub_run_name'] for sub_run in self.config['sub_runs']]
         self.det_type_info_dir = det_type_info_dir
 
-        self.det_map_types = ['strip', 'inter', 'asacusa', 'rd542']
+        self.det_map_types = ['strip', 'inter', 'asacusa', 'rd542', 'rd5']
 
     def get_det_config(self, det_name, sub_run_name=None):
         if det_name not in self.config['included_detectors']:
