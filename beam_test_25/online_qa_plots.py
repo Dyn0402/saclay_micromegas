@@ -66,6 +66,9 @@ def main():
     det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
     det.dream_data.plot_raw_amps_2d_hist(combine_y=10)
     det.dream_data.plot_amplitudes_vs_strip()
+
+    plt.show()
+
     det.plot_hits_1d()
 
     det.make_sub_detectors()
