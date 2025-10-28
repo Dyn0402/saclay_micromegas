@@ -26,7 +26,7 @@ import uproot
 import awkward as ak
 import vector
 
-from Measure import Measure
+from Detector_Classes.Measure import Measure
 
 
 class DreamData:

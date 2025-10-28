@@ -16,9 +16,9 @@ import matplotlib.colors as mcolors
 from collections import Counter
 import copy
 
-from Detector import Detector
-from DreamData import DreamData
-from DreamSubDetector import DreamSubDetector
+from Detector_Classes.Detector import Detector
+from Detector_Classes.DreamData import DreamData
+from Detector_Classes.DreamSubDetector import DreamSubDetector
 
 
 class DreamDetector(Detector):
