@@ -536,7 +536,7 @@ class DreamDetector(Detector):
         y_bins = np.arange(y_min, y_max + bin_size, bin_size)
 
         # Prepare colormap with white for zero counts
-        cmap = plt.cm.jet.copy()
+        cmap = copy.copy(plt.cm.jet)
         cmap.set_under('white')
 
         # 2D histogram with log scale
