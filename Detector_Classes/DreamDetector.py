@@ -579,7 +579,7 @@ class DreamDetector(Detector):
         ax.set_xlabel('X strip number')
         ax.set_ylabel('Y strip number')
 
-        cmap = plt.cm.jet.copy()
+        cmap = copy.copy(plt.cm.jet)
         cmap.set_under('white')
 
         if log_scale:
