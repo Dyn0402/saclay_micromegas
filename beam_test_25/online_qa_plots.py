@@ -23,11 +23,14 @@ def main():
     # limit_memory(2000)
 
     # base_dir = 'F:/Saclay/cosmic_data/'
-    base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    # base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+    base_dir = '/mnt/cosmic_data/Run/'
     # det_type_info_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    det_type_info_dir = '/mnt/cosmic_data/config/detectors/'
     # out_dir = 'F:/Saclay/Analysis/Cosmic Bench/11-5-24/'
-    out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/'
+    # out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/'
+    out_dir = '/mnt/cosmic_data/Analysis/'
     create_dir_if_not_exist(out_dir)
     # chunk_size = 5  # Number of files to process at once
     chunk_size = 0.2  # Number of files to process at once
