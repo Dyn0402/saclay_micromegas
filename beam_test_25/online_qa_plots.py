@@ -41,7 +41,7 @@ def main():
 
     # run_name = 'beam_test_fe_zs_test_10-10-25'
     # run_name = 'rd542_plein_vfp_1_fe_test_10-16-25'
-    run_name = 'rd542_plein_vfp_1__10-16-25'
+    run_name = 'rd5_plein_vfp_1_co2_fe55_10-28-25'
     run_dir = f'{base_dir}{run_name}/'
     # sub_run_name = 'quick_test_440V'
     sub_run_name = 'quick_test'
