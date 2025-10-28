@@ -48,6 +48,8 @@ def main():
 
     event_nums = np.arange(0, 1000)
 
+    out_dir = f'{out_dir}{run_name}/'
+    create_dir_if_not_exist(out_dir)
     out_dir = f'{out_dir}{run_name}/{sub_run_name}/'
     create_dir_if_not_exist(out_dir)
 
@@ -148,7 +150,6 @@ def save_all_figures(out_dir):
 
         # Try first axis title if no suptitle
         if (not raw_title or not raw_title.strip()) and fig.axes:
-            # Check for axes title (preferred) or ylabel/xlabel if empty
             ax = fig.axes[0]
             raw_title = ax.get_title() or ax.get_ylabel() or ax.get_xlabel()
 
@@ -161,11 +162,12 @@ def save_all_figures(out_dir):
         if not fig_title:
             fig_title = f'figure_{num}'
 
-        # Save files
+        # Save files and set permissions
         for ext in ('png', 'pdf'):
             path = os.path.join(out_dir, f"{fig_title}.{ext}")
             fig.savefig(path, bbox_inches='tight')
-            print(f"Saved {path}")
+            os.chmod(path, 0o777)  # <- make file readable/writable/executable by everyone
+            print(f"Saved {path} with 777 permissions")
 
 
 if __name__ == '__main__':
