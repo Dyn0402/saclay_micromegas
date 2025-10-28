@@ -1353,7 +1353,7 @@ def fit_waveform_gaus(waveform):
     try:
         popt, pcov = cf(gaussian, np.arange(len(waveform)), waveform, p0=[amplitude, mean, sd])
         perr = np.sqrt(np.diag(pcov))
-        return *popt, *perr, True
+        return tuple(popt) + tuple(perr) + (True,)
     except RuntimeError:
         return amplitude, mean, sd, 0, 0, 0, False
 
@@ -1374,7 +1374,7 @@ def fit_waveform_func(waveform):
         waveform = waveform[:end_index]
         popt, pcov = cf(waveform_func_reparam, np.arange(len(waveform)), waveform, p0=p0, bounds=p_bounds)
         perr = np.sqrt(np.diag(pcov))
-        return *popt, *perr, True
+        return tuple(popt) + tuple(perr) + (True,)
     except (RuntimeError, ValueError, IndexError):
         return amplitude, mean, 0, np.nan, np.nan, np.nan, np.nan, np.nan, False
 
