@@ -1173,7 +1173,8 @@ class DreamData:
 
 
 def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):
-    vector.register_awkward()
+    if hasattr(vector, "register_awkward") and callable(vector.register_awkward):
+        vector.register_awkward()
     # Open the ROOT file with uproot
     root_file = uproot.open(file_path)
 
@@ -1189,7 +1190,8 @@ def read_det_data(file_path, variable_name='amplitude', tree_name='nt'):
 
 
 def read_det_data_vars(file_path, variables, tree_name='nt', event_range=None):
-    vector.register_awkward()
+    if hasattr(vector, "register_awkward") and callable(vector.register_awkward):
+        vector.register_awkward()
     # Open the ROOT file with uproot
     root_file = uproot.open(file_path)
 
