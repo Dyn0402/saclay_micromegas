@@ -51,7 +51,7 @@ def main():
     out_dir = f'{out_dir}{run_name}/{sub_run_name}/'
     create_dir_if_not_exist(out_dir)
 
-    det_single = 'rd5_plein_vfp_1_co2_fe55_10-28-25'
+    det_single = 'rd5_plein_vfp_1'
 
     file_nums = 'all'
 
