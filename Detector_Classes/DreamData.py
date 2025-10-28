@@ -1277,7 +1277,7 @@ def fit_pedestals(strip_samples, plot=False):
         ax.set_xlabel('ADC')
         ax.set_ylabel('Density')
         fig.tight_layout()
-    return *popt, *perr
+    return tuple(popt) + tuple(perr)
 
 
 def get_common_noise(data, pedestals):
