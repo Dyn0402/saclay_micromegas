@@ -423,11 +423,12 @@ class DreamData:
     def get_timestamps(self):
         return self.timestamps
 
-    def filter_sparks(self, spark_filter_sigma=15, plot=True):
+    def filter_sparks(self, spark_filter_sigma=15, plot=True, filter=True):
         """
         Filter sparks, defined as events with more than 10 hits.
         :param spark_filter_sigma: Number of standard deviations above mean to set spark threshold.
         :param plot: Whether to plot the spark threshold.
+        :param filter: Whether to actually filter the data. If not, just return spark event mask.
         :return:
         """
         spark_thresh = np.mean(self.event_amp_sums) + spark_filter_sigma * np.std(self.event_amp_sums)
@@ -442,7 +443,9 @@ class DreamData:
             ax.set_ylabel('Number of Events')
             ax.set_title('Spark Metric: Events with large sample:channel sums are probably sparks')
             fig.tight_layout()
-        self.filter_data(event_spark_filter)
+        if filter:
+            self.filter_data(event_spark_filter)
+        return event_spark_filter
 
     def filter_data(self, data_indices):
         """
@@ -834,24 +837,34 @@ class DreamData:
             ax.annotate(fit_string, (0.9, 0.9), xycoords='axes fraction', ha='right', va='top',
                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
-    def plot_noise_metric(self):
+    def plot_noise_metric(self, spark_mask=None):
         """
         Plot metric for noise in data.
+        :param spark_mask: Event mask for spark events. If not None, plot them in red.
         :return:
         """
         event_amp_sums = np.nansum(self.data_amps, axis=1)
         event_hits = np.nansum(self.hits, axis=1)
         event_max_amps = np.nanmax(self.data_amps, axis=1)
         nan_mask = np.isnan(event_amp_sums) | np.isnan(event_hits) | np.isnan(event_max_amps)
-        event_amp_sums = event_amp_sums[~nan_mask]
-        event_hits = event_hits[~nan_mask]
-        event_max_amps = event_max_amps[~nan_mask]
+
+        spark_event_nums = self.event_nums[~nan_mask & ~spark_mask]
+        spark_event_amp_sums = event_amp_sums[~nan_mask & ~spark_mask]
+        spark_event_hits = event_hits[~nan_mask & ~spark_mask]
+        spark_event_max_amps = event_max_amps[~nan_mask & ~spark_mask]
+
+        event_nums = self.event_nums[~nan_mask & spark_mask]
+        event_amp_sums = event_amp_sums[~nan_mask & spark_mask]
+        event_hits = event_hits[~nan_mask & spark_mask]
+        event_max_amps = event_max_amps[~nan_mask & spark_mask]
 
         fig, ax = plt.subplots()
-        ax.plot(event_amp_sums)
+        ax.plot(event_nums, event_amp_sums)
+        ax.scatter(spark_event_nums, spark_event_amp_sums, marker='o', color='red', label='Sparks')
         ax.set_title('Event Amplitude Sums')
         ax.set_xlabel('Event')
         ax.set_ylabel('Amplitude Sum')
+        ax.legend()
         fig.tight_layout()
 
         fig, ax = plt.subplots()
