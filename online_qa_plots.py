@@ -76,10 +76,7 @@ def main():
     ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
     alignment_dir = f'{run_dir}alignments/'
 
-    try:
-        os.mkdir(alignment_dir)
-    except FileExistsError:
-        pass
+    create_dir_if_not_exist(alignment_dir)
 
     det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
 
