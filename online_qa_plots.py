@@ -60,8 +60,8 @@ def main():
     create_dir_if_not_exist(out_dir)
 
     # chunk_size = 0.2  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
-    # event_nums = None  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
-    event_nums = np.arange(0, 500000)  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
+    event_nums = None  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
+    # event_nums = np.arange(0, 500000)  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
     # file_nums = 'all'  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     file_nums = [0]  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
@@ -88,7 +88,7 @@ def main():
     print(f'FEU Channels: {det.feu_connectors}')
     print(f'HV: {det.hv}')
 
-    det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=True, save_waveforms=True,
+    det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=True, save_waveforms=False,
                         waveform_fit_func='parabola_vectorized', trigger_list=event_nums)
     print(f'Hits shape: {det.dream_data.hits.shape}')
 
