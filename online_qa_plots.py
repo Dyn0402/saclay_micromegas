@@ -42,21 +42,23 @@ def main():
         base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
         det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
         out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/'
+        chunk_size = 1  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
     elif daq_type == 'cosmic':
         base_dir = '/mnt/cosmic_data/Run/'
         det_type_info_dir = '/mnt/cosmic_data/config/detectors/'
         out_dir = '/mnt/cosmic_data/Analysis/'
+        chunk_size = 1  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
     elif daq_type == 'beam':
         base_dir = '/mnt/data/beam_sps_25/Run/'
         det_type_info_dir = '/mnt/data/beam_sps_25/config/detectors/'
         out_dir = '/mnt/data/beam_sps_25/Analysis/'
+        chunk_size = 0.2  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
     else:
         print(f'Unrecognized daq_type: {daq_type} (first commandline argument)! Exiting!')
         return
 
     create_dir_if_not_exist(out_dir)
 
-    chunk_size = 1  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
     # chunk_size = 0.2  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
     event_nums = None  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
     # event_nums = np.arange(0, 10000)  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
