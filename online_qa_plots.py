@@ -47,7 +47,7 @@ def main():
         det_type_info_dir = '/mnt/cosmic_data/config/detectors/'
         out_dir = '/mnt/cosmic_data/Analysis/'
     elif daq_type == 'beam':
-        base_dir = '/mnt/data/beam_sps_25/'
+        base_dir = '/mnt/data/beam_sps_25/Run/'
         det_type_info_dir = '/mnt/data/beam_sps_25/config/detectors/'
         out_dir = '/mnt/data/beam_sps_25/Analysis/'
     else:
