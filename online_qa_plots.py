@@ -60,8 +60,8 @@ def main():
     create_dir_if_not_exist(out_dir)
 
     # chunk_size = 0.2  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
-    event_nums = None  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
-    # event_nums = np.arange(0, 500000)  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
+    # event_nums = None  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
+    event_nums = np.arange(0, 50000)  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
     # file_nums = 'all'  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     file_nums = [0]  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
@@ -93,7 +93,10 @@ def main():
     print(f'Hits shape: {det.dream_data.hits.shape}')
 
     try:
-        det.dream_data.plot_pedestals()
+        if det.dream_data.ped_means is None or det.dream_data.ped_sigmas is None:
+            print("No pedestals found, skipping...")
+        else:
+            det.dream_data.plot_pedestals()
         # det.dream_data.plot_noise_metric()
         spark_mask = det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=False)
         det.dream_data.plot_noise_metric(spark_mask=spark_mask)
