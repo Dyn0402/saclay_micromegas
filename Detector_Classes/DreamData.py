@@ -848,6 +848,9 @@ class DreamData:
         event_max_amps = np.nanmax(self.data_amps, axis=1)
         nan_mask = np.isnan(event_amp_sums) | np.isnan(event_hits) | np.isnan(event_max_amps)
 
+        if spark_mask is None:
+            spark_mask = np.ones_like(self.event_nums, dtype=bool)
+
         spark_event_nums = self.event_nums[~nan_mask & ~spark_mask]
         spark_event_amp_sums = event_amp_sums[~nan_mask & ~spark_mask]
         spark_event_hits = event_hits[~nan_mask & ~spark_mask]

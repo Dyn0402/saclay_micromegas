@@ -66,11 +66,12 @@ def main():
     file_nums = [0]  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
     spark_filter_sigma = 8  # Number of sigma above mean to cut on amplitude sum.
+    plot_raw_amps = False  # Whether to plot raw amplitudes or not. Memory intensive.
 
     run_dir = f'{base_dir}{run_name}/'
     out_dir = f'{out_dir}{run_name}/'
     create_dir_if_not_exist(out_dir)
-    out_dir = f'{out_dir}{run_name}/{sub_run_name}/'
+    out_dir = f'{out_dir}/{sub_run_name}/'
     create_dir_if_not_exist(out_dir)
 
     run_json_path = f'{run_dir}run_config.json'
@@ -88,7 +89,7 @@ def main():
     print(f'FEU Channels: {det.feu_connectors}')
     print(f'HV: {det.hv}')
 
-    det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=True, save_waveforms=False,
+    det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=plot_raw_amps, save_waveforms=False,
                         waveform_fit_func='parabola_vectorized', trigger_list=event_nums)
     print(f'Hits shape: {det.dream_data.hits.shape}')
 
@@ -103,7 +104,8 @@ def main():
         det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=True)
 
         det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
-        det.dream_data.plot_raw_amps_2d_hist(combine_y=10)
+        if plot_raw_amps:
+            det.dream_data.plot_raw_amps_2d_hist(combine_y=10)
         det.dream_data.plot_amplitudes_vs_strip()
 
         det.make_sub_detectors()
