@@ -65,7 +65,7 @@ def main():
 
     # chunk_size = 0.2  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
     # event_nums = None  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
-    event_nums = np.arange(0, 50000)  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
+    event_nums = np.arange(0, 200000)  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
     # file_nums = 'all'  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     file_nums = [0]  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
@@ -76,6 +76,8 @@ def main():
     out_dir = f'{out_dir}{run_name}/'
     create_dir_if_not_exist(out_dir)
     out_dir = f'{out_dir}/{sub_run_name}/'
+    create_dir_if_not_exist(out_dir)
+    out_dir = f'{out_dir}/{detector_name}/'
     create_dir_if_not_exist(out_dir)
 
     # Clear previous plots
