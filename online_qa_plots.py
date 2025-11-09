@@ -57,7 +57,7 @@ def main():
         print(f'Unrecognized daq_type: {daq_type} (first commandline argument)! Exiting!')
         return
 
-    if not detector_name.startswith('rd5_'):
+    if not detector_name.startswith('banco_'):
         print(f'{detector_name} online analysis not implemented. Exiting')
         return
 
