@@ -57,6 +57,10 @@ def main():
         print(f'Unrecognized daq_type: {daq_type} (first commandline argument)! Exiting!')
         return
 
+    if not detector_name.startswith('rd5_'):
+        print(f'{detector_name} online analysis not implemented. Exiting')
+        return
+
     create_dir_if_not_exist(out_dir)
 
     # chunk_size = 0.2  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
