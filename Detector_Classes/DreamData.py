@@ -30,7 +30,7 @@ from Detector_Classes.Measure import Measure
 
 
 class DreamData:
-    def __init__(self, data_dir, feu_num, feu_connectors, ped_dir=None, waveform_fit_func=None):
+    def __init__(self, data_dir, feu_num, feu_connectors, ped_dir=None, waveform_fit_func=None, threads=None):
         self.data_dir = data_dir if data_dir.endswith('/') else f'{data_dir}/'
         self.ped_dir = ped_dir if ped_dir is not None and ped_dir.endswith('/') else f'{ped_dir}/'
         self.feu_num = feu_num
@@ -57,6 +57,13 @@ class DreamData:
         self.channels_per_connector = 64
         self.starting_connector = min(self.feu_connectors)
         self.connector_channels = None  # Dictionary of connectors and channels to use for each connector
+
+        if threads is None:
+            self.threads = os.cpu_count() - 1 or 1
+        elif threads < 0:
+            self.threads = max(os.cpu_count() + threads, 1)
+        else:
+            self.threads = threads
 
         self.ped_data = None
         self.data = None
@@ -182,7 +189,7 @@ class DreamData:
                     self.waveforms = []
                 if self.event_amp_sums is None:
                     self.event_amp_sums = []
-                with concurrent.futures.ThreadPoolExecutor() as executor:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=self.threads) as executor:
                     read_file_partial = partial(read_file, select_triggers=trigger_list, event_range=event_range_i)
                     for data_i, data_raw_i, event_nums, timestamps, ft_stamps in tqdm(executor.map(
                             read_file_partial, chunk_files), total=len(chunk_files)):
@@ -245,7 +252,7 @@ class DreamData:
             return get_waveform_fits(chunk, self.noise_thresholds, self.waveform_fit_func)
 
         fits_list = []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.threads) as executor:
             for fits in tqdm(executor.map(process_chunk, data_chunks), total=num_chunks):
                 fits_list.append(fits)
 

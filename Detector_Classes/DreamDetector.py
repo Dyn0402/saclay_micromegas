@@ -89,8 +89,8 @@ class DreamDetector(Detector):
 
     def load_dream_data(self, data_dir, ped_dir=None, noise_threshold_sigmas=None, file_nums=None, chunk_size=100,
                         trigger_list=None, hist_raw_amps=False, save_waveforms=False, waveform_fit_func=None,
-                        connector_channels=None):
-        self.dream_data = DreamData(data_dir, self.feu_num, self.feu_connectors, ped_dir, waveform_fit_func)
+                        connector_channels=None, threads=None):
+        self.dream_data = DreamData(data_dir, self.feu_num, self.feu_connectors, ped_dir, waveform_fit_func, threads)
         self.dream_data.connector_channels = connector_channels
         if noise_threshold_sigmas is not None:
             self.dream_data.noise_thresh_sigmas = noise_threshold_sigmas

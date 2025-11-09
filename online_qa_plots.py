@@ -71,6 +71,7 @@ def main():
     noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
     spark_filter_sigma = 8  # Number of sigma above mean to cut on amplitude sum.
     plot_raw_amps = False  # Whether to plot raw amplitudes or not. Memory intensive.
+    threads = -6  # Number of threads to use. If negative, uses (num_cores + threads). Set to 1 to disable multithreading.
 
     run_dir = f'{base_dir}{run_name}/'
     out_dir = f'{out_dir}{run_name}/'
@@ -101,7 +102,7 @@ def main():
     print(f'HV: {det.hv}')
 
     det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=plot_raw_amps, save_waveforms=False,
-                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums)
+                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads)
     print(f'Hits shape: {det.dream_data.hits.shape}')
 
     try:
