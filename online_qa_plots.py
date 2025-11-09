@@ -78,6 +78,11 @@ def main():
     out_dir = f'{out_dir}/{sub_run_name}/'
     create_dir_if_not_exist(out_dir)
 
+    # Clear previous plots
+    for file in os.listdir(out_dir):
+        if file.endswith('.png') or file.endswith('.pdf'):
+            os.remove(os.path.join(out_dir, file))
+
     run_json_path = f'{run_dir}run_config.json'
     data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
     ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
