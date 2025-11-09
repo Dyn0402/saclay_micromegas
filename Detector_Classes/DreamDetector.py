@@ -174,7 +174,8 @@ class DreamDetector(Detector):
             x_group_df = x_group['df'].to_dict()
             for y_group in self.y_groups:
                 if 'asacusa' in self.config['det_type']:  # Hack to only group same connectors.
-                    input('Changes to connector -> channel mapping probably broke this for asacusa, check. Enter to continue.')
+                    # TODO: Fix this
+                    print('Changes to connector -> channel mapping probably broke this for asacusa, check. Enter to continue.')
                     if x_group_df['connectors'] != y_group['df']['connectors']:  # Find better way in map file.
                         continue
                 y_group_df = y_group['df'].to_dict()
