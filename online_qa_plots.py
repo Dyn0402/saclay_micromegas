@@ -116,17 +116,17 @@ def main():
         det.dream_data.plot_noise_metric(spark_mask=spark_mask)
         det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=True)
 
-        n_trig = det.dream_data.event_nums.size
-        n_coinc = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        n_coinc_trig, n_trig_total = [], []
-        for n in n_coinc:
-            n_coinc = det.get_n_x_and_y_hit_events(n_hits_per_orientation=n)
-            n_coinc_trig.append(n_coinc)
-            n_trig_total.append(n_trig)
-        df = pd.DataFrame({'n_hits_per_orientation': n_coinc, 'n_events': n_coinc_trig,
-                           'total_triggers': n_trig_total,
-                           'fraction_of_total_events': np.array(n_coinc_trig) / n_trig})
-        df.to_csv(f'{out_dir}{sub_run_name}/coincident_events.csv', index=False)
+        # n_trig = det.dream_data.event_nums.size
+        # n_coinc = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        # n_coinc_trig, n_trig_total = [], []
+        # for n in n_coinc:
+        #     n_coinc = det.get_n_x_and_y_hit_events(n_hits_per_orientation=n)
+        #     n_coinc_trig.append(n_coinc)
+        #     n_trig_total.append(n_trig)
+        # df = pd.DataFrame({'n_hits_per_orientation': n_coinc, 'n_events': n_coinc_trig,
+        #                    'total_triggers': n_trig_total,
+        #                    'fraction_of_total_events': np.array(n_coinc_trig) / n_trig})
+        # df.to_csv(f'{out_dir}{sub_run_name}/coincident_events.csv', index=False)
 
         det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
         if plot_raw_amps:
