@@ -71,7 +71,7 @@ def main():
     file_nums = [0]  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
     spark_filter_sigma = 8  # Number of sigma above mean to cut on amplitude sum.
-    plot_raw_amps = False  # Whether to plot raw amplitudes or not. Memory intensive.
+    plot_raw_amps = True  # Whether to plot raw amplitudes or not. Memory intensive.
     threads = -6  # Number of threads to use. If negative, uses (num_cores + threads). Set to 1 to disable multithreading.
 
     run_dir = f'{base_dir}{run_name}/'
@@ -106,65 +106,67 @@ def main():
                         waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads)
     print(f'Hits shape: {det.dream_data.hits.shape}')
 
-    try:
-        if det.dream_data.ped_means is None or det.dream_data.ped_sigmas is None:
-            print("No pedestals found, skipping...")
-        else:
-            det.dream_data.plot_pedestals()
-        # det.dream_data.plot_noise_metric()
-        spark_mask = det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=False)
-        det.dream_data.plot_noise_metric(spark_mask=spark_mask)
-        det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=True)
+    # try:
+    if det.dream_data.ped_means is None or det.dream_data.ped_sigmas is None:
+        print("No pedestals found, skipping...")
+    else:
+        det.dream_data.plot_pedestals()
+    # det.dream_data.plot_noise_metric()
+    spark_mask = det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=False)
+    det.dream_data.plot_noise_metric(spark_mask=spark_mask)
+    det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=True)
 
-        # n_trig = det.dream_data.event_nums.size
-        # n_coinc = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        # n_coinc_trig, n_trig_total = [], []
-        # for n in n_coinc:
-        #     n_coinc = det.get_n_x_and_y_hit_events(n_hits_per_orientation=n)
-        #     n_coinc_trig.append(n_coinc)
-        #     n_trig_total.append(n_trig)
-        # df = pd.DataFrame({'n_hits_per_orientation': n_coinc, 'n_events': n_coinc_trig,
-        #                    'total_triggers': n_trig_total,
-        #                    'fraction_of_total_events': np.array(n_coinc_trig) / n_trig})
-        # df.to_csv(f'{out_dir}{sub_run_name}/coincident_events.csv', index=False)
+    n_trig = det.dream_data.event_nums.size
+    n_coinc = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    n_coinc_trig, n_trig_total = [], []
+    for n in n_coinc:
+        print('Calculating coincident events for n_hits_per_orientation = ', n)
+        n_coinc = det.get_n_x_and_y_hit_events(n_hits_per_orientation=n)
+        print(f'Number of events with at least {n} hits per orientation: {n_coinc} / {n_trig} ({100 * n_coinc / n_trig:.2f}%)')
+        n_coinc_trig.append(n_coinc)
+        n_trig_total.append(n_trig)
+    df = pd.DataFrame({'n_hits_per_orientation': n_coinc, 'n_events': n_coinc_trig,
+                       'total_triggers': n_trig_total,
+                       'fraction_of_total_events': np.array(n_coinc_trig) / n_trig})
+    df.to_csv(f'{out_dir}{sub_run_name}/coincident_events.csv', index=False)
 
-        det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
-        if plot_raw_amps:
-            det.dream_data.plot_raw_amps_2d_hist(combine_y=10)
-        det.dream_data.plot_amplitudes_vs_strip()
+    det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
+    if plot_raw_amps:
+        det.dream_data.plot_raw_amps_2d_hist(combine_y=10)
+    det.dream_data.plot_amplitudes_vs_strip()
 
-        det.make_sub_detectors()
+    det.make_sub_detectors()
 
-        det.plot_hits_1d()
+    det.plot_hits_1d()
 
-        det.plot_centroids_2d()
-        det.plot_xy_hit_map()
+    det.plot_centroids_2d()
+    det.plot_xy_hit_map()
 
-        det.dream_data.correct_for_fine_timestamps()
+    det.dream_data.correct_for_fine_timestamps()
 
-        sigma_x, sigma_x_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(0, int(256 / 2)),
-                                                                    min_amp=None, plot=True)
-        plt.title(f'Time of Max for X (Top) Strips')
+    sigma_x, sigma_x_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(0, int(256 / 2)),
+                                                                min_amp=None, plot=True)
+    plt.title(f'Time of Max for X (Top) Strips')
 
-        sigma_y, sigma_y_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256),
-                                                                    min_amp=None, plot=True)
-        plt.title(f'Time of Max for Y (Bottom) Strips')
+    sigma_y, sigma_y_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256),
+                                                                min_amp=None, plot=True)
+    plt.title(f'Time of Max for Y (Bottom) Strips')
 
-        min_amp = 600
-        sigma_x, sigma_x_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(0, int(256 / 2)),
-                                                                    min_amp=min_amp, plot=True)
-        plt.title(f'Time of Max for X (Top) Strips Min Amp {min_amp}')
+    min_amp = 600
+    sigma_x, sigma_x_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(0, int(256 / 2)),
+                                                                min_amp=min_amp, plot=True)
+    plt.title(f'Time of Max for X (Top) Strips Min Amp {min_amp}')
 
-        sigma_y, sigma_y_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256),
-                                                                    min_amp=min_amp, plot=True)
-        plt.title(f'Time of Max for Y (Bottom) Strips Min Amp {min_amp}')
-    except Exception as e:
-        print(f'Error during plotting: {e}')
-        with open(f'{out_dir}plotting_error.txt', 'w') as f:
-            f.write(f'Error during plotting: {e}')
-    finally:
-        # Save all open plots
-        save_all_figures(out_dir)
+    sigma_y, sigma_y_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256),
+                                                                min_amp=min_amp, plot=True)
+    plt.title(f'Time of Max for Y (Bottom) Strips Min Amp {min_amp}')
+    # except Exception as e:
+    #     print(f'Error during plotting: {e}')
+    #     with open(f'{out_dir}plotting_error.txt', 'w') as f:
+    #         f.write(f'Error during plotting: {e}')
+    # finally:
+    #     # Save all open plots
+    #     save_all_figures(out_dir)
 
     print('donzo')
 
