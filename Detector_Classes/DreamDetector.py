@@ -391,6 +391,31 @@ class DreamDetector(Detector):
         return (x_min < x_local) & (x_local < x_max) & (y_min < y_local) & (y_local < y_max)
 
 
+    def get_n_x_and_y_hit_events(self, n_hits_per_orientation=1):
+        """
+        Get the number of events with at least n_hits_per_orientation in both x and y orientations.
+        Args:
+            n_hits_per_orientation:
+
+        Returns:
+            coincident_events: Number of events with at least n_hits_per_orientation in both x and y.
+
+        """
+        # Count number of hits per event along axis=1
+        x_hit_count = np.sum(self.x_hits, axis=1)
+        y_hit_count = np.sum(self.y_hits, axis=1)
+
+        # Require at least n hits in each
+        enough_x_hits = x_hit_count >= n_hits_per_orientation
+        enough_y_hits = y_hit_count >= n_hits_per_orientation
+
+        # Events that have >= n x-hits AND >= n y-hits
+        enough_x_and_y_hits = enough_x_hits & enough_y_hits
+
+        coincident_events = np.sum(enough_x_and_y_hits)
+        return coincident_events
+
+
     def plot_event_1d(self, event_id):
         """
         Plot amplitude vs position for each group in the detector. Plot x and y on separate plots.
