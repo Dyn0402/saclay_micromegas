@@ -133,7 +133,7 @@ def main():
         df = pd.DataFrame({'n_hits_per_orientation': n_coinc, 'n_events': n_coinc_trig,
                            'total_triggers': n_trig_total,
                            'fraction_of_total_events': np.array(n_coinc_trig) / n_trig})
-        df.to_csv(f'{out_dir}{sub_run_name}/coincident_events.csv', index=False)
+        df.to_csv(f'{out_dir}/coincident_events.csv', index=False)
 
         det.plot_hits_1d()
 
