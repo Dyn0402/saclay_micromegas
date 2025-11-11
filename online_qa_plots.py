@@ -185,33 +185,36 @@ def save_all_figures(out_dir):
     os.makedirs(out_dir, exist_ok=True)
 
     for num in plt.get_fignums():
-        fig = plt.figure(num)
-        raw_title = None
+        try:
+            fig = plt.figure(num)
+            raw_title = None
 
-        # Try figure suptitle
-        if hasattr(fig, "_suptitle") and fig._suptitle is not None:
-            raw_title = fig._suptitle.get_text()
+            # Try figure suptitle
+            if hasattr(fig, "_suptitle") and fig._suptitle is not None:
+                raw_title = fig._suptitle.get_text()
 
-        # Try first axis title if no suptitle
-        if (not raw_title or not raw_title.strip()) and fig.axes:
-            ax = fig.axes[0]
-            raw_title = ax.get_title() or ax.get_ylabel() or ax.get_xlabel()
+            # Try first axis title if no suptitle
+            if (not raw_title or not raw_title.strip()) and fig.axes:
+                ax = fig.axes[0]
+                raw_title = ax.get_title() or ax.get_ylabel() or ax.get_xlabel()
 
-        # Fallback: use figure label
-        if not raw_title or not raw_title.strip():
-            raw_title = fig.get_label() or f'figure_{num}'
+            # Fallback: use figure label
+            if not raw_title or not raw_title.strip():
+                raw_title = fig.get_label() or f'figure_{num}'
 
-        # Clean up title for filename
-        fig_title = raw_title.strip().replace(' ', '_').replace('/', '-')
-        if not fig_title:
-            fig_title = f'figure_{num}'
+            # Clean up title for filename
+            fig_title = raw_title.strip().replace(' ', '_').replace('/', '-')
+            if not fig_title:
+                fig_title = f'figure_{num}'
 
-        # Save files and set permissions
-        for ext in ('png', 'pdf'):
-            path = os.path.join(out_dir, f"{fig_title}.{ext}")
-            fig.savefig(path, bbox_inches='tight')
-            os.chmod(path, 0o777)  # <- make file readable/writable/executable by everyone
-            print(f"Saved {path} with 777 permissions")
+            # Save files and set permissions
+            for ext in ('png', 'pdf'):
+                path = os.path.join(out_dir, f"{fig_title}.{ext}")
+                fig.savefig(path, bbox_inches='tight')
+                os.chmod(path, 0o777)  # <- make file readable/writable/executable by everyone
+                print(f"Saved {path} with 777 permissions")
+        except Exception as e:
+            print(f"Error saving figure {num}: {e}")
 
 
 if __name__ == '__main__':
