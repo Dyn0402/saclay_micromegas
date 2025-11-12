@@ -35,8 +35,8 @@ class DreamData:
         self.data_dir = data_dir if data_dir.endswith('/') else f'{data_dir}/'
         self.ped_dir = ped_dir if ped_dir is not None and ped_dir.endswith('/') else f'{ped_dir}/'
         self.feu_num = feu_num
-        self.feu_connectors = feu_connector_flips
-        self.feu_connector_flips = None  # List of booleans indicating whether to flip channel order for each connector
+        self.feu_connectors = feu_connectors
+        self.feu_connector_flips = feu_connector_flips  # List of booleans indicating whether to flip channel order for each connector
 
         self.array_flag = '_array'  # Ensure only files with array structure are read
         self.ped_flag = '_pedthr_'
