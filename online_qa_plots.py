@@ -96,6 +96,10 @@ def main():
 
     det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
 
+    feu_connector_flips = None
+    if detector_name == 'urw_inter':
+        feu_connector_flips = [False, False, True, True]
+
     det_config = det_config_loader.get_det_config(detector_name, sub_run_name=sub_run_name)
     det = DreamDetector(config=det_config)
     print(f'FEU Num: {det.feu_num}')
@@ -103,7 +107,8 @@ def main():
     print(f'HV: {det.hv}')
 
     det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=plot_raw_amps, save_waveforms=False,
-                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads)
+                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads,
+                        feu_connector_flips=feu_connector_flips)
     print(f'Hits shape: {det.dream_data.hits.shape}')
 
     try:

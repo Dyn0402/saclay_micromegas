@@ -30,11 +30,13 @@ from Detector_Classes.Measure import Measure
 
 
 class DreamData:
-    def __init__(self, data_dir, feu_num, feu_connectors, ped_dir=None, waveform_fit_func=None, threads=None):
+    def __init__(self, data_dir, feu_num, feu_connectors, ped_dir=None, waveform_fit_func=None, threads=None,
+                 feu_connector_flips=None):
         self.data_dir = data_dir if data_dir.endswith('/') else f'{data_dir}/'
         self.ped_dir = ped_dir if ped_dir is not None and ped_dir.endswith('/') else f'{ped_dir}/'
         self.feu_num = feu_num
         self.feu_connectors = feu_connectors
+        self.feu_connector_flips = None  # List of booleans indicating whether to flip channel order for each connector
 
         self.array_flag = '_array'  # Ensure only files with array structure are read
         self.ped_flag = '_pedthr_'
@@ -86,6 +88,7 @@ class DreamData:
         self.hits = None
 
         self.raw_amp_hist = None
+        self.raw_waveform_hist = None
 
     def copy(self):
         return copy.deepcopy(self)
@@ -106,7 +109,8 @@ class DreamData:
         ped_file_path = f'{ped_dir}{ped_files[-1]}'
 
         ped_data = read_det_data(ped_file_path)
-        self.ped_data = self.split_det_data(ped_data, self.feu_connectors, starting_connector=1, to_connectors=False)
+        self.ped_data = self.split_det_data(ped_data, self.feu_connectors, starting_connector=1, to_connectors=False,
+                                            feu_connector_flips=self.feu_connector_flips)
 
         self.get_pedestals()
         self.get_noise_thresholds(noise_sigmas=self.noise_thresh_sigmas)
@@ -120,8 +124,10 @@ class DreamData:
 
     def subtract_common_noise(self, data, pedestals):
         # feu_connectors = np.array(self.feu_connectors) - min(self.feu_connectors) + 1  # Ensure connectors start at 1
-        data_connectors = self.split_det_data(data, self.feu_connectors, to_connectors=True)
-        peds_connectors = self.split_det_data(pedestals, self.feu_connectors, to_connectors=True)
+        data_connectors = self.split_det_data(data, self.feu_connectors, to_connectors=True,
+                                              feu_connector_flips=self.feu_connector_flips)
+        peds_connectors = self.split_det_data(pedestals, self.feu_connectors, to_connectors=True,
+                                              feu_connector_flips=self.feu_connector_flips)
         data_sub = []
         for data_connector, ped_connector in zip(data_connectors, peds_connectors):
             connector_common_noise = get_common_noise(data_connector, ped_connector)
@@ -133,7 +139,8 @@ class DreamData:
         if self.connector_channels is not None:
             self.noise_thresholds = self.get_connector_channels(self.noise_thresholds)
 
-    def read_data(self, file_nums=None, chunk_size=100, trigger_list=None, hist_raw_amps=False, save_waveforms=False):
+    def read_data(self, file_nums=None, chunk_size=100, trigger_list=None, hist_raw_amps=False, save_waveforms=False,
+                  hist_raw_waveforms=False):
         if self.data_dir is None:
             print('Error: No data directory specified.')
             return None
@@ -155,7 +162,8 @@ class DreamData:
                 mask = np.isin(data_event_nums, select_triggers)
                 data_raw, data_event_nums = data_raw[mask], data_event_nums[mask]
                 data_ft_stamp, data_timestamp = data_ft_stamp[mask], data_timestamp[mask]
-            data_raw = self.split_det_data(data_raw, self.feu_connectors, starting_connector=1, to_connectors=False)
+            data_raw = self.split_det_data(data_raw, self.feu_connectors, starting_connector=1, to_connectors=False,
+                                           feu_connector_flips=self.feu_connector_flips)
             if self.ped_means is not None:
                 data = self.subtract_common_noise(data_raw, self.ped_means)
                 data = subtract_pedestal(data, self.ped_means)
@@ -213,6 +221,14 @@ class DreamData:
                                 self.raw_amp_hist = histograms
                             else:
                                 self.raw_amp_hist += histograms
+
+                        # if hist_raw_waveforms:
+                        #     n_events, n_channels, n_samples = data_raw_i.shape
+                        #     data_raw_i = data_raw_i.reshape(-1, data.shape[-1])
+
+
+                            if self.raw_waveform_hist is None:
+                                self.raw_waveform_hist = np.zeros((n_channels, n_samples, len(bins_y) - 1))
 
                 self.data = np.concatenate(self.data)
 
@@ -351,12 +367,51 @@ class DreamData:
             channel_time_of_max = self.split_det_data_connectors(self.data_time_of_max, [connector], channels)
         return channel_time_of_max
 
-    def split_det_data(self, det_data, feu_connectors, to_connectors=False, starting_connector=None):
+    # def split_det_data(self, det_data, feu_connectors, to_connectors=False, starting_connector=None):
+    #     if starting_connector is None:
+    #         starting_connector = self.starting_connector
+    #     channel_list = np.concatenate([np.arange(self.channels_per_connector) +
+    #                                    self.channels_per_connector * (connector_num - starting_connector)
+    #                                    for connector_num in feu_connectors])
+    #     if det_data.ndim == 1:
+    #         det_data = det_data[channel_list]
+    #         if to_connectors:
+    #             det_data = np.array(np.split(det_data, len(feu_connectors)))
+    #     elif det_data.ndim == 2:
+    #         det_data = det_data[:, channel_list]
+    #         if to_connectors:
+    #             det_data = np.array(np.split(det_data, len(feu_connectors), axis=1))
+    #     elif det_data.ndim == 3:
+    #         det_data = det_data[:, channel_list]
+    #         if to_connectors:
+    #             det_data = np.array(np.split(det_data, len(feu_connectors), axis=1))
+    #     else:
+    #         print('Error: Data shape not recognized.')
+    #         return None
+    #
+    #     return det_data
+
+    def split_det_data(self, det_data, feu_connectors, to_connectors=False, starting_connector=None,
+                       feu_connector_flips=None):
         if starting_connector is None:
             starting_connector = self.starting_connector
-        channel_list = np.concatenate([np.arange(self.channels_per_connector) +
-                                       self.channels_per_connector * (connector_num - starting_connector)
-                                       for connector_num in feu_connectors])
+
+        if feu_connector_flips is None:
+            # Default: no flips
+            feu_connector_flips = [False] * len(feu_connectors)
+        elif len(feu_connector_flips) != len(feu_connectors):
+            print("Error: feu_connector_flips must have the same length as feu_connectors.")
+            return None
+
+        connector_arrays = []
+        for connector_num, flip in zip(feu_connectors, feu_connector_flips):
+            channels = np.arange(self.channels_per_connector)
+            if flip:
+                channels = channels[::-1]  # flip channel order (0→63, 1→62, etc.)
+            connector_arrays.append(channels + self.channels_per_connector * (connector_num - starting_connector))
+
+        channel_list = np.concatenate(connector_arrays)
+
         if det_data.ndim == 1:
             det_data = det_data[channel_list]
             if to_connectors:
@@ -370,7 +425,7 @@ class DreamData:
             if to_connectors:
                 det_data = np.array(np.split(det_data, len(feu_connectors), axis=1))
         else:
-            print('Error: Data shape not recognized.')
+            print("Error: Data shape not recognized.")
             return None
 
         return det_data
@@ -879,31 +934,37 @@ class DreamData:
 
         fig, ax = plt.subplots()
         ax.hist(event_amp_sums, bins=100)
-        ax.set_title('Event Amplitude Sums')
+        ax.set_title('Event Amplitude Sums Hist')
         ax.set_xlabel('Amplitude Sum')
         ax.set_ylabel('Events')
         fig.tight_layout()
 
         fig, ax = plt.subplots()
         ax.scatter(event_hits, event_amp_sums, alpha=0.5)
+        ax.scatter(spark_event_hits, spark_event_amp_sums, marker='o', color='red', label='Sparks', alpha=0.5)
         ax.set_title('Event Amplitude Sums vs Hits')
         ax.set_xlabel('Hits')
         ax.set_ylabel('Amplitude Sum')
+        ax.legend()
         fig.tight_layout()
 
 
         fig, ax = plt.subplots()
         ax.scatter(event_max_amps, event_amp_sums, alpha=0.5)
+        ax.scatter(spark_event_max_amps, spark_event_amp_sums, marker='o', color='red', label='Sparks', alpha=0.5)
         ax.set_title('Event Amplitude Sums vs Max Amplitudes')
         ax.set_xlabel('Max Amplitude')
         ax.set_ylabel('Amplitude Sum')
+        ax.legend()
         fig.tight_layout()
 
         fig, ax = plt.subplots()
         ax.scatter(event_hits, event_max_amps, alpha=0.5)
+        ax.scatter(spark_event_hits, spark_event_max_amps, marker='o', color='red', label='Sparks', alpha=0.5)
         ax.set_title('Event Max Amplitudes vs Hits')
         ax.set_xlabel('Hits')
         ax.set_ylabel('Max Amplitude')
+        ax.legend()
         fig.tight_layout()
 
         max_amp_div_sum = event_max_amps / event_amp_sums
@@ -912,13 +973,16 @@ class DreamData:
         ax.set_title('Max Amplitude / Amplitude Sum')
         ax.set_xlabel('Max Amplitude / Amplitude Sum')
         ax.set_ylabel('Events')
+        ax.legend()
         fig.tight_layout()
 
         fig, ax = plt.subplots()
         ax.scatter(range(len(max_amp_div_sum)), max_amp_div_sum, alpha=0.5)
+        ax.scatter(np.where(~spark_mask)[0], spark_event_max_amps / spark_event_amp_sums, marker='o', color='red', label='Sparks', alpha=0.5)
         ax.set_title('Max Amplitude / Amplitude Sum')
         ax.set_xlabel('Event')
         ax.set_ylabel('Max Amplitude / Amplitude Sum')
+        ax.legend()
         fig.tight_layout()
 
     def plot_hits_vs_strip(self, print_dead_strips=False):
@@ -1044,8 +1108,10 @@ class DreamData:
         :return:
         """
         pedestals = get_pedestals_by_median(self.ped_data)
-        data_connectors = self.split_det_data(self.ped_data, self.feu_connectors, to_connectors=True)
-        peds_connectors = self.split_det_data(pedestals, self.feu_connectors, to_connectors=True)
+        data_connectors = self.split_det_data(self.ped_data, self.feu_connectors, to_connectors=True,
+                                              feu_connector_flips=self.feu_connector_flips)
+        peds_connectors = self.split_det_data(pedestals, self.feu_connectors, to_connectors=True,
+                                              feu_connector_flips=self.feu_connector_flips)
         print(f'Connector {connector + self.starting_connector} Data: {data_connectors[connector].shape}')
         print(f'Connector {connector + self.starting_connector} Peds: {peds_connectors[connector].shape}')
         connector_common_noise = get_common_noise(data_connectors[connector], peds_connectors[connector])
@@ -1150,7 +1216,8 @@ class DreamData:
                 waveforms_split.append(waveforms_split_hold[:, channel_index:channel_index + len(channels)])
                 channel_index += len(channels)
         else:
-            waveforms_split = self.split_det_data(self.waveforms, self.feu_connectors, to_connectors=True)
+            waveforms_split = self.split_det_data(self.waveforms, self.feu_connectors, to_connectors=True,
+                                                  feu_connector_flips=self.feu_connector_flips)
         min_amp, max_amp = 0, 100
 
         for connector_i, (ax, waveform_connector) in enumerate(zip(axes, waveforms_split)):
