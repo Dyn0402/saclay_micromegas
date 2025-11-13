@@ -151,13 +151,23 @@ def main():
         plt.title(f'Time of Max for Y (Bottom) Strips')
 
         min_amp = 600
-        sigma_x, sigma_x_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(0, int(256 / 2)),
+        sigma_x_600, sigma_x_err_600 = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(0, int(256 / 2)),
                                                                     min_amp=min_amp, plot=True)
         plt.title(f'Time of Max for X (Top) Strips Min Amp {min_amp}')
 
-        sigma_y, sigma_y_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256),
+        sigma_y_600, sigma_y_err_600 = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256),
                                                                     min_amp=min_amp, plot=True)
         plt.title(f'Time of Max for Y (Bottom) Strips Min Amp {min_amp}')
+
+        # Write timing resolution results to a csv file
+        timing_df = pd.DataFrame({
+            'orientation': ['X', 'Y'],
+            'time_resolution_ns': [sigma_x, sigma_y],
+            'time_resolution_err_ns': [sigma_x_err, sigma_y_err],
+            'time_resolution_ns_min_amp_600': [sigma_x_600, sigma_y_600],
+            'time_resolution_err_ns_min_amp_600': [sigma_x_err_600, sigma_y_err_600],
+        })
+        timing_df.to_csv(f'{out_dir}/timing_resolution.csv', index=False)
     except Exception as e:
         print(f'Error during plotting: {e}')
         with open(f'{out_dir}plotting_error.txt', 'w') as f:
