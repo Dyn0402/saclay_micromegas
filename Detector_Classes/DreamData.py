@@ -31,7 +31,7 @@ from Detector_Classes.Measure import Measure
 
 class DreamData:
     def __init__(self, data_dir, feu_num, feu_connectors, ped_dir=None, waveform_fit_func=None, threads=None,
-                 feu_connector_flips=None):
+                 feu_connector_flips=None, sample_period=None):
         self.data_dir = data_dir if data_dir.endswith('/') else f'{data_dir}/'
         self.ped_dir = ped_dir if ped_dir is not None and ped_dir.endswith('/') else f'{ped_dir}/'
         self.feu_num = feu_num
@@ -54,7 +54,7 @@ class DreamData:
 
         self.fine_timestamp_constant = 1.0 / 6
         self.timestamp_frequency = 100e6  # Hz
-        self.sample_period = 60  # ns
+        self.sample_period = sample_period if sample_period is not None else 60  # ns
 
         self.channels_per_connector = 64
         self.starting_connector = min(self.feu_connectors)
