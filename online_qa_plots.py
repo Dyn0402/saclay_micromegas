@@ -70,7 +70,7 @@ def main():
     # file_nums = 'all'  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     file_nums = [0]  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
     noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
-    spark_filter_sigma = 8  # Number of sigma above mean to cut on amplitude sum.
+    spark_filter_sigma = 12  # Number of sigma above mean to cut on amplitude sum.
     plot_raw_amps = True  # Whether to plot raw amplitudes or not. Memory intensive.
     threads = -6  # Number of threads to use. If negative, uses (num_cores + threads). Set to 1 to disable multithreading.
 

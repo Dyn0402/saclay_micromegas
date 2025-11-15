@@ -977,8 +977,8 @@ class DreamData:
         fig.tight_layout()
 
         fig, ax = plt.subplots()
-        ax.scatter(range(len(max_amp_div_sum)), max_amp_div_sum, alpha=0.5)
-        ax.scatter(np.where(~spark_mask)[0], spark_event_max_amps / spark_event_amp_sums, marker='o', color='red', label='Sparks', alpha=0.5)
+        ax.scatter(event_nums, max_amp_div_sum, alpha=0.5)
+        ax.scatter(spark_event_nums, spark_event_max_amps / spark_event_amp_sums, marker='o', color='red', label='Sparks', alpha=0.5)
         ax.set_title('Max Amplitude / Amplitude Sum')
         ax.set_xlabel('Event')
         ax.set_ylabel('Max Amplitude / Amplitude Sum')
