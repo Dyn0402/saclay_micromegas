@@ -93,22 +93,22 @@ def main():
     ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
     alignment_dir = f'{run_dir}alignments/'
 
-    create_dir_if_not_exist(alignment_dir)
-
-    det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
-
-    det_config = det_config_loader.get_det_config(detector_name, sub_run_name=sub_run_name)
-    det = DreamDetector(config=det_config)
-    print(f'FEU Num: {det.feu_num}')
-    print(f'FEU Channels: {det.feu_connectors}')
-    print(f'HV: {det.hv}')
-
-    det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=plot_raw_amps, save_waveforms=False,
-                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads, sample_period=40,
-                        hist_raw_waveforms=True)
-    print(f'Hits shape: {det.dream_data.hits.shape}')
-
     try:
+        create_dir_if_not_exist(alignment_dir)
+
+        det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
+
+        det_config = det_config_loader.get_det_config(detector_name, sub_run_name=sub_run_name)
+        det = DreamDetector(config=det_config)
+        print(f'FEU Num: {det.feu_num}')
+        print(f'FEU Channels: {det.feu_connectors}')
+        print(f'HV: {det.hv}')
+
+        det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=plot_raw_amps, save_waveforms=False,
+                            waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads, sample_period=40,
+                            hist_raw_waveforms=True)
+        print(f'Hits shape: {det.dream_data.hits.shape}')
+
         if det.dream_data.ped_means is None or det.dream_data.ped_sigmas is None:
             print("No pedestals found, skipping...")
         else:
