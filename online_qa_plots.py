@@ -104,7 +104,8 @@ def main():
     print(f'HV: {det.hv}')
 
     det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=plot_raw_amps, save_waveforms=False,
-                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads, sample_period=40, save_waveform_hists)
+                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads, sample_period=40,
+                        hist_raw_waveforms=True)
     print(f'Hits shape: {det.dream_data.hits.shape}')
 
     try:
