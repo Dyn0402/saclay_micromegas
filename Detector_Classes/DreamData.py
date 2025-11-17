@@ -1214,10 +1214,10 @@ class DreamData:
 
         # --- Rebin along y if requested ---
         if combine_y > 1:
-            n_bins_y = hist.shape[0]
+            n_samples, n_bins_y = hist.shape
             new_bins_y = n_bins_y // combine_y
-            hist = hist[:new_bins_y * combine_y, :]  # trim to multiple of combine_y
-            hist = hist.reshape(new_bins_y, combine_y, hist.shape[1]).sum(axis=1)
+            hist = hist[:, new_bins_y * combine_y]  # trim to multiple of combine_y
+            hist = hist.reshape(n_samples, new_bins_y, combine_y).sum(axis=2)
 
         fig, ax = plt.subplots()
         ax.set_title(f'Raw Waveforms')
