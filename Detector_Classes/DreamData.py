@@ -1199,11 +1199,10 @@ class DreamData:
         cbar = fig.colorbar(h, ax=ax)
         fig.tight_layout()
 
-    def plot_raw_waveform_2d_hist(self, channel, combine_y: int = 1):
+    def plot_raw_waveform_2d_hist(self, combine_y: int = 1):
         """
         Plot a 2D histogram of the raw waveforms for a specific channel.
 
-        :param channel: Channel number to plot.
         :param combine_y: Number of bins to combine along the y-axis (amplitude).
                           Must be >= 1. Default is 1 (no combining).
         """
@@ -1211,7 +1210,7 @@ class DreamData:
             print('Error: Raw waveform histogram not created.')
             return
 
-        hist = self.raw_waveform_hist[channel]
+        hist = self.raw_waveform_hist
 
         # --- Rebin along y if requested ---
         if combine_y > 1:
@@ -1221,7 +1220,7 @@ class DreamData:
             hist = hist.reshape(new_bins_y, combine_y, hist.shape[1]).sum(axis=1)
 
         fig, ax = plt.subplots()
-        ax.set_title(f'Raw Waveforms - Channel {channel}')
+        ax.set_title(f'Raw Waveforms')
         ax.set_xlabel('Sample')
         ax.set_ylabel('Amplitude')
 
