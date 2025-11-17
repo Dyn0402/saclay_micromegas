@@ -72,6 +72,7 @@ def main():
     noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
     spark_filter_sigma = 12  # Number of sigma above mean to cut on amplitude sum.
     plot_raw_amps = True  # Whether to plot raw amplitudes or not. Memory intensive.
+    plot_raw_waveforms = False  # Whether to plot raw waveforms or not. Memory intensive.
     threads = -6  # Number of threads to use. If negative, uses (num_cores + threads). Set to 1 to disable multithreading.
 
     run_dir = f'{base_dir}{run_name}/'
@@ -103,7 +104,7 @@ def main():
     print(f'HV: {det.hv}')
 
     det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=plot_raw_amps, save_waveforms=False,
-                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads, sample_period=40)
+                        waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads, sample_period=40, save_waveform_hists)
     print(f'Hits shape: {det.dream_data.hits.shape}')
 
     try:
@@ -119,6 +120,8 @@ def main():
         det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
         if plot_raw_amps:
             det.dream_data.plot_raw_amps_2d_hist(combine_y=10)
+        if plot_raw_waveforms:
+            det.dream_data.plot_raw_waveform_2d_hist(combine_y=10)
         det.dream_data.plot_amplitudes_vs_strip()
 
         det.make_sub_detectors()
@@ -168,6 +171,17 @@ def main():
             'time_resolution_err_ns_min_amp_600': [sigma_x_err_600, sigma_y_err_600],
         })
         timing_df.to_csv(f'{out_dir}/timing_resolution.csv', index=False)
+
+        for sub_det_i, sub_det in enumerate(det.sub_detectors):
+            x_mean, y_mean, x_err, y_err = sub_det.plot_cluster_sizes()
+            # Write cluster size results to a csv file
+            cluster_size_df = pd.DataFrame({
+                'orientation': ['X', 'Y'],
+                'average_cluster_size': [x_mean, y_mean],
+                'average_cluster_size_err': [x_err, y_err],
+            })
+            cluster_size_df.to_csv(f'{out_dir}/sub_detector_{sub_det_i}_cluster_sizes.csv', index=False)
+
     except Exception as e:
         print(f'Error during plotting: {e}')
         with open(f'{out_dir}plotting_error.txt', 'w') as f:

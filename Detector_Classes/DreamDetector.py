@@ -93,16 +93,18 @@ class DreamDetector(Detector):
 
     def load_dream_data(self, data_dir, ped_dir=None, noise_threshold_sigmas=None, file_nums=None, chunk_size=100,
                         trigger_list=None, hist_raw_amps=False, save_waveforms=False, waveform_fit_func=None,
-                        connector_channels=None, threads=None, feu_connector_flips=None, sample_period=None):
+                        connector_channels=None, threads=None, feu_connector_flips=None, sample_period=None,
+                        hist_raw_waveforms=False):
         self.dream_data = DreamData(data_dir, self.feu_num, self.feu_connectors, ped_dir, waveform_fit_func, threads,
-                                    feu_connector_flips=feu_connector_flips, sample_period=None)
+                                    feu_connector_flips=feu_connector_flips, sample_period=sample_period)
         self.dream_data.connector_channels = connector_channels
         if noise_threshold_sigmas is not None:
             self.dream_data.noise_thresh_sigmas = noise_threshold_sigmas
         if ped_dir:
             self.dream_data.read_ped_data()
         self.dream_data.read_data(file_nums, chunk_size=chunk_size, trigger_list=trigger_list,
-                                  hist_raw_amps=hist_raw_amps, save_waveforms=save_waveforms)
+                                  hist_raw_amps=hist_raw_amps, save_waveforms=save_waveforms,
+                                  hist_raw_waveforms=hist_raw_waveforms)
 
     def make_sub_groups(self):
         x_group_dfs = self.det_map[self.det_map['axis'] == 'y']  # y-going strips give x position

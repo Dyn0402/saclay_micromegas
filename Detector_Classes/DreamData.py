@@ -52,9 +52,9 @@ class DreamData:
             self.waveform_fit_func = waveform_fit_func
         self.noise_thresh_sigmas = 4
 
-        self.fine_timestamp_constant = 1.0 / 6
         self.timestamp_frequency = 100e6  # Hz
         self.sample_period = sample_period if sample_period is not None else 60  # ns
+        self.fine_timestamp_constant = 1.0 / (self.sample_period / 10)
 
         self.channels_per_connector = 64
         self.starting_connector = min(self.feu_connectors)
@@ -212,23 +212,29 @@ class DreamData:
                             self.waveforms.append(data_raw_i)
                         if hist_raw_amps:
                             n_events, n_channels, n_samples = data_raw_i.shape
-                            data_raw_i = data_raw_i.transpose(1, 0, 2).reshape(n_channels, n_events * n_samples)
+                            data_raw_i_raw_amp = data_raw_i.transpose(1, 0, 2).reshape(n_channels, n_events * n_samples)
                             bins_y = np.arange(-0.5, 4096.5, 1)
 
-                            histograms = np.array([np.histogram(data_raw_i[i], bins=bins_y)[0] for i in range(n_channels)])
+                            histograms = np.array([np.histogram(data_raw_i_raw_amp[i], bins=bins_y)[0]
+                                                   for i in range(n_channels)])
 
                             if self.raw_amp_hist is None:
                                 self.raw_amp_hist = histograms
                             else:
                                 self.raw_amp_hist += histograms
 
-                        # if hist_raw_waveforms:
-                        #     n_events, n_channels, n_samples = data_raw_i.shape
-                        #     data_raw_i = data_raw_i.reshape(-1, data.shape[-1])
+                        if hist_raw_waveforms:
+                            n_events, n_channels, n_samples = data_raw_i.shape
+                            data_raw_i_raw_wave = data_raw_i.reshape(-1, n_samples)
+                            bins_y = np.arange(-0.5, 4096.5, 1)
 
+                            histograms = np.array([np.histogram(data_raw_i_raw_wave[:, i], bins=bins_y)[0]
+                                                   for i in range(n_samples)])
 
                             if self.raw_waveform_hist is None:
-                                self.raw_waveform_hist = np.zeros((n_channels, n_samples, len(bins_y) - 1))
+                                self.raw_waveform_hist = histograms
+                            else:
+                                self.raw_waveform_hist += histograms
 
                 self.data = np.concatenate(self.data)
 
@@ -1187,6 +1193,48 @@ class DreamData:
             aspect='auto',
             cmap=cmap,
             extent=[-0.5, n_channels - 0.5, -0.5, combine_y * n_bins_y - 0.5],
+            norm=LogNorm(vmin=1)
+        )
+
+        cbar = fig.colorbar(h, ax=ax)
+        fig.tight_layout()
+
+    def plot_raw_waveform_2d_hist(self, channel, combine_y: int = 1):
+        """
+        Plot a 2D histogram of the raw waveforms for a specific channel.
+
+        :param channel: Channel number to plot.
+        :param combine_y: Number of bins to combine along the y-axis (amplitude).
+                          Must be >= 1. Default is 1 (no combining).
+        """
+        if self.raw_waveform_hist is None:
+            print('Error: Raw waveform histogram not created.')
+            return
+
+        hist = self.raw_waveform_hist[channel]
+
+        # --- Rebin along y if requested ---
+        if combine_y > 1:
+            n_bins_y = hist.shape[0]
+            new_bins_y = n_bins_y // combine_y
+            hist = hist[:new_bins_y * combine_y, :]  # trim to multiple of combine_y
+            hist = hist.reshape(new_bins_y, combine_y, hist.shape[1]).sum(axis=1)
+
+        fig, ax = plt.subplots()
+        ax.set_title(f'Raw Waveforms - Channel {channel}')
+        ax.set_xlabel('Sample')
+        ax.set_ylabel('Amplitude')
+
+        cmap = plt.cm.jet
+        cmap.set_under('w')
+
+        n_bins_y, n_samples = hist.shape
+        h = ax.imshow(
+            hist,
+            origin='lower',
+            aspect='auto',
+            cmap=cmap,
+            extent=[-0.5, n_samples - 0.5, -0.5, combine_y * n_bins_y - 0.5],
             norm=LogNorm(vmin=1)
         )
 
