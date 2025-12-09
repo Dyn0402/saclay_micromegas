@@ -162,6 +162,7 @@ class DreamData:
                 mask = np.isin(data_event_nums, select_triggers)
                 data_raw, data_event_nums = data_raw[mask], data_event_nums[mask]
                 data_ft_stamp, data_timestamp = data_ft_stamp[mask], data_timestamp[mask]
+            print(f'Data Raw Shape: {data_raw.shape}')
             data_raw = self.split_det_data(data_raw, self.feu_connectors, starting_connector=1, to_connectors=False,
                                            feu_connector_flips=self.feu_connector_flips)
             if self.ped_means is not None:
@@ -491,19 +492,28 @@ class DreamData:
     def get_timestamps(self):
         return self.timestamps
 
-    def filter_sparks(self, spark_filter_sigma=15, plot=True, filter=True):
+    def filter_sparks(self, spark_filter_sigma=15, plot=True, filter=True, filter_on_max_amps=False):
         """
         Filter sparks, defined as events with more than 10 hits.
         :param spark_filter_sigma: Number of standard deviations above mean to set spark threshold.
         :param plot: Whether to plot the spark threshold.
         :param filter: Whether to actually filter the data. If not, just return spark event mask.
+        :param filter_on_max_amps: Whether to filter based on max channel amplitude instead of sum of all amplitudes.
         :return:
         """
-        spark_thresh = np.mean(self.event_amp_sums) + spark_filter_sigma * np.std(self.event_amp_sums)
-        event_spark_filter = self.event_amp_sums < spark_thresh
+        event_sums = self.event_amp_sums
+        if filter_on_max_amps:
+            event_amp_sums = np.nansum(self.data_amps, axis=1)
+            event_hits = np.nansum(self.hits, axis=1)
+            event_max_amps = np.nanmax(self.data_amps, axis=1)
+            nan_mask = np.isnan(event_amp_sums) | np.isnan(event_hits) | np.isnan(event_max_amps)
+            event_amp_sums[nan_mask] = -1
+            event_sums = event_amp_sums
+        spark_thresh = np.mean(event_sums) + spark_filter_sigma * np.std(event_sums)
+        event_spark_filter = event_sums < spark_thresh
         if plot:
             fig, ax = plt.subplots(figsize=(8, 6))
-            ax.hist(self.event_amp_sums, bins=100)
+            ax.hist(event_sums, bins=100)
             ax.axvline(spark_thresh, color='black', ls='--', label='Spark Event Amplitude Sum Threshold')
             ax.legend()
             ax.set_yscale('log')
@@ -1229,7 +1239,7 @@ class DreamData:
 
         n_bins_y, n_samples = hist.shape
         h = ax.imshow(
-            hist,
+            hist.T,
             origin='lower',
             aspect='auto',
             cmap=cmap,

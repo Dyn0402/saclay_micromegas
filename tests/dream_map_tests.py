@@ -14,14 +14,18 @@ from Detector_Classes.DreamData import DreamData
 
 
 def main():
-    maps_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
-    # maps_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    # maps_dir = 'C:/Users/Dylan/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+    maps_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
     det_types = ['strip', 'inter', 'asacusa', 'rd542']
     for det_type in det_types:
+        print()
         print(det_type)
         det_map = load_det_map(f'{maps_dir}{det_type}_map.txt')
         # print(det_map)
-        split_df = split_neighbors(det_map)
+        split_connectors = True
+        if 'rd5' in det_type:
+            split_connectors = False
+        split_df = split_neighbors(det_map, split_connectors=split_connectors)
         print(split_df)
         print(split_df.iloc[0]['channels'])
         print(split_df.iloc[0]['connectors'])
