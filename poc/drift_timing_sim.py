@@ -30,9 +30,10 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
 from typing import Optional
 from scipy.signal import fftconvolve
-from scipy.special import gamma
+from scipy.special import gamma, erf
 from scipy.optimize import curve_fit as cf
 from scipy.interpolate import interp1d
+from math import sqrt, pi
 
 from DreamData import fit_waveform_parabola
 
@@ -40,8 +41,10 @@ from DreamData import fit_waveform_parabola
 def main():
     sim = MicromegasDriftSimulator(
         gap_mm=3.0,
+        # gap_mm=30.0,
         potential_V=800.0,
         ion_rate_per_mm=6.0,
+        # theta_deg=75.0,
         theta_deg=0.0,
         drift_velocity_um_per_ns=25.0,
         diff_t_um_per_sqrtcm=450.0,
@@ -52,7 +55,13 @@ def main():
     # run_event(sim)
     # run_events(sim, n_events=10000)
     # gas_properties_plot()
-    gas_comparison_plot()
+    # gas_comparison_plot()
+
+    # define strip layout (example: 11 strips, pitch 400 µm)
+    pitch_um = 800.0
+    strip_centers = pitch_um * np.arange(-29, 30)
+
+    run_event_strips(sim, strip_centers)
 
     print('donzo')
 
@@ -91,7 +100,7 @@ def gas_comparison_plot():
             ax.plot(drift_voltages, drift_v_e, label=f'{gas}', color=color)
             ax.scatter(drift_field_measured * drift_gap, d_v_e_m, color=color, marker='o', s=20)
 
-        ax.set_ylabel('Drift Velocity in E (cm/ns)')
+        ax.set_ylabel('Drift Velocity in E (um/ns)')
         ax.set_xlabel('Drift Voltage (V)')
         ax.legend()
         fig.suptitle(f'B={b_field}T')
@@ -161,6 +170,7 @@ def run_event(sim):
                                   t_min=-10, t_max=2000, dt=0.5,
                                   gain_mean=1e5, theta=2.0,
                                   tau_shaping_ns=80.0)
+                                  # tau_shaping_ns=200.0)
 
     sample_period = 60  # ns
     # Sample from waveform with sample_period
@@ -181,6 +191,93 @@ def run_event(sim):
     # ax.legend(loc='best')
     fig.tight_layout()
     plt.show()
+
+
+def run_event_strips(sim,
+                     strip_centers_um,
+                     strip_width_um=200.0,   # typical strip pitch ~400–500 µm
+                     t_min=-10, t_max=2000, dt=0.5,
+                     gain_mean=1e5, theta=2.0,
+                     tau_shaping_ns=80.0):
+
+    # --- Simulate event (primaries) ---
+    event = sim.simulate_event()
+
+    # --- Simulate waveform for each strip ---
+    # Expect: dict strip_index → (t, waveform)
+    strip_waveforms = {}
+    for i, xc in enumerate(strip_centers_um):
+        t_strip, wf_strip = sim.simulate_waveform_strip(
+            event,
+            strip_center_um=xc,
+            strip_width_um=strip_width_um,
+            t_min=t_min, t_max=t_max, dt=dt,
+            gain_mean=gain_mean,
+            theta=theta,
+            tau_shaping_ns=tau_shaping_ns
+        )
+        strip_waveforms[i] = (t_strip, wf_strip)
+
+    # pick central strip (the one closest to x=0)
+    central_idx = np.argmin(np.abs(strip_centers_um))
+    t_c, wf_c = strip_waveforms[central_idx]
+
+    # --- Sampling (same as pad waveform version) ---
+    sample_period = 60  # ns
+    stride = int(sample_period / dt)
+    sampled_wf = wf_c[::stride]
+    sampled_t = t_c[::stride]
+    y_vertex, x_vertex, success = fit_waveform_parabola(sampled_wf)
+
+    # =====================================================
+    #  PLOT 1 — Single (central) strip waveform
+    # =====================================================
+    fig, ax = plt.subplots()
+    ax.plot(t_c, wf_c, label=f"Strip {central_idx}")
+    ax.scatter(sampled_t, sampled_wf, s=20, color="black")
+
+    if success:
+        ax.axhline(y_vertex, color='r', linestyle='--')
+        ax.axvline(x_vertex * sample_period, color='r', linestyle='--')
+
+    ax.set_xlabel("Time (ns)")
+    ax.set_ylabel("Charge (a.u.)")
+    ax.set_title("Simulated Micromegas Strip Waveform (central strip)")
+    ax.annotate(f'n_prim = {event["n_prim"]}', xy=(0.7, 0.9), xycoords='axes fraction')
+    fig.tight_layout()
+
+    # =====================================================
+    #  PLOT 2 — All strips waveforms
+    # =====================================================
+    fig2, ax2 = plt.subplots(figsize=(10, 6))
+
+    for i, (t_i, wf_i) in strip_waveforms.items():
+        ax2.plot(t_i, wf_i + i*0.3*wf_c.max(), label=f"Strip {i}", color='k')
+        # vertically offset for readability
+
+    ax2.set_xlabel("Time (ns)")
+    ax2.set_ylabel("Charge (offset for visibility)")
+    ax2.set_title("Micromegas Strip Readout — All Strips")
+    # ax2.legend(ncol=2, loc='upper right')
+    fig2.tight_layout()
+
+    # =====================================================
+    #  PLOT 3 — All strips waveforms with no offset
+    # =====================================================
+    fig3, ax3 = plt.subplots(figsize=(10, 6))
+
+    for i, (t_i, wf_i) in strip_waveforms.items():
+        ax3.plot(t_i, wf_i, label=f"Strip {i}")
+
+    ax3.set_xlabel("Time (ns)")
+    ax3.set_ylabel("Charge")
+    ax3.set_title("Micromegas Strip Readout -- All Strips")
+    ax3.legend(ncol=2, loc='upper right')
+    fig3.tight_layout()
+
+    plt.show()
+
+    return strip_waveforms
 
 
 def run_events(sim, n_events=1000):
@@ -377,6 +474,9 @@ class MicromegasDriftSimulator:
         # initial x coordinate along track: x = s * sin(theta) = s * tan(theta) * cos(theta) = z * tan(theta)
         x0 = z * self.tan_theta
 
+        # Shift x0s to center on 0:
+        x0 = x0 - self.gap_um * self.tan_theta / 2
+
         # for each primary, compute drift distance to readout plane at z = gap_um
         drift_distance_um = self.gap_um - z  # positive
 
@@ -395,14 +495,9 @@ class MicromegasDriftSimulator:
         # arrival time adding longitudinal diffusion effect: delta_t = delta_z / v_drift
         arrival_time_ns = drift_time_ns + (delta_z / self.drift_velocity_um_per_ns)
 
-        # final x at readout: initial x projected to readout plus transverse diffusion
-        # initial x projected to readout (ignoring diffusion along track): x_at_readout = x0 + tan(theta)*drift_distance_z_component
-        # but since track already has slope, moving from z to gap changes x by delta_x_track = (gap - z) * tan(theta)
-        # initial x on track at z is x0; when reaching gap at z=gap the purely geometrical endpoint would be:
-        x_geom_at_readout = x0 + drift_distance_um * self.tan_theta  # note: tan(theta) * dz
-        # but that's equivalent to starting at track origin x=0 and going to z=gap gives x = gap * tan(theta)
+        # Electrons drift straight to mesh, don't follow initial angle!!!
         # now add transverse diffusion displacement
-        final_x_um = x_geom_at_readout + delta_x
+        final_x_um = x0 + delta_x
 
         return {
             'n_prim': n_prim,
@@ -448,41 +543,6 @@ class MicromegasDriftSimulator:
         df = pd.DataFrame(rows)
         ev_df = pd.DataFrame(event_summaries)
         return df, ev_df
-
-    def simulate_waveform_gaus(self, event_data, t_min, t_max, dt,
-                               gain_mean=1e5, gain_sigma=2e4, pulse_sigma_ns=2.0):
-        """
-        Convert event primary arrivals into a summed waveform.
-
-        Parameters
-        ----------
-        event_data : dict
-            Output from simulate_event() (contains arrival_time_ns).
-        t_min, t_max : float
-            Time window in ns.
-        dt : float
-            Time step in ns.
-        gain_mean, gain_sigma : float
-            Mean and sigma of avalanche gain (number of electrons).
-        pulse_sigma_ns : float
-            Gaussian width of the single-electron pulse in ns.
-        """
-        times = np.arange(t_min, t_max, dt)
-        waveform = np.zeros_like(times)
-
-        n = event_data['n_prim']
-        if n == 0:
-            return times, waveform
-
-        # Sample amplification gains
-        gains = self.rng.normal(loc=gain_mean, scale=gain_sigma, size=n)
-        gains = np.clip(gains, 0, None)  # no negative charge
-
-        # Add each electron’s pulse
-        for t0, g in zip(event_data['arrival_time_ns'], gains):
-            waveform += gaussian_pulse(times, t0, pulse_sigma_ns, g)
-
-        return times, waveform
 
     def simulate_waveform(self, event_data, t_min, t_max, dt,
                           gain_mean=1e5, theta=2.0,
@@ -535,6 +595,99 @@ class MicromegasDriftSimulator:
         shaped = fftconvolve(waveform, h, mode='full')[:len(times)]
 
         return times, shaped
+
+    def simulate_waveform_strip(
+            self, event_data, t_min, t_max, dt,
+            strip_center_um, strip_width_um,
+            avalanche_sigma_um=150.0,
+            gain_mean=1e5, theta=2.0,
+            tau_shaping_ns=10.0):
+        """
+        Simulate waveform on a single 1D strip.
+
+        Parameters
+        ----------
+        strip_center_um : float
+            Center position of strip.
+        strip_width_um : float
+            Physical width of the strip.
+        avalanche_sigma_um : float
+            Gaussian width of the avalanche charge cloud at readout.
+        """
+        times = np.arange(t_min, t_max, dt)
+        waveform = np.zeros_like(times)
+
+        n = event_data['n_prim']
+        if n == 0:
+            return times, waveform
+
+        final_x = event_data['final_x_um']
+        arrival_t = event_data['arrival_time_ns']
+
+        # --- Sample avalanche gains (same as original) ---
+        k = theta + 1.0
+        scale = gain_mean / (theta + 1.0)
+        gains = self.rng.gamma(shape=k, scale=scale, size=n)
+
+        # --- Compute charge fraction landing on this strip ---
+        w2 = strip_width_um / 2.0
+        sigma = avalanche_sigma_um
+
+        # Precompute normalizer
+        inv_sqrt2sigma = 1.0 / (sqrt(2) * sigma)
+
+        charge_frac = 0.5 * (
+                erf((strip_center_um + w2 - final_x) * inv_sqrt2sigma) -
+                erf((strip_center_um - w2 - final_x) * inv_sqrt2sigma)
+        )
+        charge_frac = np.clip(charge_frac, 0.0, 1.0)
+
+        # Effective signal deposited on this strip
+        dep_charge = gains * charge_frac
+
+        # --- Deposit raw current samples ---
+        for t0, dq in zip(arrival_t, dep_charge):
+            idx = int(round((t0 - t_min) / dt))
+            if 0 <= idx < len(waveform):
+                waveform[idx] += dq
+
+        # --- Shape it (reuse your CR-RC logic) ---
+        t_sh = np.arange(0, 10 * tau_shaping_ns, dt)
+        h = (t_sh / tau_shaping_ns ** 2) * np.exp(-t_sh / tau_shaping_ns)
+        h /= np.sum(h)
+
+        shaped = fftconvolve(waveform, h, mode='full')[:len(times)]
+        return times, shaped
+
+    def simulate_all_strips(
+            self, event_data, t_min, t_max, dt,
+            strip_centers_um, strip_width_um,
+            avalanche_sigma_um=150.0,
+            gain_mean=1e5, theta=2.0,
+            tau_shaping_ns=10.0):
+        """
+        Simulate a waveform for each strip in strip_centers_um.
+
+        Returns
+        -------
+        times : array
+        waveforms : 2D array shape (n_strips, n_time_samples)
+        """
+        waveforms = []
+        for xc in strip_centers_um:
+            t, w = self.simulate_waveform_strip(
+                event_data, t_min, t_max, dt,
+                strip_center_um=xc,
+                strip_width_um=strip_width_um,
+                avalanche_sigma_um=avalanche_sigma_um,
+                gain_mean=gain_mean,
+                theta=theta,
+                tau_shaping_ns=tau_shaping_ns
+            )
+            waveforms.append(w)
+
+        return t, np.array(waveforms)
+
 
 class GasProperties:
     """Class to read and interpolate gas properties from Garfield Magboltz output files."""
