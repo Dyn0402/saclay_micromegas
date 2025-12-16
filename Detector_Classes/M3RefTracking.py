@@ -131,6 +131,22 @@ class M3RefTracking:
         for var in self.variables:
             self.ray_data[var] = self.ray_data[var][mask]
 
+    def remove_duplicate_events(self):
+        """
+        Remove duplicate events based on 'evn' in self.ray_data (Awkward Array).
+        Keeps the first occurrence of each event number.
+        """
+        evn = ak.to_numpy(self.ray_data["evn"])  # Convert to flat NumPy array for uniqueness check
+        unique_triggers = np.unique(evn)
+
+        print(f'Removing duplicate events: {len(evn) - len(unique_triggers)} duplicates found of {len(evn)}.')
+
+        if self.trigger_list is not None:
+            # Keep only unique triggers that are in the original trigger list
+            unique_triggers = np.intersect1d(unique_triggers, np.array(self.trigger_list))
+        self.trigger_list = unique_triggers
+        self.filter_on_trigger_list()
+
     def plot_xy(self, z, event_list=None, multi_track_events=False, one_track=True, plt_type='scatter', bins=50):
         x, y, event_nums = self.get_xy_positions(z, event_list, multi_track_events, one_track)
         if plt_type == 'scatter' or plt_type == 'both':

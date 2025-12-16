@@ -22,6 +22,7 @@ class DetectorConfigLoader:
         self.det_type_info_dir = det_type_info_dir
 
         self.det_map_types = ['strip', 'inter', 'asacusa', 'rd542', 'rd5']
+        self.det_no_maps = ['banco', 'm3']
 
     def get_det_config(self, det_name, sub_run_name=None):
         if det_name not in self.config['included_detectors']:
@@ -50,10 +51,13 @@ class DetectorConfigLoader:
             det_config.update({key: val for key, val in det_type_info.items()})
             det_map_type = [det_type for det_type in det_config["det_type"].split('_')
                             if det_type in self.det_map_types]
+            det_no_maps = [det_type for det_type in det_config["det_type"].split('_')
+                           if det_type in self.det_no_maps]
             if len(det_map_type) == 2:  # Hack to accommodate 'strip' grid -- eg asacusa_strip
                 det_map_type = [det_map_type[0]]
             if len(det_map_type) != 1:
-                print(f'Error: Detector type {det_config["det_type"]} not found in det map types.')
+                if len(det_no_maps) < 1:
+                    print(f'Error: Detector type {det_config["det_type"]} not found in det map types.')
             else:
                 det_map = load_det_map(f'{self.det_type_info_dir}{det_map_type[0]}_map.txt')
                 det_config.update({'det_map': det_map})

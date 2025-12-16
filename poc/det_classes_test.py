@@ -437,6 +437,7 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
     subs_centroids, subs_triggers = det.get_sub_centroids_coords()
     for sub_centroids, sub_triggers, sub_det in zip(subs_centroids, subs_triggers, det.sub_detectors):
         x_rays, y_rays, event_num_rays = ray_data.get_xy_positions(det.center[2], list(sub_triggers))
+        print(f'sub_triggers shape: {len(sub_triggers)}, x_rays shape: {len(x_rays)}, y_rays shape: {len(y_rays)}, event_num_rays shape: {len(event_num_rays) if event_num_rays is not None else "None"}')
         if in_det:
             # x_rays, y_rays, event_num_rays = get_rays_in_sub_det(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
             x_rays, y_rays, event_num_rays = get_rays_in_sub_det_vectorized(det, sub_det, x_rays, y_rays, event_num_rays, tolerance)
@@ -465,6 +466,26 @@ def get_residuals(det, ray_data, sub_reses=False, plot=False, in_det=False, tole
             continue
 
         centroids_i_matched = sub_centroids[matched_indices]
+
+        print(f'Centroids shape: {centroids_i_matched.shape}, x_rays shape: {x_rays.shape}, y_rays shape: {y_rays.shape}')
+        missing_in_rays = np.setdiff1d(sub_triggers, event_num_rays)
+        missing_in_subs = np.setdiff1d(event_num_rays, sub_triggers)
+        print("Missing in rays:", missing_in_rays)
+        print("Missing in subs:", missing_in_subs)
+
+        print("Unique sub triggers:", len(np.unique(sub_triggers)), "of", len(sub_triggers))
+        print("Unique event triggers:", len(np.unique(event_num_rays)), "of", len(event_num_rays))
+
+        unique, counts = np.unique(event_num_rays, return_counts=True)
+        num_dupes = np.sum(counts > 1)
+        print(f"{num_dupes} triggers appear more than once")
+
+        dupes = unique[counts > 1]
+        print("Duplicate triggers:", dupes)
+
+        _, unique_indices = np.unique(event_num_rays, return_index=True)
+        x_rays = x_rays[unique_indices]
+        y_rays = y_rays[unique_indices]
 
         x_res_i = centroids_i_matched[:, 0] - x_rays
         y_res_i = centroids_i_matched[:, 1] - y_rays
@@ -1015,6 +1036,10 @@ def get_efficiency(det, ray_data, hit_dist=1000, plot=False, in_det=False, toler
             continue
 
         centroids_i_matched = sub_centroids[matched_indices]
+
+        _, unique_indices = np.unique(event_num_rays, return_index=True)
+        x_rays = x_rays[unique_indices]
+        y_rays = y_rays[unique_indices]
 
         x_res_i = centroids_i_matched[:, 0] - x_rays
         y_res_i = centroids_i_matched[:, 1] - y_rays

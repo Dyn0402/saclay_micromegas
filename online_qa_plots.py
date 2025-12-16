@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on October 11 7:27 PM 2025
+Created in PyCharm
+Created as saclay_micromegas/online_qa_plots.py
+
+@author: Dylan Neff, Dylan
+"""
+
+import os
+import resource
+import sys
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from Detector_Classes.DetectorConfigLoader import DetectorConfigLoader
+from Detector_Classes.DreamDetector import DreamDetector
+
+
+def main():
+    # Example: limit to 2 GB of memory, kill process if exceeded
+    # limit_memory(2000)
+
+    daq_type = 'local'
+    # run_name = 'rd5_strip_esl_1_co2_fe55_zs_r510_10-27-25'
+    run_name = 'rd5_plein_esl_1_co2_fe55_zs_10-29-25'
+    sub_run_name = 'quick_test'
+    # detector_name = 'rd5_strip_esl_1'
+    detector_name = 'rd5_plein_esl_1'
+
+    if len(sys.argv) >= 2:
+        daq_type = sys.argv[1]  # Either local, cosmic, or beam
+    if len(sys.argv) >= 3:
+        run_name = sys.argv[2]
+    if len(sys.argv) >= 4:
+        sub_run_name = sys.argv[3]
+    if len(sys.argv) >= 5:
+        detector_name = sys.argv[4]
+
+    if daq_type == 'local':
+        base_dir = '/local/home/dn277127/Bureau/cosmic_data/'
+        det_type_info_dir = '/local/home/dn277127/PycharmProjects/Cosmic_Bench_DAQ_Control/config/detectors/'
+        out_dir = '/local/home/dn277127/Bureau/cosmic_data/Analysis/'
+        chunk_size = 1  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
+    elif daq_type == 'cosmic':
+        base_dir = '/mnt/cosmic_data/Run/'
+        det_type_info_dir = '/mnt/cosmic_data/config/detectors/'
+        out_dir = '/mnt/cosmic_data/Analysis/'
+        chunk_size = 1  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
+    elif daq_type == 'beam':
+        base_dir = '/mnt/data/beam_sps_25/Run/'
+        det_type_info_dir = '/mnt/data/beam_sps_25/config/detectors/'
+        out_dir = '/mnt/data/beam_sps_25/Analysis/'
+        chunk_size = 0.2  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
+    else:
+        print(f'Unrecognized daq_type: {daq_type} (first commandline argument)! Exiting!')
+        return
+
+    if detector_name.startswith('banco_'):
+        print(f'{detector_name} online analysis not implemented. Exiting')
+        return
+
+    create_dir_if_not_exist(out_dir)
+
+    # chunk_size = 0.2  # Number of files to process at once. Can be less than one to do part of a file. For memory balance.
+    # event_nums = None  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
+    event_nums = np.arange(0, 200000)  # None for all events. For specific event numbers in each file, eg: np.arange(0, 1000)
+    # file_nums = 'all'  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
+    file_nums = [0]  # 'all' to process all files. For specific files only, eg: [0, 1, 4]
+    noise_sigma = 4  # Number of pedestal sigma above pedestal mean to be considered a hit.
+    spark_filter_sigma = 12  # Number of sigma above mean to cut on amplitude sum.
+    plot_raw_amps = True  # Whether to plot raw amplitudes or not. Memory intensive.
+    plot_raw_waveforms = False  # Whether to plot raw waveforms or not. Memory intensive.
+    threads = -6  # Number of threads to use. If negative, uses (num_cores + threads). Set to 1 to disable multithreading.
+
+    run_dir = f'{base_dir}{run_name}/'
+    out_dir = f'{out_dir}{run_name}/'
+    create_dir_if_not_exist(out_dir)
+    out_dir = f'{out_dir}/{sub_run_name}/'
+    create_dir_if_not_exist(out_dir)
+    out_dir = f'{out_dir}/{detector_name}/'
+    create_dir_if_not_exist(out_dir)
+
+    # Clear previous plots
+    for file in os.listdir(out_dir):
+        if file.endswith('.png') or file.endswith('.pdf'):
+            os.remove(os.path.join(out_dir, file))
+
+    run_json_path = f'{run_dir}run_config.json'
+    data_dir = f'{run_dir}{sub_run_name}/filtered_root/'
+    ped_dir = f'{run_dir}{sub_run_name}/decoded_root/'
+    alignment_dir = f'{run_dir}alignments/'
+
+    try:
+        create_dir_if_not_exist(alignment_dir)
+
+        det_config_loader = DetectorConfigLoader(run_json_path, det_type_info_dir)
+
+        det_config = det_config_loader.get_det_config(detector_name, sub_run_name=sub_run_name)
+        det = DreamDetector(config=det_config)
+        print(f'FEU Num: {det.feu_num}')
+        print(f'FEU Channels: {det.feu_connectors}')
+        print(f'HV: {det.hv}')
+
+        det.load_dream_data(data_dir, ped_dir, noise_sigma, file_nums, chunk_size, hist_raw_amps=plot_raw_amps, save_waveforms=False,
+                            waveform_fit_func='parabola_vectorized', trigger_list=event_nums, threads=threads, sample_period=40,
+                            hist_raw_waveforms=True)
+        print(f'Hits shape: {det.dream_data.hits.shape}')
+
+        if det.dream_data.ped_means is None or det.dream_data.ped_sigmas is None:
+            print("No pedestals found, skipping...")
+        else:
+            det.dream_data.plot_pedestals()
+        # det.dream_data.plot_noise_metric()
+        spark_mask = det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=False)
+        det.dream_data.plot_noise_metric(spark_mask=spark_mask)
+        det.dream_data.filter_sparks(spark_filter_sigma=spark_filter_sigma, filter=True)
+
+        det.dream_data.plot_hits_vs_strip(print_dead_strips=True)
+        if plot_raw_amps:
+            det.dream_data.plot_raw_amps_2d_hist(combine_y=10)
+        if plot_raw_waveforms:
+            det.dream_data.plot_raw_waveform_2d_hist(combine_y=10)
+        det.dream_data.plot_amplitudes_vs_strip()
+
+        det.make_sub_detectors()
+
+        n_trig = det.dream_data.event_nums.size
+        n_coinc = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        n_coinc_trig, n_trig_total = [], []
+        for n in n_coinc:
+            n_coinc = det.get_n_x_and_y_hit_events(n_hits_per_orientation=n)
+            n_coinc_trig.append(n_coinc)
+            n_trig_total.append(n_trig)
+        df = pd.DataFrame({'n_hits_per_orientation': n_coinc, 'n_events': n_coinc_trig,
+                           'total_triggers': n_trig_total,
+                           'fraction_of_total_events': np.array(n_coinc_trig) / n_trig})
+        df.to_csv(f'{out_dir}/coincident_events.csv', index=False)
+
+        det.plot_hits_1d()
+
+        det.plot_centroids_2d()
+        det.plot_xy_hit_map()
+
+        det.dream_data.correct_for_fine_timestamps()
+
+        sigma_x, sigma_x_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(0, int(256 / 2)),
+                                                                    min_amp=None, plot=True)
+        plt.title(f'Time of Max for X (Top) Strips')
+
+        sigma_y, sigma_y_err = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256),
+                                                                    min_amp=None, plot=True)
+        plt.title(f'Time of Max for Y (Bottom) Strips')
+
+        min_amp = 600
+        sigma_x_600, sigma_x_err_600 = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(0, int(256 / 2)),
+                                                                    min_amp=min_amp, plot=True)
+        plt.title(f'Time of Max for X (Top) Strips Min Amp {min_amp}')
+
+        sigma_y_600, sigma_y_err_600 = det.dream_data.plot_event_time_maxes(max_channel=True, channels=np.arange(int(256 / 2), 256),
+                                                                    min_amp=min_amp, plot=True)
+        plt.title(f'Time of Max for Y (Bottom) Strips Min Amp {min_amp}')
+
+        # Write timing resolution results to a csv file
+        timing_df = pd.DataFrame({
+            'orientation': ['X', 'Y'],
+            'time_resolution_ns': [sigma_x, sigma_y],
+            'time_resolution_err_ns': [sigma_x_err, sigma_y_err],
+            'time_resolution_ns_min_amp_600': [sigma_x_600, sigma_y_600],
+            'time_resolution_err_ns_min_amp_600': [sigma_x_err_600, sigma_y_err_600],
+        })
+        timing_df.to_csv(f'{out_dir}/timing_resolution.csv', index=False)
+
+        for sub_det_i, sub_det in enumerate(det.sub_detectors):
+            x_mean, y_mean, x_err, y_err = sub_det.plot_cluster_sizes()
+            # Write cluster size results to a csv file
+            cluster_size_df = pd.DataFrame({
+                'orientation': ['X', 'Y'],
+                'average_cluster_size': [x_mean, y_mean],
+                'average_cluster_size_err': [x_err, y_err],
+            })
+            cluster_size_df.to_csv(f'{out_dir}/sub_detector_{sub_det_i}_cluster_sizes.csv', index=False)
+
+    except Exception as e:
+        print(f'Error during plotting: {e}')
+        with open(f'{out_dir}plotting_error.txt', 'w') as f:
+            f.write(f'Error during plotting: {e}')
+    finally:
+        # Save all open plots
+        save_all_figures(out_dir)
+
+    print('donzo')
+
+
+def limit_memory(max_mem_mb: int):
+    """Set a memory limit (in MB) for this process."""
+    soft, hard = max_mem_mb * 1024 * 1024, max_mem_mb * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
+
+
+def create_dir_if_not_exist(dir_path):
+    if not os.path.isdir(dir_path):
+        os.makedirs(dir_path)
+        os.chmod(dir_path, 0o777)
+
+
+def save_all_figures(out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+
+    for num in plt.get_fignums():
+        try:
+            fig = plt.figure(num)
+            raw_title = None
+
+            # Try figure suptitle
+            if hasattr(fig, "_suptitle") and fig._suptitle is not None:
+                raw_title = fig._suptitle.get_text()
+
+            # Try first axis title if no suptitle
+            if (not raw_title or not raw_title.strip()) and fig.axes:
+                ax = fig.axes[0]
+                raw_title = ax.get_title() or ax.get_ylabel() or ax.get_xlabel()
+
+            # Fallback: use figure label
+            if not raw_title or not raw_title.strip():
+                raw_title = fig.get_label() or f'figure_{num}'
+
+            # Clean up title for filename
+            fig_title = raw_title.strip().replace(' ', '_').replace('/', '-')
+            if not fig_title:
+                fig_title = f'figure_{num}'
+
+            # Save files and set permissions
+            for ext in ('png', 'pdf'):
+                path = os.path.join(out_dir, f"{fig_title}.{ext}")
+                fig.savefig(path, bbox_inches='tight')
+                os.chmod(path, 0o777)  # <- make file readable/writable/executable by everyone
+                print(f"Saved {path} with 777 permissions")
+        except Exception as e:
+            print(f"Error saving figure {num}: {e}")
+
+
+if __name__ == '__main__':
+    main()

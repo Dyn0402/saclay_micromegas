@@ -1,0 +1,8 @@
+numpy
+matplotlib
+scipy
+pandas
+tqdm
+awkward==2.7.0
+vector==1.5.2
+uproot==5.5.0

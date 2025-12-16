@@ -17,7 +17,8 @@ def main():
     # file_path = 'F:/Saclay/cosmic_data/rd542_plein_3_first_test_10-2-25/long_test_450V/hv_monitor.csv'
     # file_path = 'F:/Saclay/cosmic_data/rd542_strip_2_first_test_10-27-25/long_test_450V/hv_monitor.csv'
     # file_path = '/local/home/dn277127/Bureau/cosmic_data/rd542_plein_3_first_test_10-2-25/long_test_450V/hv_monitor.csv'
-    file_path = 'F:/Saclay/cosmic_data/rd542_strip_2_co2_10-8-25/long_test_460V/hv_monitor.csv'
+    # file_path = 'F:/Saclay/cosmic_data/rd542_strip_2_co2_10-8-25/long_test_460V/hv_monitor.csv'
+    file_path = '/mnt/data/beam_sps_25/Run/run_185/rotation_0_pions_0/hv_monitor.csv'
     plot_hv_monitor(file_path)
     plt.show()
     print('donzo')

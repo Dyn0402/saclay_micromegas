@@ -16,9 +16,9 @@ import matplotlib.colors as mcolors
 from collections import Counter
 import copy
 
-from Detector import Detector
-from DreamData import DreamData
-from DreamSubDetector import DreamSubDetector
+from Detector_Classes.Detector import Detector
+from Detector_Classes.DreamData import DreamData
+from Detector_Classes.DreamSubDetector import DreamSubDetector
 
 
 class DreamDetector(Detector):
@@ -72,7 +72,11 @@ class DreamDetector(Detector):
             self.feu_connectors.append(slot_chan[1])
 
         if 'det_map' in self.config:
-            self.det_map = split_neighbors(self.config['det_map'], starting_connector=min(self.feu_connectors))
+            split_connectors = True
+            if 'rd5' in self.config['det_type']:
+                split_connectors = False
+            self.det_map = split_neighbors(self.config['det_map'], starting_connector=min(self.feu_connectors),
+                                           split_connectors=split_connectors)
             # Center gerber coordinates such that (0, 0) is bottom left corner on maxes/mins of xs_gerber and ys_gerber
             x_min = min(xs.min() for xs in self.det_map['xs_gerber'])
             x_max = max(xs.max() for xs in self.det_map['xs_gerber'])
@@ -89,15 +93,18 @@ class DreamDetector(Detector):
 
     def load_dream_data(self, data_dir, ped_dir=None, noise_threshold_sigmas=None, file_nums=None, chunk_size=100,
                         trigger_list=None, hist_raw_amps=False, save_waveforms=False, waveform_fit_func=None,
-                        connector_channels=None):
-        self.dream_data = DreamData(data_dir, self.feu_num, self.feu_connectors, ped_dir, waveform_fit_func)
+                        connector_channels=None, threads=None, feu_connector_flips=None, sample_period=None,
+                        hist_raw_waveforms=False):
+        self.dream_data = DreamData(data_dir, self.feu_num, self.feu_connectors, ped_dir, waveform_fit_func, threads,
+                                    feu_connector_flips=feu_connector_flips, sample_period=sample_period)
         self.dream_data.connector_channels = connector_channels
         if noise_threshold_sigmas is not None:
             self.dream_data.noise_thresh_sigmas = noise_threshold_sigmas
         if ped_dir:
             self.dream_data.read_ped_data()
         self.dream_data.read_data(file_nums, chunk_size=chunk_size, trigger_list=trigger_list,
-                                  hist_raw_amps=hist_raw_amps, save_waveforms=save_waveforms)
+                                  hist_raw_amps=hist_raw_amps, save_waveforms=save_waveforms,
+                                  hist_raw_waveforms=hist_raw_waveforms)
 
     def make_sub_groups(self):
         x_group_dfs = self.det_map[self.det_map['axis'] == 'y']  # y-going strips give x position
@@ -174,7 +181,8 @@ class DreamDetector(Detector):
             x_group_df = x_group['df'].to_dict()
             for y_group in self.y_groups:
                 if 'asacusa' in self.config['det_type']:  # Hack to only group same connectors.
-                    input('Changes to connector -> channel mapping probably broke this for asacusa, check. Enter to continue.')
+                    # TODO: Fix this
+                    print('Changes to connector -> channel mapping probably broke this for asacusa, check. Enter to continue.')
                     if x_group_df['connectors'] != y_group['df']['connectors']:  # Find better way in map file.
                         continue
                 y_group_df = y_group['df'].to_dict()
@@ -390,6 +398,31 @@ class DreamDetector(Detector):
         return (x_min < x_local) & (x_local < x_max) & (y_min < y_local) & (y_local < y_max)
 
 
+    def get_n_x_and_y_hit_events(self, n_hits_per_orientation=1):
+        """
+        Get the number of events with at least n_hits_per_orientation in both x and y orientations.
+        Args:
+            n_hits_per_orientation:
+
+        Returns:
+            coincident_events: Number of events with at least n_hits_per_orientation in both x and y.
+
+        """
+        # Count number of hits per event along axis=1
+        x_hit_count = np.sum(self.x_hits, axis=1)
+        y_hit_count = np.sum(self.y_hits, axis=1)
+
+        # Require at least n hits in each
+        enough_x_hits = x_hit_count >= n_hits_per_orientation
+        enough_y_hits = y_hit_count >= n_hits_per_orientation
+
+        # Events that have >= n x-hits AND >= n y-hits
+        enough_x_and_y_hits = enough_x_hits & enough_y_hits
+
+        coincident_events = np.sum(enough_x_and_y_hits)
+        return coincident_events
+
+
     def plot_event_1d(self, event_id):
         """
         Plot amplitude vs position for each group in the detector. Plot x and y on separate plots.
@@ -536,7 +569,7 @@ class DreamDetector(Detector):
         y_bins = np.arange(y_min, y_max + bin_size, bin_size)
 
         # Prepare colormap with white for zero counts
-        cmap = plt.cm.jet.copy()
+        cmap = copy.copy(plt.cm.jet)
         cmap.set_under('white')
 
         # 2D histogram with log scale
@@ -579,7 +612,7 @@ class DreamDetector(Detector):
         ax.set_xlabel('X strip number')
         ax.set_ylabel('Y strip number')
 
-        cmap = plt.cm.jet.copy()
+        cmap = copy.copy(plt.cm.jet)
         cmap.set_under('white')
 
         if log_scale:
@@ -872,33 +905,37 @@ class DreamDetector(Detector):
         fig.tight_layout()
 
 
-def split_neighbors(df, starting_connector=0):
+def split_neighbors(df, starting_connector=0, split_connectors=False):
     """
     Split the detector map into groups of connectors based on the axis, pitch, and interpitch.
     Return a dataframe where each entry is a group with columns: axis, pitch, interpitch, connector, channels.
     :param df: Detector map dataframe.
     :param starting_connector: Connector number to start with.
+    :param split_connectors: Whether to split groups by connector as well.
     :return: DataFrame of groups with columns: axis, pitch, interpitch, connector, channels.
     """
     # Mark rows where group changes
-    # df['group'] = ((df['axis'] != df['axis'].shift()) | (df['connector'] != df['connector'].shift()) |
-    #                (df['pitch(mm)'] != df['pitch(mm)'].shift()) |
-    #                (df['interpitch(mm)'] != df['interpitch(mm)'].shift()))
-
-    # Remove connector from group change condition for RD542 homogeneous detectors, tested and looks ok for old detectors too
-    df['group'] = ((df['axis'] != df['axis'].shift()) |
-                   (df['pitch(mm)'] != df['pitch(mm)'].shift()) |
-                   (df['interpitch(mm)'] != df['interpitch(mm)'].shift()))
+    if split_connectors:
+        df['group'] = ((df['axis'] != df['axis'].shift()) | (df['connector'] != df['connector'].shift()) |
+                       (df['pitch(mm)'] != df['pitch(mm)'].shift()) |
+                       (df['interpitch(mm)'] != df['interpitch(mm)'].shift()))
+    else:
+        # Remove connector from group change condition for RD542 homogeneous detectors, tested and looks ok for old detectors too
+        df['group'] = ((df['axis'] != df['axis'].shift()) |
+                       (df['pitch(mm)'] != df['pitch(mm)'].shift()) |
+                       (df['interpitch(mm)'] != df['interpitch(mm)'].shift()))
 
     # Assign group number to each row using cumulative sum of group marks
     df['group'] = df['group'].cumsum()
 
     # Create a unique name for each group
-    # df['group_name'] = df.apply(lambda row:
-    #                             f"{row['axis']}_{row['connector']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
+    if split_connectors:
+        df['group_name'] = df.apply(lambda row:
+                                    f"{row['axis']}_{row['connector']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
     # This might break inter detector, need to test
-    df['group_name'] = df.apply(lambda row:
-                                f"{row['axis']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
+    else:
+        df['group_name'] = df.apply(lambda row:
+                                    f"{row['axis']}_{row['pitch(mm)']}_{row['interpitch(mm)']}", axis=1)
 
     # Group by the new group_name column
     grouped = df.groupby('group_name')
